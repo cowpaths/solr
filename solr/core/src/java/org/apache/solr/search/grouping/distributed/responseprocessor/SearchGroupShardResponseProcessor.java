@@ -69,7 +69,7 @@ public class SearchGroupShardResponseProcessor implements ShardResponseProcessor
     SearchGroupsResultTransformer serializer =
         new SearchGroupsResultTransformer(rb.req.getSearcher());
     long maxElapsedTime = 0;
-    int hitCountDuringFirstPhase = 0;
+    long hitCountDuringFirstPhase = 0;
 
     NamedList<Object> shardInfo = null;
     if (rb.req.getParams().getBool(ShardParams.SHARDS_INFO, false)) {
@@ -94,6 +94,10 @@ public class SearchGroupShardResponseProcessor implements ShardResponseProcessor
           nl.add("trace", trace.toString());
         } else {
           nl.add("numFound", response.get("totalHitCount"));
+          nl.add("numFound", ((Number) response.get("totalHitCount")).longValue());
+        }
+        if (srsp.getSolrResponse() != null) {
+          nl.add("time", srsp.getSolrResponse().getElapsedTime());
         }
 
         nl.add("time", solrResponse.getElapsedTime());
@@ -126,14 +130,14 @@ public class SearchGroupShardResponseProcessor implements ShardResponseProcessor
         String field = entry.getKey();
         final SearchGroupsFieldCommandResult firstPhaseCommandResult = result.get(field);
 
-        final Integer groupCount = firstPhaseCommandResult.getGroupCount();
+        final Long groupCount = firstPhaseCommandResult.getGroupCount();
         if (groupCount != null) {
-          Integer existingGroupCount = rb.mergedGroupCounts.get(field);
+          Long existingGroupCount = rb.mergedGroupCounts.get(field);
           // Assuming groups don't cross shard boundary...
           rb.mergedGroupCounts.put(
               field,
               existingGroupCount != null
-                  ? Integer.valueOf(existingGroupCount + groupCount)
+                  ? Long.valueOf(existingGroupCount + groupCount)
                   : groupCount);
         }
 
@@ -150,7 +154,7 @@ public class SearchGroupShardResponseProcessor implements ShardResponseProcessor
           shards.add(srsp.getShard());
         }
       }
-      hitCountDuringFirstPhase += (Integer) response.get("totalHitCount");
+      hitCountDuringFirstPhase += ((Number) response.get("totalHitCount")).longValue();
     }
     rb.totalHitCount = hitCountDuringFirstPhase;
     rb.firstPhaseElapsedTime = (int) maxElapsedTime;

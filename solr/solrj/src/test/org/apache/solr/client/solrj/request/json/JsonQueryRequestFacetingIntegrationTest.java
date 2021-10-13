@@ -253,7 +253,9 @@ public class JsonQueryRequestFacetingIntegrationTest extends SolrCloudTestCase {
 
   @Test
   public void testMultiRangeFacet() throws Exception {
-    final RangeFacetMap pricesFacet = new RangeFacetMap("price", 0, 100, 20, false);
+    final RangeFacetMap pricesFacet =
+        new RangeFacetMap("price", 0, 100, 20, false)
+            .withStatSubFacet("unique_cats", "unique(cat)");
     final RangeFacetMap shippingWeightFacet = new RangeFacetMap("weight", 0, 200, 50, false);
     final JsonQueryRequest request =
         new JsonQueryRequest()
@@ -274,6 +276,13 @@ public class JsonQueryRequestFacetingIntegrationTest extends SolrCloudTestCase {
         new FacetBucket(40.0f, 0),
         new FacetBucket(60.0f, 1),
         new FacetBucket(80.0f, 1));
+    List<BucketJsonFacet> buckets = topLevelFacetData.getBucketBasedFacets("prices").getBuckets();
+    assertEquals(5, buckets.size());
+    assertEquals(4, buckets.get(0).getStatValue("unique_cats"));
+    assertNull(buckets.get(1).getStatValue("unique_cats"));
+    assertNull(buckets.get(2).getStatValue("unique_cats"));
+    assertEquals(2, buckets.get(3).getStatValue("unique_cats"));
+    assertEquals(2, buckets.get(4).getStatValue("unique_cats"));
     assertHasFacetWithBucketValues(
         topLevelFacetData,
         "shipping_weights",
@@ -285,7 +294,8 @@ public class JsonQueryRequestFacetingIntegrationTest extends SolrCloudTestCase {
 
   @Test
   public void testMultiRangeFacetDocValues() throws Exception {
-    final RangeFacetMap pricesFacet = new RangeFacetMap("price", 0, 100, 20, true);
+    final RangeFacetMap pricesFacet =
+        new RangeFacetMap("price", 0, 100, 20, true).withStatSubFacet("unique_cats", "unique(cat)");
     final RangeFacetMap shippingWeightFacet = new RangeFacetMap("weight", 0, 200, 50, true);
     final JsonQueryRequest request =
         new JsonQueryRequest()
@@ -306,6 +316,13 @@ public class JsonQueryRequestFacetingIntegrationTest extends SolrCloudTestCase {
         new FacetBucket(40.0f, 0),
         new FacetBucket(60.0f, 1),
         new FacetBucket(80.0f, 1));
+    List<BucketJsonFacet> buckets = topLevelFacetData.getBucketBasedFacets("prices").getBuckets();
+    assertEquals(5, buckets.size());
+    assertEquals(4, buckets.get(0).getStatValue("unique_cats"));
+    assertNull(buckets.get(1).getStatValue("unique_cats"));
+    assertNull(buckets.get(2).getStatValue("unique_cats"));
+    assertEquals(2, buckets.get(3).getStatValue("unique_cats"));
+    assertEquals(2, buckets.get(4).getStatValue("unique_cats"));
     assertHasFacetWithBucketValues(
         topLevelFacetData,
         "shipping_weights",

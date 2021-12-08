@@ -209,6 +209,13 @@ public class FacetHeatmap extends FacetRequest {
 
       return this.facet;
     }
+
+    public static class Factory implements FacetParserFactory {
+      @Override
+      public FacetParser<?> create(FacetParser<?> parent, String key) {
+        return new Parser(parent, key);
+      }
+    }
   } // class Parser
 
   private final Map<String, Object> argsMap;

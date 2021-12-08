@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.IntFunction;
+import java.util.stream.Collectors;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
@@ -45,19 +46,19 @@ import org.apache.solr.search.facet.SlotAcc.SlotContext;
 
 /** Base abstraction for a class that computes facets. This is fairly internal to the module. */
 public abstract class FacetProcessor<T extends FacetRequest> {
-  SimpleOrderedMap<Object> response;
-  FacetContext fcontext;
+  protected SimpleOrderedMap<Object> response;
+  protected FacetContext fcontext;
   // TODO : I'm not sure this needs to be generic but come back to this later
-  T freq;
+  protected T freq;
 
   // TODO: do these need to be on the context to support recomputing during multi-select?
   DocSet filter; // additional filters specified by "filter"
 
   LinkedHashMap<String, SlotAcc> accMap;
   SlotAcc[] accs;
-  SlotAcc.CountSlotAcc countAcc;
+  protected SlotAcc.CountSlotAcc countAcc;
 
-  FacetProcessor(FacetContext fcontext, T freq) {
+  public FacetProcessor(FacetContext fcontext, T freq) {
     this.fcontext = fcontext;
     this.freq = freq;
     fcontext.processor = this;
@@ -229,8 +230,7 @@ public abstract class FacetProcessor<T extends FacetRequest> {
       }
     }
 
-    // recompute the base domain
-    fcontext.base = fcontext.searcher.getDocSet(qlist);
+    return qlist;
   }
 
   /** modifies the context base if there is a join field domain change */
@@ -338,8 +338,10 @@ public abstract class FacetProcessor<T extends FacetRequest> {
     }
   }
 
-  long collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext) throws IOException {
+  protected long collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext)
+      throws IOException {
     long count = 0;
+
     SolrIndexSearcher searcher = fcontext.searcher;
 
     if (0 == docs.size()) {
@@ -397,8 +399,9 @@ public abstract class FacetProcessor<T extends FacetRequest> {
     }
   }
 
-  void addStats(SimpleOrderedMap<Object> target, int slotNum) throws IOException {
+  protected void addStats(SimpleOrderedMap<Object> target, int slotNum) throws IOException {
     long count = countAcc.getCount(slotNum);
+
     target.add("count", count);
     if (count > 0 || freq.processEmpty) {
       for (SlotAcc acc : accs) {
@@ -452,7 +455,7 @@ public abstract class FacetProcessor<T extends FacetRequest> {
   }
 
   @SuppressWarnings({"unchecked"})
-  void processSubs(
+  protected void processSubs(
       SimpleOrderedMap<Object> response,
       Query filter,
       DocSet domain,

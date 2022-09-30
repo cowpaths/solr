@@ -17,7 +17,6 @@
 package org.apache.solr.search.facet;
 
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.search.SyntaxError;
 
 /**
  * Factory that creates facet parsers. Can be registered with plugins.

@@ -473,7 +473,6 @@ public class SolrConfig implements MapSerializable {
                   REQUIRE_CLASS,
                   MULTI_OK))
           .add(new SolrPluginInfo(SolrCache.class, "cache", REQUIRE_NAME, REQUIRE_CLASS, MULTI_OK))
-
           // TODO: WTF is up with queryConverter???
           // it apparently *only* works as a singleton? - SOLR-4304
           // and even then -- only if there is a single SpellCheckComponent

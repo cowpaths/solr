@@ -148,7 +148,7 @@ public abstract class FacetParser<T extends FacetRequest> {
     }
     // Then handle special case func directly.
     if (type.equals("func")) {
-        return parseStat(key, args);
+      return parseStat(key, args);
     }
     // Otherwise, unknown.
     throw err("Unknown facet or stat. key=" + key + " type=" + type + " args=" + args);
@@ -526,7 +526,7 @@ public abstract class FacetParser<T extends FacetRequest> {
 
       return facet;
     }
-    
+
     public static class Factory implements FacetParserFactory {
       @Override
       public FacetParser<?> create(FacetParser<?> parent, String key) {

@@ -228,7 +228,8 @@ public final class SolrCore implements SolrInfoBean, Closeable {
       new PluginBag<>(SearchComponent.class, this);
   private final PluginBag<UpdateRequestProcessorFactory> updateProcessors =
       new PluginBag<>(UpdateRequestProcessorFactory.class, this, true);
-  private final PluginBag<FacetParserFactory> facetParserFactories = new PluginBag<>(FacetParserFactory.class, this);
+  private final PluginBag<FacetParserFactory> facetParserFactories =
+      new PluginBag<>(FacetParserFactory.class, this);
   private final Map<String, UpdateRequestProcessorChain> updateProcessorChains;
   private final SolrCoreMetricManager coreMetricManager;
   private final Map<String, SolrInfoBean> infoRegistry = new ConcurrentHashMap<>();
@@ -2019,9 +2020,7 @@ public final class SolrCore implements SolrInfoBean, Closeable {
     return searchComponents;
   }
 
-  /**
-   * Registers the default facet parsers
-   */
+  /** Registers the default facet parsers */
   private void loadFacetParserFactories() {
     Map<String, FacetParserFactory> instances = createInstances(FacetParser.standard_factories);
     facetParserFactories.init(instances, this);

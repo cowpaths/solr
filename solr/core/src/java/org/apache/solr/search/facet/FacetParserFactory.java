@@ -18,13 +18,9 @@ package org.apache.solr.search.facet;
 
 import org.apache.solr.common.util.NamedList;
 
-/**
- * Factory that creates facet parsers. Can be registered with plugins.
- */
+/** Factory that creates facet parsers. Can be registered with plugins. */
 public interface FacetParserFactory {
-  /**
-   * Creates a facet parser given the parent and key.
-   */
+  /** Creates a facet parser given the parent and key. */
   FacetParser<?> create(FacetParser<?> parent, String key);
 
   default void init(@SuppressWarnings({"rawtypes"}) NamedList args) {

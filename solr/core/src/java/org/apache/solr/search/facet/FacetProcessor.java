@@ -356,7 +356,8 @@ public abstract class FacetProcessor<T extends FacetRequest> {
     }
   }
 
-  protected long collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext) throws IOException {
+  protected long collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext)
+      throws IOException {
     long count = 0;
 
     SolrIndexSearcher searcher = fcontext.searcher;

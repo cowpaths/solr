@@ -215,8 +215,7 @@ public class FacetHeatmap extends FacetRequest {
         return new Parser(parent, key);
       }
     }
-
-  }//class Parser
+  } // class Parser
 
   private final Map<String, Object> argsMap;
   private final PrefixTreeStrategy strategy;

@@ -17,6 +17,10 @@ Bug Fixes
 
 * SOLR-16622: Replicas don't come up active after node restart (noble, Ishan Chattopadhyaya)
 
+Build
+---------------------
+* Upgrade forbiddenapis to 3.4 (Uwe Schindler)
+
 Other Changes
 ---------------------
 

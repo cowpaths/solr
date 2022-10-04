@@ -55,7 +55,7 @@ public abstract class FacetProcessor<T extends FacetRequest> {
 
   LinkedHashMap<String, SlotAcc> accMap;
   SlotAcc[] accs;
-  SlotAcc.CountSlotAcc countAcc;
+  protected SlotAcc.CountSlotAcc countAcc;
 
   FacetProcessor(FacetContext fcontext, T freq) {
     this.fcontext = fcontext;
@@ -356,8 +356,10 @@ public abstract class FacetProcessor<T extends FacetRequest> {
     }
   }
 
-  long collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext) throws IOException {
+  protected long collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext)
+      throws IOException {
     long count = 0;
+
     SolrIndexSearcher searcher = fcontext.searcher;
 
     if (0 == docs.size()) {
@@ -415,8 +417,9 @@ public abstract class FacetProcessor<T extends FacetRequest> {
     }
   }
 
-  void addStats(SimpleOrderedMap<Object> target, int slotNum) throws IOException {
+  protected void addStats(SimpleOrderedMap<Object> target, int slotNum) throws IOException {
     long count = countAcc.getCount(slotNum);
+
     target.add("count", count);
     if (count > 0 || freq.processEmpty) {
       for (SlotAcc acc : accs) {
@@ -470,7 +473,7 @@ public abstract class FacetProcessor<T extends FacetRequest> {
   }
 
   @SuppressWarnings({"unchecked"})
-  void processSubs(
+  protected void processSubs(
       SimpleOrderedMap<Object> response,
       Query filter,
       DocSet domain,

@@ -84,7 +84,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
           "evictions", PrometheusMetricType.COUNTER);
 
   @Override
-  public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, UnavailableException {
+  public void doGet(HttpServletRequest request, HttpServletResponse response)
+      throws IOException, UnavailableException {
     List<PrometheusMetric> metrics = new ArrayList<>();
     AtomicInteger qTime = new AtomicInteger();
     for (MetricsApiCaller caller : callers) {
@@ -713,7 +714,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     // use HttpSolrCall to simulate a call to the metrics api.
     void call(
         AtomicInteger qTime, List<PrometheusMetric> results, HttpServletRequest originalRequest)
-            throws IOException, UnavailableException {
+        throws IOException, UnavailableException {
       SolrDispatchFilter filter = getSolrDispatchFilter(originalRequest);
       CoreContainer cores = filter.getCores();
       HttpServletRequest request = new MetricsApiRequest(originalRequest, group, prefix, property);

@@ -157,6 +157,7 @@ public class CacheConfig implements MapSerializable {
     return config;
   }
 
+  @SuppressWarnings("rawtypes")
   public SolrCache newInstance(SolrCore core) {
     try {
       SolrCache<?, ?> cache = clazz.get().getConstructor().newInstance();

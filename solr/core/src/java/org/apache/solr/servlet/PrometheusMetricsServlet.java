@@ -38,6 +38,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javax.servlet.ServletOutputStream;
+import javax.servlet.UnavailableException;
 import javax.servlet.WriteListener;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -83,7 +84,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
           "evictions", PrometheusMetricType.COUNTER);
 
   @Override
-  public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, UnavailableException {
     List<PrometheusMetric> metrics = new ArrayList<>();
     AtomicInteger qTime = new AtomicInteger();
     for (MetricsApiCaller caller : callers) {
@@ -101,6 +102,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     writer.flush();
   }
 
+  @SuppressWarnings({"rawtypes", "unchecked"})
   static void getSharedCacheMetrics(
       List<PrometheusMetric> results,
       CoreContainer cores,
@@ -711,7 +713,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     // use HttpSolrCall to simulate a call to the metrics api.
     void call(
         AtomicInteger qTime, List<PrometheusMetric> results, HttpServletRequest originalRequest)
-        throws IOException {
+            throws IOException, UnavailableException {
       SolrDispatchFilter filter = getSolrDispatchFilter(originalRequest);
       CoreContainer cores = filter.getCores();
       HttpServletRequest request = new MetricsApiRequest(originalRequest, group, prefix, property);

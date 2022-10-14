@@ -1,0 +1,5 @@
+[submodule "lucene"]
+	path = lucene
+    url = git@github.com:cowpaths/lucene.git
+  	ignore = untracked
+	branch = release/9.3

@@ -58,7 +58,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
-  private static final Logger LOGGER =
+  private static final Logger log =
       LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   // values less than this threshold are considered invalid; mark the invalid values instead of
@@ -683,7 +683,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     if (node.isNumber()) {
       return node.numberValue();
     } else {
-      LOGGER.warn(
+      log.warn(
           "node {} does not have a number at the path {}.", originalNode, Arrays.toString(names));
       return INVALID_NUMBER;
     }

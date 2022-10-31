@@ -58,8 +58,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
-  private static final Logger log =
-      LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   // values less than this threshold are considered invalid; mark the invalid values instead of
   // failing the call.
@@ -658,7 +657,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     static String normalize(String name) {
       StringBuilder builder = new StringBuilder();
       boolean modified = false;
-      for (char ch : name.toCharArray()) {
+      for (int i = 0; i < name.length(); i++) {
+        char ch = name.charAt(i);
         if (ch == ' ') {
           builder.append('_');
           modified = true;

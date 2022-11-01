@@ -1,0 +1,100 @@
+version: 2.1
+
+orbs:
+  slack: circleci/slack@4.4.2
+
+
+commands:
+  run_shell:
+    description: |
+      Wrapper for "run:", which will provide the "step_name" parameter to the
+      shell for xunit output. If this is used on an executor not having
+      "shell-xunit", then it'll run only with a hard-set 21m no_output_timeout.
+    parameters:
+      step_name:
+        type: string
+        description: the name of this step visible in ci and passed to the shell
+      command:
+        type: string
+        description: A script to execute in the shell
+      working_directory:
+        type: string
+        description: In which directory to run this step. Will be interpreted relative to the working_directory of the job.
+        default: "."
+      no_output_timeout:
+        type: integer
+        description: |
+          How long to wait before cancelling the job because of no output.
+          Expected to be given in seconds, and to be no greater than 20 minutes.
+          If set to 0, disables the in-script timeout killer. Defaults to 10
+          minutes.
+        default: 600
+      when:
+        type: string
+        description: "Specify when to enable or disable the step. Takes the following values: always, on_success, on_fail"
+        default: "on_success"
+      background:
+        type: boolean
+        description: "Whether or not this step should run in the background (default: false)"
+        default: false
+      verbose:
+        type: string
+        description: "Set this to a value if you'd like to get verbose shell-xunit output from this step."
+        default: ""
+    steps:
+      - run:
+          name: "<< parameters.step_name >>"
+          environment:
+            CI_STEP_NAME: "<< parameters.step_name >>"
+            CI_TIMEOUT: << parameters.no_output_timeout >>
+            SHELL_XUNIT_VERBOSE: "<< parameters.verbose >>"
+          working_directory: "<< parameters.working_directory >>"
+          no_output_timeout: 21m # One minute longer than the in-script default, in case that's disabled or failing.
+          when: "<< parameters.when >>"
+          background: << parameters.background >>
+          command: "<< parameters.command >>"
+
+  load_slack_orb_deps:
+    description: Setup Slack Orb dependencies
+    steps:
+      - run_shell:
+          step_name: Load Slack Id
+          command: echo "export SLACK_ID="C03FKTY6553"" >> $BASH_ENV #manually pointing to solr-builds since we don't have devs.go tools in this repo
+          when: always
+          
+  # all jobs need to add this step to send signal to Slack as soon as the jobs fail
+  notify_slack_on_fail:
+    steps:
+      - load_slack_orb_deps
+      - slack/notify:
+          event: fail
+          channel: $SLACK_ID # dm
+          template: basic_fail_1
+
+jobs:
+  build:
+    docker:
+      - image: circleci/openjdk:11
+    working_directory: /tmp/solr
+    steps:
+      - checkout:
+          path: /tmp/solr
+      - run:
+          name: Gradle Check
+          command: ./gradlew check -X test
+      - run:
+          name: Gradle Test
+          command: ./gradlew test
+      - store_test_results:
+          path: plugin/test-bin
+      - run:
+          name: Gradle Assemble
+          command: ./gradlew assemble
+      - notify_slack_on_fail
+
+workflows:
+  version: 2
+  commit:
+    jobs:
+      - build:
+          context: slack

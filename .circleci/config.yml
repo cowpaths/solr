@@ -81,7 +81,7 @@ jobs:
           path: /tmp/solr
       - run:
           name: Gradle Check
-          command: ./gradlew check -X test
+          command: ./gradlew check -x test
       - run:
           name: Gradle Test
           command: ./gradlew test

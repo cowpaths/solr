@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.lang.invoke.MethodHandles;
 import java.net.URLEncoder;
@@ -95,11 +96,12 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         new PrometheusMetric(
             "metrics_qtime", PrometheusMetricType.GAUGE, "QTime for calling metrics api", qTime));
     response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-    PrintWriter writer = response.getWriter();
+    PrintWriter printWriter =
+        new PrintWriter(new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8));
     for (PrometheusMetric metric : metrics) {
-      metric.write(writer);
+      metric.write(printWriter);
     }
-    writer.flush();
+    printWriter.flush();
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
@@ -761,6 +763,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       super(request);
       queryString =
           String.format(
+              Locale.ENGLISH,
               "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
               URLEncoder.encode(group, StandardCharsets.UTF_8.name()),
               URLEncoder.encode(prefix, StandardCharsets.UTF_8.name()),

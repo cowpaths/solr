@@ -762,7 +762,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       super(request);
       queryString =
           String.format(
-              Locale.ENGLISH,
+              Locale.ROOT,
               "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
               URLEncoder.encode(group, StandardCharsets.UTF_8.name()),
               URLEncoder.encode(prefix, StandardCharsets.UTF_8.name()),

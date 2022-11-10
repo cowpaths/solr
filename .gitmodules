@@ -1,4 +1,4 @@
 [submodule "lucene"]
 	path = lucene
 	url = git@github.com:cowpaths/lucene.git
-	branch = hitesh/cp_luceneModuleChange_93
+	branch = fs/branch_9_3

@@ -109,6 +109,7 @@ public class FacetHeatmap extends FacetRequest {
       super(parent, key);
     }
 
+    @Override
     public FacetHeatmap parse(Object argsObj) {
       assert facet == null;
 
@@ -207,6 +208,13 @@ public class FacetHeatmap extends FacetRequest {
       parseCommonParams(argsObj); // e.g. domain change
 
       return this.facet;
+    }
+
+    public static class Factory implements FacetParserFactory {
+      @Override
+      public FacetParser<?> create(FacetParser<?> parent, String key) {
+        return new Parser(parent, key);
+      }
     }
   } // class Parser
 

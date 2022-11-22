@@ -357,7 +357,7 @@ public class FacetModule extends SearchComponent {
   // TODO: perhaps factor out some sort of root/parent facet object that doesn't depend
   // on stuff like ResponseBuilder, but contains request parameters,
   // root filter lists (for filter exclusions), etc?
-  class FacetComponentState {
+  static class FacetComponentState {
     ResponseBuilder rb;
     Map<String, Object> facetCommands;
     FacetRequest facetRequest;
@@ -409,14 +409,14 @@ public class FacetModule extends SearchComponent {
       if (a < b) return -1;
       if (a > b) return 1;
 
-      if (a != a) { // a==NaN
-        if (b != b) {
+      if (Double.isNaN(a)) {
+        if (Double.isNaN(b)) {
           return 0; // both NaN
         }
         return -1 * direction.getMultiplier(); // asc==-1, so this will put NaN at end of sort
       }
 
-      if (b != b) { // b is NaN so a is greater
+      if (Double.isNaN(b)) { // b is NaN so a is greater
         return 1 * direction.getMultiplier(); // if sorting asc, make a less so NaN is at end
       }
 
@@ -445,8 +445,9 @@ public class FacetModule extends SearchComponent {
   }
 
   // base class for facets that create buckets (and can hence have sub-facets)
-  abstract static class FacetBucketMerger<FacetRequestT extends FacetRequest> extends FacetMerger {
-    FacetRequestT freq;
+  public abstract static class FacetBucketMerger<FacetRequestT extends FacetRequest>
+      extends FacetMerger {
+    protected FacetRequestT freq;
 
     public FacetBucketMerger(FacetRequestT freq) {
       this.freq = freq;
@@ -456,7 +457,8 @@ public class FacetModule extends SearchComponent {
      * Bucketval is the representative value for the bucket. Only applicable to terms and range
      * queries to distinguish buckets.
      */
-    FacetBucket newBucket(@SuppressWarnings("rawtypes") Comparable bucketVal, Context mcontext) {
+    protected FacetBucket newBucket(
+        @SuppressWarnings("rawtypes") Comparable bucketVal, Context mcontext) {
       return new FacetBucket(this, bucketVal, mcontext);
     }
 

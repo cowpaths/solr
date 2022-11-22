@@ -28,6 +28,7 @@ class FacetRangeParser extends FacetParser<FacetRange> {
     facet = new FacetRange();
   }
 
+  @Override
   public FacetRange parse(Object arg) throws SyntaxError {
     parseCommonParams(arg);
 
@@ -69,5 +70,12 @@ class FacetRangeParser extends FacetParser<FacetRange> {
     parseSubs(facetObj);
 
     return facet;
+  }
+
+  public static class Factory implements FacetParserFactory {
+    @Override
+    public FacetParser<?> create(FacetParser<?> parent, String key) {
+      return new FacetRangeParser(parent, key);
+    }
   }
 }

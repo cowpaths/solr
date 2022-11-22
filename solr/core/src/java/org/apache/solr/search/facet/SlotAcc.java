@@ -409,6 +409,7 @@ public abstract class SlotAcc implements Closeable {
       super(values, fcontext, numSlots);
     }
 
+    @Override
     public void collect(int doc, int slotNum, IntFunction<SlotContext> slotContext)
         throws IOException {
       // todo: worth trying to share this value across multiple stats that need it?
@@ -828,7 +829,7 @@ public abstract class SlotAcc implements Closeable {
     }
   }
 
-  abstract static class CountSlotAcc extends SlotAcc implements ReadOnlyCountSlotAcc {
+  public abstract static class CountSlotAcc extends SlotAcc implements ReadOnlyCountSlotAcc {
     public CountSlotAcc(FacetContext fcontext) {
       super(fcontext);
       // assume we are the 'count' by default unless/untill our creator overrides this
@@ -837,6 +838,7 @@ public abstract class SlotAcc implements Closeable {
 
     public abstract void incrementCount(int slot, long count);
 
+    @Override
     public abstract long getCount(int slot);
   }
 

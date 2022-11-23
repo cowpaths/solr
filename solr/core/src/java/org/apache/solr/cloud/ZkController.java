@@ -1861,6 +1861,21 @@ public class ZkController implements Closeable {
     }
     CloudDescriptor cloudDescriptor = cd.getCloudDescriptor();
     if (removeCoreFromZk) {
+      // extra handling for PRS, we need to write the PRS entries from this node directly,
+      // as overseer does not and should not handle those entries
+      if (docCollection != null && docCollection.isPerReplicaState() && coreNodeName != null) {
+        if (log.isDebugEnabled()) {
+          log.debug(
+              "Unregistering core with coreNodeName {} of collection {} - deleting the PRS entries from ZK",
+              coreNodeName,
+              docCollection.getName());
+        }
+        PerReplicaStates perReplicaStates =
+            PerReplicaStatesFetcher.fetch(
+                docCollection.getZNode(), zkClient, docCollection.getPerReplicaStates());
+        PerReplicaStatesOps.deleteReplica(coreNodeName, perReplicaStates)
+            .persist(docCollection.getZNode(), zkClient);
+      }
       ZkNodeProps m =
           new ZkNodeProps(
               Overseer.QUEUE_OPERATION,
@@ -2466,7 +2481,7 @@ public class ZkController implements Closeable {
             // restart the replication thread to ensure the replication is running in each new
             // replica especially if previous role is "leader" (i.e., no replication thread)
             stopReplicationFromLeader(coreName);
-            startReplicationFromLeader(coreName, false);
+            startReplicationFromLeader(coreName, true);
           }
         }
       }
@@ -2929,34 +2944,33 @@ public class ZkController implements Closeable {
             collectionsInThisNode.add(cd.getCloudDescriptor().getCollectionName());
           }
         }
-        collectionsInThisNode.parallelStream()
-            .forEach(
-                c -> {
-                  final List<String> replicasToDown = new ArrayList<>();
-                  DocCollection coll = zkStateReader.getCollection(c);
-                  if (coll == null) {
-                    // may be the collection no more exists
-                    return;
-                  }
-                  coll.forEachReplica(
-                      (s, r) -> {
-                        if (r.getNodeName().equals(nodeName)) {
-                          replicasToDown.add(r.getName());
-                        }
-                      });
-
-                  if (!replicasToDown.isEmpty()) {
-                    try {
-                      PerReplicaStatesOps.downReplicas(
-                              replicasToDown,
-                              PerReplicaStatesFetcher.fetch(
-                                  coll.getZNode(), zkClient, coll.getPerReplicaStates()))
-                          .persist(coll.getZNode(), zkClient);
-                    } catch (KeeperException | InterruptedException e) {
-                      throw new RuntimeException(e);
+        collectionsInThisNode.forEach(
+            c -> {
+              final List<String> replicasToDown = new ArrayList<>();
+              DocCollection coll = zkStateReader.getCollection(c);
+              if (coll == null) {
+                // may be the collection no more exists
+                return;
+              }
+              coll.forEachReplica(
+                  (s, r) -> {
+                    if (r.getNodeName().equals(nodeName)) {
+                      replicasToDown.add(r.getName());
                     }
-                  }
-                });
+                  });
+
+              if (!replicasToDown.isEmpty()) {
+                try {
+                  PerReplicaStatesOps.downReplicas(
+                          replicasToDown,
+                          PerReplicaStatesFetcher.fetch(
+                              coll.getZNode(), zkClient, coll.getPerReplicaStates()))
+                      .persist(coll.getZNode(), zkClient);
+                } catch (KeeperException | InterruptedException e) {
+                  throw new RuntimeException(e);
+                }
+              }
+            });
 
         // We always send a down node event to overseer to be safe, but overseer will not need to do
         // anything for PRS collections

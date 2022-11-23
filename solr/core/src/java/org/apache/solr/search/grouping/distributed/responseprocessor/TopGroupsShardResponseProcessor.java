@@ -170,7 +170,7 @@ public class TopGroupsShardResponseProcessor implements ShardResponseProcessor {
       if (docsPerGroup < 0) {
         docsPerGroup = 0;
         for (TopGroups<?> subTopGroups : topGroups) {
-          docsPerGroup += (int)subTopGroups.totalGroupedHitCount;
+          docsPerGroup += (int) subTopGroups.totalGroupedHitCount;
         }
       }
       rb.mergedTopGroups.put(

@@ -22,31 +22,33 @@ import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
 import org.junit.Test;
 
 public class SolrCoreConfigTest extends AbstractFullDistribZkTestBase {
-    @Override
-    public void distribSetUp() throws Exception {
-        System.setProperty(SolrCore.DISABLE_ZK_CONFIG_WATCH, "true");
-        super.distribSetUp();
-    }
+  @Override
+  public void distribSetUp() throws Exception {
+    System.setProperty(SolrCore.DISABLE_ZK_CONFIG_WATCH, "true");
+    super.distribSetUp();
+  }
 
-    @Override
-    public void distribTearDown() throws Exception {
-        try {
-            super.distribTearDown();
-        } finally {
-            System.clearProperty(SolrCore.DISABLE_ZK_CONFIG_WATCH);
-        }
+  @Override
+  public void distribTearDown() throws Exception {
+    try {
+      super.distribTearDown();
+    } finally {
+      System.clearProperty(SolrCore.DISABLE_ZK_CONFIG_WATCH);
     }
+  }
 
-    @Test
-    public void testNoZkConfigWatch() {
-        CoreContainer cc = getContainer();
-        assertFalse("There shouldn't be any conf listener", cc.getZkController().hasConfDirectoryListeners("/configs/conf1"));
-    }
+  @Test
+  public void testNoZkConfigWatch() {
+    CoreContainer cc = getContainer();
+    assertFalse(
+        "There shouldn't be any conf listener",
+        cc.getZkController().hasConfDirectoryListeners("/configs/conf1"));
+  }
 
-    private CoreContainer getContainer() {
-        for (JettySolrRunner jetty : jettys) {
-            return jetty.getCoreContainer();
-        }
-        return null;
+  private CoreContainer getContainer() {
+    for (JettySolrRunner jetty : jettys) {
+      return jetty.getCoreContainer();
     }
+    return null;
+  }
 }

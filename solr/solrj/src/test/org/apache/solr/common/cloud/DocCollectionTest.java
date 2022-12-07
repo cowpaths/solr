@@ -20,8 +20,6 @@ package org.apache.solr.common.cloud;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.util.Utils;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
@@ -30,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 public class DocCollectionTest extends SolrTestCaseJ4 {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   @Test
   public void testDocCollectionEqualsAndHashcode() throws Exception {
@@ -92,9 +89,7 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
 
     byte[] ser = Utils.toJSON(docCollection);
 
-    log.info("state.json size with indent 0: " + ser.length );
-
     //sometime it takes url schems http or https - test setup issue
-    assertTrue("byte size should be " + ser.length, 558944 == ser.length || 558944 + 2048 == ser.length);
+    assertTrue("byte size is wrong at " + ser.length, 558944 == ser.length || 558944 + 2048 == ser.length);
   }
 }

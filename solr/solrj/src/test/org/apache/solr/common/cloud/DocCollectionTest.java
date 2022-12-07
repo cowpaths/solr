@@ -17,15 +17,13 @@
 
 package org.apache.solr.common.cloud;
 
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.util.Utils;
-import org.junit.Test;
-
-import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.util.Utils;
+import org.junit.Test;
 
 public class DocCollectionTest extends SolrTestCaseJ4 {
 
@@ -44,9 +42,11 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     Map<String, Slice> sliceMap = new HashMap<>();
     sliceMap.put(sliceName, slice);
     DocRouter docRouter = new CompositeIdRouter();
-    DocCollection docCollection = new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
+    DocCollection docCollection =
+        new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
 
-    DocCollection docCollection2 = new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
+    DocCollection docCollection2 =
+        new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
     String prsState = "replicacore:1:A:L";
     List<String> prsStates = new ArrayList<>();
     prsStates.add(prsState);
@@ -54,12 +54,12 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     docCollection2 = docCollection2.copyWith(prs);
 
     assertFalse("collection'equal method should NOT be same", docCollection.equals(docCollection2));
-    assertFalse("collection's hashcode method should NOT be same", docCollection.hashCode() == docCollection2.hashCode());
+    assertFalse(
+        "collection's hashcode method should NOT be same",
+        docCollection.hashCode() == docCollection2.hashCode());
   }
 
-  /**
-   * Now we have indent size 0 for any json object serialization
-   */
+  /** Now we have indent size 0 for any json object serialization */
   @Test
   public void testDocCollectionSeriallizationNoIndent() throws Exception {
     String collName = "Q8RZD";
@@ -73,7 +73,8 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
       propMap.put(ZkStateReader.REPLICA_TYPE, "NRT");
       propMap.put(ZkStateReader.FORCE_SET_STATE_PROP, "false");
       propMap.put(ZkStateReader.LEADER_PROP, "true");
-      Replica replica = new Replica(collName + "_" + sliceName + "_replica_n" + i, propMap, collName, sliceName);
+      Replica replica =
+          new Replica(collName + "_" + sliceName + "_replica_n" + i, propMap, collName, sliceName);
       Map<String, Replica> replicaMap = new HashMap<>();
       replicaMap.put("core_node" + i, replica);
       Map<String, Object> shardProps = new HashMap<>();
@@ -85,11 +86,13 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     }
     DocRouter docRouter = new CompositeIdRouter();
 
-    DocCollection docCollection = new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
+    DocCollection docCollection =
+        new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
 
     byte[] ser = Utils.toJSON(docCollection);
 
-    //sometime it takes url schems http or https - test setup issue
-    assertTrue("byte size is wrong at " + ser.length, 558944 == ser.length || 558944 + 2048 == ser.length);
+    // sometime it takes url schems http or https - test setup issue
+    assertTrue(
+        "byte size is wrong at " + ser.length, 558944 == ser.length || 558944 + 2048 == ser.length);
   }
 }

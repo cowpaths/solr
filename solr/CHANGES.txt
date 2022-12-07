@@ -32,6 +32,8 @@ Other Changes
 
 * SOLR-16480: ConfigSets now have an overridable allow-list for filetypes. (Houston Putman)
 
+SOLR-16575: splitshard should honour createNodeSet (noble)
+
 ==================  9.1.0 ==================
 
 New Features

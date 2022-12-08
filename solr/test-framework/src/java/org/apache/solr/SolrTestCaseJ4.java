@@ -680,6 +680,7 @@ public abstract class SolrTestCaseJ4 extends SolrTestCase {
     schemaString = schema;
     testSolrHome = Paths.get(solrHome);
     System.setProperty("solr.solr.home", solrHome);
+    System.setProperty("solr.install.dir", solrHome);
     initCore();
   }
 

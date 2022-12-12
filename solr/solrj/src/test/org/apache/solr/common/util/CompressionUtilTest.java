@@ -17,7 +17,6 @@
 
 package org.apache.solr.common.util;
 
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Random;

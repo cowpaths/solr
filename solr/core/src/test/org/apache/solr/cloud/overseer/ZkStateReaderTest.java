@@ -104,7 +104,8 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     super.tearDown();
   }
 
-  private static TestFixture setupTestFixture(String testPrefix, int minimumStateSizeForCompression) throws Exception {
+  private static TestFixture setupTestFixture(String testPrefix, int minimumStateSizeForCompression)
+      throws Exception {
     Path zkDir = createTempDir(testPrefix);
     ZkTestServer server = new ZkTestServer(zkDir);
     server.run();
@@ -432,12 +433,12 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
 
     // create new collection
     DocCollection state =
-            new DocCollection(
-                    "c1",
-                    new HashMap<>(),
-                    Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
-                    DocRouter.DEFAULT,
-                    0);
+        new DocCollection(
+            "c1",
+            new HashMap<>(),
+            Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
+            DocRouter.DEFAULT,
+            0);
     ZkWriteCommand wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -452,12 +453,12 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
 
     // update the collection
     state =
-            new DocCollection(
-                    "c1",
-                    new HashMap<>(),
-                    Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
-                    DocRouter.DEFAULT,
-                    ref.get().getZNodeVersion());
+        new DocCollection(
+            "c1",
+            new HashMap<>(),
+            Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
+            DocRouter.DEFAULT,
+            ref.get().getZNodeVersion());
     wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -473,12 +474,12 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
 
     fixture.zkClient.makePath(ZkStateReader.COLLECTIONS_ZKNODE + "/c2", true);
     state =
-            new DocCollection(
-                    "c2",
-                    new HashMap<>(),
-                    Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
-                    DocRouter.DEFAULT,
-                    0);
+        new DocCollection(
+            "c2",
+            new HashMap<>(),
+            Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
+            DocRouter.DEFAULT,
+            0);
     ZkWriteCommand wc2 = new ZkWriteCommand("c2", state);
 
     writer.enqueueUpdate(reader.getClusterState(), Arrays.asList(wc1, wc2), null);
@@ -491,8 +492,8 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     ref = reader.getClusterState().getCollectionRef("c2");
     assertNotNull(ref);
     assertTrue(
-            "c2 should have been lazily loaded but is not!",
-            ref.isLazilyLoaded()); // c2 should be lazily loaded as it's not watched
+        "c2 should have been lazily loaded but is not!",
+        ref.isLazilyLoaded()); // c2 should be lazily loaded as it's not watched
     assertEquals(0, ref.get().getZNodeVersion());
   }
 

@@ -17,6 +17,7 @@
 
 package org.apache.solr.common.cloud;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
 import org.apache.lucene.util.IOUtils;
@@ -65,7 +66,7 @@ public class SolrZkClientCompressedDataTest extends SolrTestCase {
               + "\"type\":\"NRT\",\n"
               + "\"force_set_state\":\"false\",\n"
               + "\"leader\":\"true\"}}}}}}";
-      byte[] arr = state.getBytes();
+      byte[] arr = state.getBytes(StandardCharsets.UTF_8);
       byte[] compressedData = CompressionUtil.compressBytes(arr);
       ZkACLProvider aclProvider = new DefaultZkACLProvider();
       String path = ZkStateReader.COLLECTIONS_ZKNODE + "/c1/state.json";

@@ -64,7 +64,8 @@ public class CompressionUtilTest extends SolrTestCase {
           120, 1, 11, -50, -49, 77, 85, 40, 73, 45, 46, 81, 72, 73, 44, 73, -28, 2, 0, 43, -36, 5,
           57
         };
-    byte[] compressedBytes = CompressionUtil.compressBytes("Some test data\n".getBytes(StandardCharsets.UTF_8));
+    byte[] compressedBytes =
+        CompressionUtil.compressBytes("Some test data\n".getBytes(StandardCharsets.UTF_8));
     int decompressedSize = ByteBuffer.wrap(compressedBytes, compressedBytes.length - 8, 4).getInt();
     int xoredSize = ByteBuffer.wrap(compressedBytes, compressedBytes.length - 4, 4).getInt();
     assertEquals(xoredSize, decompressedSize ^ 2018370979);

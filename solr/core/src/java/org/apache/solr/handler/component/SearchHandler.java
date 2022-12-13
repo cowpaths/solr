@@ -22,6 +22,7 @@ import static org.apache.solr.common.params.CommonParams.PATH;
 import static org.apache.solr.common.params.CommonParams.STATUS;
 
 import com.codahale.metrics.Counter;
+import com.google.common.collect.Iterators;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
@@ -35,8 +36,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-
-import com.google.common.collect.Iterators;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.search.TotalHits;
@@ -331,9 +330,10 @@ public class SearchHandler extends RequestHandlerBase
 
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
-    final boolean ridTaggingDisabled = req.getParams().getBool(CommonParams.DISABLE_REQUEST_ID, false);
+    final boolean ridTaggingDisabled =
+        req.getParams().getBool(CommonParams.DISABLE_REQUEST_ID, false);
     final String reqId = ridTaggingDisabled ? null : getOrGenerateRequestId(req);
-    if (reqId != null) { //update MDC with reqId if it's generated here
+    if (reqId != null) { // update MDC with reqId if it's generated here
       MDCLoggingContext.setReqId(reqId);
     }
 
@@ -341,15 +341,19 @@ public class SearchHandler extends RequestHandlerBase
       int purpose = req.getParams().getInt(ShardParams.SHARDS_PURPOSE, 0);
       SolrPluginUtils.forEachRequestPurpose(
           purpose, n -> shardPurposes.computeIfAbsent(n, name -> new Counter()).inc());
-      //log a simple message on start
+      // log a simple message on start
       log.info("Start Forwarded Search Query");
       SolrParams filteredParams = removeVerboseParams(req.getParams());
-      rsp.getToLog().asShallowMap(false).put("params", "{" + filteredParams + "}"); //replace "params" with the filtered version
+      rsp.getToLog()
+          .asShallowMap(false)
+          .put("params", "{" + filteredParams + "}"); // replace "params" with the filtered version
     } else {
-      // Then it is the first time this req hitting Solr - not a req distributed by another higher level req.
+      // Then it is the first time this req hitting Solr - not a req distributed by another higher
+      // level req.
       // We have to log the query here as
       // 1. It's useful to know the query before the processing start in case if the query stalls
-      // 2. The existing logging in SolrCore does not contain the query as query construction happens after the log
+      // 2. The existing logging in SolrCore does not contain the query as query construction
+      // happens after the log
       //    entries are added to rsp.toLog
       log.info("Start External Search Query: {}", req.getParamString());
     }
@@ -631,31 +635,34 @@ public class SearchHandler extends RequestHandlerBase
   }
 
   private static final List<String> VERBOSE_LOGGING_PARAMS = Arrays.asList("fq", "json");
+
   private SolrParams removeVerboseParams(final SolrParams params) {
     // Filter params by removing kv of VERBOSE_LOGGING_PARAMS, so that we can then call toString
-    SolrParams filteredParams = new SolrParams() {
-      @Override
-      public Iterator<String> getParameterNamesIterator() {
-        return Iterators.filter(params.getParameterNamesIterator(), s -> !VERBOSE_LOGGING_PARAMS.contains(s));
-      }
+    SolrParams filteredParams =
+        new SolrParams() {
+          @Override
+          public Iterator<String> getParameterNamesIterator() {
+            return Iterators.filter(
+                params.getParameterNamesIterator(), s -> !VERBOSE_LOGGING_PARAMS.contains(s));
+          }
 
-      @Override
-      public String get(String param) {
-        return params.get(param);
-      }
+          @Override
+          public String get(String param) {
+            return params.get(param);
+          }
 
-      @Override
-      public String[] getParams(String param) {
-        return params.getParams(param);
-      }
-    };
+          @Override
+          public String[] getParams(String param) {
+            return params.getParams(param);
+          }
+        };
     return filteredParams;
   }
 
   private void tagRequestWithRequestId(ResponseBuilder rb, String rid) {
     if (StringUtils.isBlank(rb.req.getParams().get(CommonParams.REQUEST_ID))) {
       ModifiableSolrParams params = new ModifiableSolrParams(rb.req.getParams());
-      params.add(CommonParams.REQUEST_ID, rid);//add rid to the request so that shards see it
+      params.add(CommonParams.REQUEST_ID, rid); // add rid to the request so that shards see it
       rb.req.setParams(params);
     }
   }

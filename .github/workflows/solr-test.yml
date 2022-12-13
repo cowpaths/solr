@@ -1,4 +1,4 @@
-name: SolrJ Tests
+name: Solr Tests
 
 on:
   pull_request:

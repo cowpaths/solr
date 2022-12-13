@@ -26,13 +26,17 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+
+import com.google.common.collect.Iterators;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.search.TotalHits;
@@ -44,6 +48,7 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.CursorMarkParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.ShardParams;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.core.CloseHook;
@@ -51,6 +56,7 @@ import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.RequestHandlerBase;
+import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.metrics.MetricsMap;
 import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.pkg.PackageAPI;
@@ -326,11 +332,27 @@ public class SearchHandler extends RequestHandlerBase
 
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
-    log.info("Start Search Query: {}", req.getParamString());
+    final boolean ridTaggingDisabled = req.getParams().getBool(CommonParams.DISABLE_REQUEST_ID, false);
+    final String reqId = ridTaggingDisabled ? null : getOrGenerateRequestId(req);
+    if (reqId != null) { //update MDC with reqId if it's generated here
+      MDCLoggingContext.setReqId(reqId);
+    }
+
     if (req.getParams().getBool(ShardParams.IS_SHARD, false)) {
       int purpose = req.getParams().getInt(ShardParams.SHARDS_PURPOSE, 0);
       SolrPluginUtils.forEachRequestPurpose(
           purpose, n -> shardPurposes.computeIfAbsent(n, name -> new Counter()).inc());
+      //log a simple message on start
+      log.info("Start Forwarded Search Query");
+      SolrParams filteredParams = removeVerboseParams(req.getParams());
+      rsp.getToLog().asShallowMap(false).put("params", "{" + filteredParams + "}"); //replace "params" with the filtered version
+    } else {
+      // Then it is the first time this req hitting Solr - not a req distributed by another higher level req.
+      // We have to log the query here as
+      // 1. It's useful to know the query before the processing start in case if the query stalls
+      // 2. The existing logging in SolrCore does not contain the query as query construction happens after the log
+      //    entries are added to rsp.toLog
+      log.info("Start External Search Query: {}", req.getParamString());
     }
 
     List<SearchComponent> components = getComponents();
@@ -339,7 +361,9 @@ public class SearchHandler extends RequestHandlerBase
       rb.requestInfo.setResponseBuilder(rb);
     }
 
-    tagRequestWithRequestId(rb);
+    if (reqId != null) {
+      tagRequestWithRequestId(rb, reqId);
+    }
 
     boolean dbg = req.getParams().getBool(CommonParams.DEBUG_QUERY, false);
     rb.setDebug(dbg);
@@ -607,30 +631,33 @@ public class SearchHandler extends RequestHandlerBase
     }
   }
 
-  private void tagRequestWithRequestId(ResponseBuilder rb) {
-    final boolean ridTaggingDisabled =
-        rb.req.getParams().getBool(CommonParams.DISABLE_REQUEST_ID, false);
-    if (!ridTaggingDisabled) {
-      String rid = getOrGenerateRequestId(rb.req);
-
-      // NOTE: SearchHandler explicitly never clears/removes this MDC value...
-      // We want it to live for the entire request, beyond the scope of SearchHandler's processing,
-      // and trust SolrDispatchFilter to clean it up at the end of the request.
-      //
-      // Examples:
-      // - ERROR logging of Exceptions propogated up to our base class
-      // - SolrCore.RequestLog
-      // - ERRORs that may be logged during response writing
-      MDC.put(CommonParams.REQUEST_ID, rid);
-
-      if (StringUtils.isBlank(rb.req.getParams().get(CommonParams.REQUEST_ID))) {
-        ModifiableSolrParams params = new ModifiableSolrParams(rb.req.getParams());
-        params.add(CommonParams.REQUEST_ID, rid); // add rid to the request so that shards see it
-        rb.req.setParams(params);
+  private static final List<String> VERBOSE_LOGGING_PARAMS = Arrays.asList("fq", "json");
+  private SolrParams removeVerboseParams(final SolrParams params) {
+    // Filter params by removing kv of VERBOSE_LOGGING_PARAMS, so that we can then call toString
+    SolrParams filteredParams = new SolrParams() {
+      @Override
+      public Iterator<String> getParameterNamesIterator() {
+        return Iterators.filter(params.getParameterNamesIterator(), s -> !VERBOSE_LOGGING_PARAMS.contains(s));
       }
-      if (rb.isDistrib) {
-        rb.rsp.addToLog(CommonParams.REQUEST_ID, rid); // to see it in the logs of the landing core
+
+      @Override
+      public String get(String param) {
+        return params.get(param);
       }
+
+      @Override
+      public String[] getParams(String param) {
+        return params.getParams(param);
+      }
+    };
+    return filteredParams;
+  }
+
+  private void tagRequestWithRequestId(ResponseBuilder rb, String rid) {
+    if (StringUtils.isBlank(rb.req.getParams().get(CommonParams.REQUEST_ID))) {
+      ModifiableSolrParams params = new ModifiableSolrParams(rb.req.getParams());
+      params.add(CommonParams.REQUEST_ID, rid);//add rid to the request so that shards see it
+      rb.req.setParams(params);
     }
   }
 

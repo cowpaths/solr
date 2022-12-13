@@ -104,6 +104,7 @@ import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.ContentStreamHandlerBase;
+import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequestBase;
@@ -500,6 +501,13 @@ public class HttpSolrCall {
 
     try {
       init();
+
+      if (solrReq != null && solrReq.getParams() != null) {
+        String reqId = solrReq.getParams().get(CommonParams.REQUEST_ID);
+        if (reqId != null) {
+          MDCLoggingContext.setReqId(reqId);
+        }
+      }
 
       TraceUtils.ifNotNoop(getSpan(), this::populateTracingSpan);
 

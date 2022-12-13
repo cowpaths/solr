@@ -78,7 +78,6 @@ import org.apache.solr.util.plugin.PluginInfoInitialized;
 import org.apache.solr.util.plugin.SolrCoreAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 /** Refer SOLR-281 */
 public class SearchHandler extends RequestHandlerBase

@@ -355,7 +355,9 @@ public class SearchHandler extends RequestHandlerBase
       // 2. The existing logging in SolrCore does not contain the query as query construction
       // happens after the log
       //    entries are added to rsp.toLog
-      log.info("Start External Search Query: {}", req.getParamString());
+      if (log.isInfoEnabled()) {
+        log.info("Start External Search Query: {}", req.getParamString());
+      }
     }
 
     List<SearchComponent> components = getComponents();

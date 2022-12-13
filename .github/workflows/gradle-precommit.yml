@@ -42,7 +42,4 @@ jobs:
     - name: Run gradle check (without tests)
       run: ./gradlew check -x test -Ptask.times=true -x licenses -x documentation -x buildLocalAntoraSite -x :solr:documentation:documentation -x :solr:documentation:collectLuceneJavadocs -x buildLocalSite -x :solr:solr-ref-guide:checkSiteLinks -x :checkUnusedConstraints -x rat -x :validateSourcePatterns -x :verifyLocks -x :solr:documentation:checkBrokenLinks
 
-    - name: Test solrj + core packages
-      run: ./gradlew :solr:core:test :solr:solrj:test
-
     - uses: gradle/wrapper-validation-action@v1

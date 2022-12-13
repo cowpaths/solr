@@ -17,6 +17,7 @@
 
 package org.apache.solr.common.cloud;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,6 +36,7 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     propMap.put(ZkStateReader.NODE_NAME_PROP, "localhost:8983_solr");
     propMap.put(ZkStateReader.CORE_NAME_PROP, "replicacore");
     propMap.put(ZkStateReader.REPLICA_TYPE, "NRT");
+    propMap.put(ZkStateReader.BASE_URL_PROP, "https://localhost");
     Replica replica = new Replica("replica1", propMap, collName, sliceName);
     Map<String, Replica> replicaMap = new HashMap<>();
     replicaMap.put("replica1core", replica);
@@ -43,10 +45,10 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     sliceMap.put(sliceName, slice);
     DocRouter docRouter = new CompositeIdRouter();
     DocCollection docCollection =
-        new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
+        new DocCollection(collName, sliceMap, propMap, docRouter, 1);
 
     DocCollection docCollection2 =
-        new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
+        new DocCollection(collName, sliceMap, propMap, docRouter, 1);
     String prsState = "replicacore:1:A:L";
     List<String> prsStates = new ArrayList<>();
     prsStates.add(prsState);
@@ -62,7 +64,7 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
   /** Now we have indent size 0 for any json object serialization */
   @Test
   public void testDocCollectionSeriallizationNoIndent() throws Exception {
-    String collName = "Q8RZD";
+    String collName = "test1";
     int numShards = 2048;
     Map<String, Slice> sliceMap = new HashMap<>();
     for (int i = 0; i < numShards; i++) {
@@ -70,6 +72,8 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
       Map<String, Object> propMap = new HashMap<>();
       propMap.put(ZkStateReader.NODE_NAME_PROP, "localhost:8983_solr");
       propMap.put(ZkStateReader.CORE_NAME_PROP, "replicacore");
+      propMap.put(ZkStateReader.BASE_URL_PROP, "https://localhost");
+      propMap.put(ZkStateReader.STATE_PROP, "active");
       propMap.put(ZkStateReader.REPLICA_TYPE, "NRT");
       propMap.put(ZkStateReader.FORCE_SET_STATE_PROP, "false");
       propMap.put(ZkStateReader.LEADER_PROP, "true");
@@ -86,13 +90,15 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     }
     DocRouter docRouter = new CompositeIdRouter();
 
+    Map<String, Object> propMap = new HashMap<>();
+    //propMap.put(ZkStateReader.BASE_URL_PROP, "https://localhost");
     DocCollection docCollection =
-        new DocCollection(collName, sliceMap, null, docRouter, 1, "collection");
+        new DocCollection(collName, sliceMap, propMap, docRouter, 1);
 
     byte[] ser = Utils.toJSON(docCollection);
 
     // sometime it takes url schems http or https - test setup issue
     assertTrue(
-        "byte size is wrong at " + ser.length, 558944 == ser.length || 558944 + 2048 == ser.length);
+        "byte size is wrong at " + ser.length, 727646 == ser.length || 727646 + 2048 == ser.length);
   }
 }

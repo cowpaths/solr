@@ -17,7 +17,6 @@
 
 package org.apache.solr.common.cloud;
 
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -44,11 +43,9 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     Map<String, Slice> sliceMap = new HashMap<>();
     sliceMap.put(sliceName, slice);
     DocRouter docRouter = new CompositeIdRouter();
-    DocCollection docCollection =
-        new DocCollection(collName, sliceMap, propMap, docRouter, 1);
+    DocCollection docCollection = new DocCollection(collName, sliceMap, propMap, docRouter, 1);
 
-    DocCollection docCollection2 =
-        new DocCollection(collName, sliceMap, propMap, docRouter, 1);
+    DocCollection docCollection2 = new DocCollection(collName, sliceMap, propMap, docRouter, 1);
     String prsState = "replicacore:1:A:L";
     List<String> prsStates = new ArrayList<>();
     prsStates.add(prsState);
@@ -91,9 +88,8 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
     DocRouter docRouter = new CompositeIdRouter();
 
     Map<String, Object> propMap = new HashMap<>();
-    //propMap.put(ZkStateReader.BASE_URL_PROP, "https://localhost");
-    DocCollection docCollection =
-        new DocCollection(collName, sliceMap, propMap, docRouter, 1);
+    // propMap.put(ZkStateReader.BASE_URL_PROP, "https://localhost");
+    DocCollection docCollection = new DocCollection(collName, sliceMap, propMap, docRouter, 1);
 
     byte[] ser = Utils.toJSON(docCollection);
 

@@ -34,5 +34,5 @@ jobs:
           ${{ runner.os }}-gradle-
     - name: Initialize gradle settings
       run: ./gradlew localSettings
-    - name: Test the SolrJ Package
-      run: ./gradlew solr:solrj:test solr:core:test
+    - name: Test Solr
+      run: ./gradlew solr:test

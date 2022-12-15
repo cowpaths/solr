@@ -35,4 +35,4 @@ jobs:
     - name: Initialize gradle settings
       run: ./gradlew localSettings
     - name: Test Solr
-      run: ./gradlew solr:test
+      run: ./gradlew test

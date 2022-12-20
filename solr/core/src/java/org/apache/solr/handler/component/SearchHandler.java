@@ -22,6 +22,7 @@ import static org.apache.solr.common.params.CommonParams.PATH;
 import static org.apache.solr.common.params.CommonParams.STATUS;
 
 import com.codahale.metrics.Counter;
+import com.google.common.collect.Iterators;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
@@ -35,8 +36,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-
-import com.google.common.collect.Iterators;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.search.TotalHits;
@@ -336,8 +335,8 @@ public class SearchHandler extends RequestHandlerBase
       log.info("Start Forwarded Search Query");
       SolrParams filteredParams = removeVerboseParams(req.getParams());
       rsp.getToLog()
-              .asShallowMap(false)
-              .put("params", "{" + filteredParams + "}"); // replace "params" with the filtered version
+          .asShallowMap(false)
+          .put("params", "{" + filteredParams + "}"); // replace "params" with the filtered version
       int purpose = req.getParams().getInt(ShardParams.SHARDS_PURPOSE, 0);
       SolrPluginUtils.forEachRequestPurpose(
           purpose, n -> shardPurposes.computeIfAbsent(n, name -> new Counter()).inc());
@@ -634,23 +633,23 @@ public class SearchHandler extends RequestHandlerBase
   private SolrParams removeVerboseParams(final SolrParams params) {
     // Filter params by removing kv of VERBOSE_LOGGING_PARAMS, so that we can then call toString
     SolrParams filteredParams =
-            new SolrParams() {
-              @Override
-              public Iterator<String> getParameterNamesIterator() {
-                return Iterators.filter(
-                        params.getParameterNamesIterator(), s -> !VERBOSE_LOGGING_PARAMS.contains(s));
-              }
+        new SolrParams() {
+          @Override
+          public Iterator<String> getParameterNamesIterator() {
+            return Iterators.filter(
+                params.getParameterNamesIterator(), s -> !VERBOSE_LOGGING_PARAMS.contains(s));
+          }
 
-              @Override
-              public String get(String param) {
-                return params.get(param);
-              }
+          @Override
+          public String get(String param) {
+            return params.get(param);
+          }
 
-              @Override
-              public String[] getParams(String param) {
-                return params.getParams(param);
-              }
-            };
+          @Override
+          public String[] getParams(String param) {
+            return params.getParams(param);
+          }
+        };
     return filteredParams;
   }
 

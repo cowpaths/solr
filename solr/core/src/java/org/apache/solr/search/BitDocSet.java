@@ -259,7 +259,7 @@ public class BitDocSet extends DocSet {
     }
 
     final int base = context.docBase;
-    final int max = base + maxDoc; // one past the max doc in this segment.
+    final int max = Math.min(bits.length(), base + maxDoc); // one past the max doc in this segment, limited to bit set length
     final FixedBitSet bs = bits;
 
     return new DocIdSetIterator() {

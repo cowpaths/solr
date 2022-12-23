@@ -318,11 +318,11 @@ public class JsonQueryRequestFacetingIntegrationTest extends SolrCloudTestCase {
         new FacetBucket(80.0f, 1));
     List<BucketJsonFacet> buckets = topLevelFacetData.getBucketBasedFacets("prices").getBuckets();
     assertEquals(5, buckets.size());
-    assertEquals(4, buckets.get(0).getStatValue("unique_cats"));
+    assertEquals(4l, buckets.get(0).getStatValue("unique_cats"));
     assertNull(buckets.get(1).getStatValue("unique_cats"));
     assertNull(buckets.get(2).getStatValue("unique_cats"));
-    assertEquals(2, buckets.get(3).getStatValue("unique_cats"));
-    assertEquals(2, buckets.get(4).getStatValue("unique_cats"));
+    assertEquals(2l, buckets.get(3).getStatValue("unique_cats"));
+    assertEquals(2l, buckets.get(4).getStatValue("unique_cats"));
     assertHasFacetWithBucketValues(
         topLevelFacetData,
         "shipping_weights",

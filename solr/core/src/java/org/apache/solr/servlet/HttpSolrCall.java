@@ -133,6 +133,7 @@ import org.apache.solr.util.tracing.TraceUtils;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.slf4j.MarkerFactory;
 
 /** This class represents a call made to Solr */
@@ -558,6 +559,13 @@ public class HttpSolrCall {
 
     try {
       init();
+
+      if (solrReq != null && solrReq.getParams() != null) {
+        String reqId = solrReq.getParams().get(CommonParams.REQUEST_ID);
+        if (reqId != null) {
+          MDC.put(CommonParams.REQUEST_ID, reqId);
+        }
+      }
 
       TraceUtils.ifNotNoop(getSpan(), this::populateTracingSpan);
 

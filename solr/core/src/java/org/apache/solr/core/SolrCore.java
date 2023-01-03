@@ -180,6 +180,7 @@ import org.apache.zookeeper.data.Stat;
 import org.eclipse.jetty.io.RuntimeIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MarkerFactory;
 
 /**
  * SolrCore got its name because it represents the "core" of Solr -- one index and everything needed
@@ -2887,7 +2888,12 @@ public final class SolrCore implements SolrInfoBean, Closeable {
 
     if (rsp.getToLog().size() > 0) {
       if (requestLog.isInfoEnabled()) {
-        requestLog.info(rsp.getToLogAsString());
+        Object path = rsp.getToLog().get("path");
+        if (path instanceof String) {
+          requestLog.info(MarkerFactory.getMarker((String) path), rsp.getToLogAsString());
+        } else {
+          requestLog.info(rsp.getToLogAsString());
+        }
       }
 
       /* slowQueryThresholdMillis defaults to -1 in SolrConfig -- not enabled.*/

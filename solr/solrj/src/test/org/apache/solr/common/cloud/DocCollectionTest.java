@@ -44,20 +44,22 @@ public class DocCollectionTest extends SolrTestCase {
 
     Map<String, Slice> slices = new HashMap<>();
     Map<String, Replica> sliceToProps = new HashMap<>();
-    Map<String, Object> props = new HashMap<>();
+    Map<String, Object> replicaProps = new HashMap<>();
     String nodeName = "127.0.0.1:10000_solr";
-    props.put(ZkStateReader.NODE_NAME_PROP, nodeName);
-    props.put(ZkStateReader.BASE_URL_PROP, Utils.getBaseUrlForNodeName(nodeName, "http"));
-    props.put(ZkStateReader.CORE_NAME_PROP, "core1");
-    props.put(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME);
-    props.put(Replica.ReplicaStateProps.STATE, Replica.State.DOWN.toString()); //start with down
+    replicaProps.put(ZkStateReader.NODE_NAME_PROP, nodeName);
+    replicaProps.put(ZkStateReader.BASE_URL_PROP, Utils.getBaseUrlForNodeName(nodeName, "http"));
+    replicaProps.put(ZkStateReader.CORE_NAME_PROP, "core1");
+    replicaProps.put(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME);
+    replicaProps.put(Replica.ReplicaStateProps.STATE, Replica.State.DOWN.toString()); //start with down
 
-    Replica replica = new Replica("node1", props, "collection1", "shard1");
+    Replica replica = new Replica("node1", replicaProps, "collection1", "shard1");
     sliceToProps.put("node1", replica);
     Slice slice = new Slice("shard1", sliceToProps, null, "collection1");
     slices.put("shard1", slice);
-    return new DocCollection("collection1", slices, props, DocRouter.DEFAULT);
+    PerReplicaStates replicaStates = new PerReplicaStates(
+            "state.json", 1, List.of("node1:2:D"));
+    Map<String, Object> collectionProps =  Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME,
+            DocCollection.CollectionStateProps.PER_REPLICA_STATE, "true" );
+    return new DocCollection("collection1", slices, collectionProps, DocRouter.DEFAULT,0, new DocCollection.PrsSupplier(() -> replicaStates));
   }
-
-
 }

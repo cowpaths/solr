@@ -39,7 +39,8 @@ Improvements
 
 Optimizations
 ---------------------
-(No changes)
+
+* SOLR-15616: Allow thread metrics to be cached (Ishan Chattopadhyaya, ab)
 
 Bug Fixes
 ---------------------

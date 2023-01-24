@@ -36,7 +36,11 @@ class UniqueMultiDvSlotAcc extends UniqueSlotAcc {
   SortedSetDocValues subDv;
 
   public UniqueMultiDvSlotAcc(
-      FacetContext fcontext, SchemaField field, int numSlots, int numValsExplicit, HLLAgg.HLLFactory factory)
+      FacetContext fcontext,
+      SchemaField field,
+      int numSlots,
+      int numValsExplicit,
+      HLLAgg.HLLFactory factory)
       throws IOException {
     super(fcontext, field, numSlots, numValsExplicit, factory);
   }

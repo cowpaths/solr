@@ -36,7 +36,11 @@ class UniqueSinglevaluedSlotAcc extends UniqueSlotAcc {
   SortedDocValues subDv;
 
   public UniqueSinglevaluedSlotAcc(
-      FacetContext fcontext, SchemaField field, int numSlots, int numValsExplicit, HLLAgg.HLLFactory factory)
+      FacetContext fcontext,
+      SchemaField field,
+      int numSlots,
+      int numValsExplicit,
+      HLLAgg.HLLFactory factory)
       throws IOException {
     super(fcontext, field, numSlots, numValsExplicit, factory);
   }

@@ -33,7 +33,8 @@ public class UniqueBlockQueryAgg extends UniqueBlockAgg {
     private Query query;
     private BitSet parentBitSet;
 
-    private UniqueBlockQuerySlotAcc(FacetContext fcontext, Query query, int numSlots, int numValsExplicit)
+    private UniqueBlockQuerySlotAcc(
+        FacetContext fcontext, Query query, int numSlots, int numValsExplicit)
         throws IOException { //
       super(fcontext, null, numSlots, numValsExplicit);
       this.query = query;

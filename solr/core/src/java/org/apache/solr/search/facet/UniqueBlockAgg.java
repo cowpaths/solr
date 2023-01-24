@@ -26,9 +26,15 @@ public abstract class UniqueBlockAgg extends UniqueAgg {
 
     protected int[] lastSeenValuesPerSlot;
 
-    protected UniqueBlockSlotAcc(FacetContext fcontext, SchemaField field, int numSlots, int numValsExplicit)
+    protected UniqueBlockSlotAcc(
+        FacetContext fcontext, SchemaField field, int numSlots, int numValsExplicit)
         throws IOException { //
-      super(fcontext, field, /*numSlots suppressing inherited accumulator */ 0, numValsExplicit, null);
+      super(
+          fcontext,
+          field, /*numSlots suppressing inherited accumulator */
+          0,
+          numValsExplicit,
+          null);
       counts = new int[numSlots];
       lastSeenValuesPerSlot = new int[numSlots];
       Arrays.fill(lastSeenValuesPerSlot, Integer.MIN_VALUE);

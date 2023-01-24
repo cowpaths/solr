@@ -133,7 +133,8 @@ public class UniqueAgg extends StrAggValueSource {
     LongSet[] sets;
     private final int numValsExplicit;
 
-    public BaseNumericAcc(FacetContext fcontext, String field, int numSlots,  int numValsExplicit) throws IOException {
+    public BaseNumericAcc(FacetContext fcontext, String field, int numSlots, int numValsExplicit)
+        throws IOException {
       super(fcontext, fcontext.qcontext.searcher().getSchema().getField(field));
       sets = new LongSet[numSlots];
       this.numValsExplicit = numValsExplicit;
@@ -213,7 +214,8 @@ public class UniqueAgg extends StrAggValueSource {
   static class NumericAcc extends BaseNumericAcc {
     NumericDocValues values;
 
-    public NumericAcc(FacetContext fcontext, String field, int numSlots, int numValsExplicit) throws IOException {
+    public NumericAcc(FacetContext fcontext, String field, int numSlots, int numValsExplicit)
+        throws IOException {
       super(fcontext, field, numSlots, numValsExplicit);
     }
 
@@ -236,7 +238,8 @@ public class UniqueAgg extends StrAggValueSource {
   static class SortedNumericAcc extends BaseNumericAcc {
     SortedNumericDocValues values;
 
-    public SortedNumericAcc(FacetContext fcontext, String field, int numSlots, int numValsExplicit) throws IOException {
+    public SortedNumericAcc(FacetContext fcontext, String field, int numSlots, int numValsExplicit)
+        throws IOException {
       super(fcontext, field, numSlots, numValsExplicit);
     }
 

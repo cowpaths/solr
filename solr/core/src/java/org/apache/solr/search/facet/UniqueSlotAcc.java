@@ -36,7 +36,11 @@ abstract class UniqueSlotAcc extends SlotAcc {
   final int numValsExplicit;
 
   public UniqueSlotAcc(
-      FacetContext fcontext, SchemaField field, int numSlots, int numValsExplicit, HLLAgg.HLLFactory factory)
+      FacetContext fcontext,
+      SchemaField field,
+      int numSlots,
+      int numValsExplicit,
+      HLLAgg.HLLFactory factory)
       throws IOException {
     super(fcontext);
     this.factory = factory;

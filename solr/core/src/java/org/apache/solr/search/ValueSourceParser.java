@@ -1174,7 +1174,8 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
           @Override
           public ValueSource parse(FunctionQParser fp) throws SyntaxError {
             if (fp.sp.peek() == QueryParsing.LOCALPARAM_START.charAt(0)) {
-              return new UniqueBlockQueryAgg(fp.parseNestedQuery(), UniqueAgg.DEFAULT_NUM_VALS_EXPLICIT);
+              return new UniqueBlockQueryAgg(
+                  fp.parseNestedQuery(), UniqueAgg.DEFAULT_NUM_VALS_EXPLICIT);
             }
             return new UniqueBlockFieldAgg(fp.parseArg(), UniqueAgg.DEFAULT_NUM_VALS_EXPLICIT);
           }

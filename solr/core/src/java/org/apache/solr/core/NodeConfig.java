@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,6 +38,8 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.logging.LogWatcherConfig;
+import org.apache.solr.search.CacheConfig;
+import org.apache.solr.search.SolrCache;
 import org.apache.solr.servlet.SolrDispatchFilter;
 import org.apache.solr.update.UpdateShardHandlerConfig;
 import org.apache.solr.util.ModuleUtils;
@@ -104,6 +107,8 @@ public class NodeConfig {
 
   private final MetricsConfig metricsConfig;
 
+  private final Map<String, SolrCache<?, ?>> caches;
+
   private final PluginInfo transientCacheConfig;
 
   private final PluginInfo tracerConfig;
@@ -141,6 +146,7 @@ public class NodeConfig {
       Properties solrProperties,
       PluginInfo[] backupRepositoryPlugins,
       MetricsConfig metricsConfig,
+      Map<String, CacheConfig> cachesConfig,
       PluginInfo transientCacheConfig,
       PluginInfo tracerConfig,
       boolean fromZookeeper,
@@ -176,6 +182,16 @@ public class NodeConfig {
     this.solrProperties = solrProperties;
     this.backupRepositoryPlugins = backupRepositoryPlugins;
     this.metricsConfig = metricsConfig;
+    if (cachesConfig.isEmpty()) {
+      this.caches = Collections.emptyMap();
+    } else {
+      Map<String, SolrCache<?, ?>> m = new HashMap<>(cachesConfig.size());
+      cachesConfig.forEach((k, c) -> {
+        SolrCache<?, ?> solrCache = c.newInstance(null);
+        m.put(k, solrCache);
+      });
+      this.caches = Collections.unmodifiableMap(m);
+    }
     this.transientCacheConfig = transientCacheConfig;
     this.tracerConfig = tracerConfig;
     this.fromZookeeper = fromZookeeper;
@@ -378,6 +394,10 @@ public class NodeConfig {
     return metricsConfig;
   }
 
+  public SolrCache<?, ?> getCache(String name) {
+    return caches.get(name);
+  }
+
   public PluginInfo getTransientCachePluginInfo() {
     return transientCacheConfig;
   }
@@ -566,6 +586,7 @@ public class NodeConfig {
     private Properties solrProperties = new Properties();
     private PluginInfo[] backupRepositoryPlugins;
     private MetricsConfig metricsConfig;
+    private Map<String, CacheConfig> cachesConfig;
     private PluginInfo transientCacheConfig;
     private PluginInfo tracerConfig;
     private boolean fromZookeeper = false;
@@ -737,6 +758,11 @@ public class NodeConfig {
       return this;
     }
 
+    public NodeConfigBuilder setCachesConfig(Map<String, CacheConfig> cachesConfig) {
+      this.cachesConfig = cachesConfig;
+      return this;
+    }
+
     public NodeConfigBuilder setSolrCoreCacheFactoryConfig(PluginInfo transientCacheConfig) {
       this.transientCacheConfig = transientCacheConfig;
       return this;
@@ -816,6 +842,7 @@ public class NodeConfig {
           solrProperties,
           backupRepositoryPlugins,
           metricsConfig,
+          cachesConfig,
           transientCacheConfig,
           tracerConfig,
           fromZookeeper,

@@ -32,6 +32,8 @@ import org.apache.commons.exec.OS;
 import org.apache.lucene.tests.util.TestUtil;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.search.CaffeineCache;
+import org.apache.solr.search.SolrCache;
 import org.apache.solr.update.UpdateShardHandlerConfig;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -158,6 +160,15 @@ public class TestSolrXml extends SolrTestCaseJ4 {
     assertThat(cfg.getCoreRootDirectory().toString(), containsString("myCoreRoot"));
     assertEquals("solr host port", 8888, cfg.getCloudConfig().getSolrHostPort());
     assertEquals("schema cache", false, cfg.hasSchemaCache());
+  }
+
+  public void testNodeLevelCache() throws IOException {
+    Path testSrcRoot = TEST_PATH();
+    Files.copy(testSrcRoot.resolve("solr-nodelevelcaches.xml"), solrHome.resolve("solr.xml"));
+
+    NodeConfig cfg = SolrXmlConfig.fromSolrHome(solrHome, new Properties());
+    SolrCache<?, ?> nodeLevelCache = cfg.getCache("myNodeLevelCache");
+    assertTrue(nodeLevelCache instanceof CaffeineCache);
   }
 
   public void testExplicitNullGivesDefaults() {

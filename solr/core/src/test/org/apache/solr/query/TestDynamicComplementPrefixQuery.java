@@ -21,7 +21,7 @@ import java.util.Random;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.MultiTermQuery;
-import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.tests.util.TestUtil;
 import org.apache.lucene.util.UnicodeUtil;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;

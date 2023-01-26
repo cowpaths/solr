@@ -37,6 +37,7 @@ import org.apache.lucene.search.DocValuesFieldExistsQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MultiTermQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
@@ -70,7 +71,7 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
   }
 
   public DynamicComplementPrefixQuery(Term prefix, boolean noInvert, boolean multiValued, boolean forceCacheFieldExists) {
-    super(prefix.field());
+    super(prefix.field(), noInvert ? CONSTANT_SCORE_REWRITE : new InvertingRewriteMethod(CONSTANT_SCORE_REWRITE, multiValued));
     this.termPrefix = prefix;
     BytesRef tmp = prefix.bytes();
     byte[] backing = new byte[tmp.length + UnicodeUtil.BIG_TERM.length];
@@ -80,7 +81,7 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     this.limit = new BytesRef(backing);
     this.multiValued = multiValued;
     this.forceCacheFieldExists = forceCacheFieldExists;
-    inverted = noInvert ? null : new MultiTermQuery(field) {
+    inverted = noInvert ? null : new MultiTermQuery(field, CONSTANT_SCORE_REWRITE) {
       @Override
       protected TermsEnum getTermsEnum(Terms terms, AttributeSource atts) throws IOException {
         TermsEnum te = terms.iterator();
@@ -117,6 +118,13 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
       @Override
       public String toString(String field) {
         return DynamicComplementPrefixQuery.this.toString(field) + " (inverted)";
+      }
+
+      @Override
+      public void visit(QueryVisitor visitor) {
+        // NOTE: we obviously _do_ match on terms, but fully enumerating all matching terms here
+        // could be prohibitively expensive, so we pretend we _don't_ match on terms.
+        visitor.visitLeaf(this);
       }
     };
   }
@@ -233,8 +241,6 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     return false;
   }
 
-  private boolean wrappedRewriteMethod = false;
-
   private static class InvertingRewriteMethod extends RewriteMethod {
     private final RewriteMethod backing;
     private final boolean multiValued;
@@ -261,20 +267,9 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
   }
 
   @Override
+  @Deprecated
   public void setRewriteMethod(RewriteMethod method) {
-    wrappedRewriteMethod = true;
     super.setRewriteMethod(inverted == null ? method : new InvertingRewriteMethod(method, multiValued));
-  }
-
-  @Override
-  public RewriteMethod getRewriteMethod() {
-    RewriteMethod ret = super.getRewriteMethod();
-    if (wrappedRewriteMethod) {
-      return ret;
-    } else {
-      setRewriteMethod(ret);
-      return super.getRewriteMethod();
-    }
   }
 
   private Query rewriteInverting(IndexReader reader, RewriteMethod internalRewriteMethod, boolean multiValued) throws IOException {
@@ -375,6 +370,13 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     }
 
     @Override
+    public void visit(QueryVisitor visitor) {
+      // NOTE: we obviously _do_ match on terms, but fully enumerating all matching terms here
+      // could be prohibitively expensive, so we pretend we _don't_ match on terms.
+      visitor.visitLeaf(this);
+    }
+
+    @Override
     public boolean equals(Object obj) {
       if (!(obj instanceof DynamicallyInvertingPrefixQuery)) {
         return false;
@@ -405,6 +407,13 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     buffer.append(termPrefix.text());
     buffer.append('*');
     return buffer.toString();
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    // NOTE: we obviously _do_ match on terms, but fully enumerating all matching terms here
+    // could be prohibitively expensive, so we pretend we _don't_ match on terms.
+    visitor.visitLeaf(this);
   }
 
   @Override

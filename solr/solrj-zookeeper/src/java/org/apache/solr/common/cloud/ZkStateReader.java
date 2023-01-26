@@ -699,7 +699,10 @@ public class ZkStateReader implements SolrCloseable {
           clusterState.getCollectionStates());
     }
 
-    notifyCloudCollectionsListeners();
+    if (changedCollections.isEmpty()) {
+      // We only need to notify cloud collection listeners on new collections
+      notifyCloudCollectionsListeners();
+    }
 
     for (String collection : changedCollections) {
       notifyStateWatchers(collection, clusterState.getCollectionOrNull(collection));

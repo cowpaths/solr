@@ -18,7 +18,6 @@ package org.apache.solr.search.facet;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -191,6 +190,18 @@ public abstract class FacetProcessor<T extends FacetRequest> {
   }
 
   private void handleFilterExclusions() throws IOException {
+    List<String> excludeTags = freq.domain.excludeTags;
+
+    if (excludeTags == null || excludeTags.size() == 0) {
+      return;
+    }
+
+    Set<Query> excludeSet = QueryUtils.getTaggedQueries(fcontext.req, excludeTags);
+
+    if (excludeSet.isEmpty()) {
+      return;
+    }
+
     List<Query> qlist = getContextQueries();
 
     // recompute the base domain
@@ -200,15 +211,7 @@ public abstract class FacetProcessor<T extends FacetRequest> {
   protected List<Query> getContextQueries() {
     List<String> excludeTags = freq.domain.excludeTags;
 
-    if (excludeTags == null || excludeTags.size() == 0) {
-      return Collections.emptyList();
-    }
-
     Set<Query> excludeSet = QueryUtils.getTaggedQueries(fcontext.req, excludeTags);
-
-    if (excludeSet.isEmpty()) {
-      return Collections.emptyList();
-    }
 
     List<Query> qlist = new ArrayList<>();
 

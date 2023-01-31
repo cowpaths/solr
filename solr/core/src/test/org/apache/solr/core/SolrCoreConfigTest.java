@@ -17,7 +17,7 @@
 
 package org.apache.solr.core;
 
-import org.apache.solr.client.solrj.embedded.JettySolrRunner;
+import org.apache.solr.embedded.JettySolrRunner;
 import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
 import org.junit.Test;
 

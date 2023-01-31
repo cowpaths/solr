@@ -17,12 +17,7 @@
 package org.apache.solr.search.facet;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.IntFunction;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.BooleanClause;
@@ -190,16 +185,23 @@ public abstract class FacetProcessor<T extends FacetRequest> {
   }
 
   private void handleFilterExclusions() throws IOException {
+    List<Query> qlist = getContextQueries();
+
+    // recompute the base domain
+    fcontext.base = fcontext.searcher.getDocSet(qlist);
+  }
+
+  protected List<Query> getContextQueries() {
     List<String> excludeTags = freq.domain.excludeTags;
 
     if (excludeTags == null || excludeTags.size() == 0) {
-      return;
+      return Collections.emptyList();
     }
 
     Set<Query> excludeSet = QueryUtils.getTaggedQueries(fcontext.req, excludeTags);
 
     if (excludeSet.isEmpty()) {
-      return;
+      return Collections.emptyList();
     }
 
     List<Query> qlist = new ArrayList<>();
@@ -229,8 +231,7 @@ public abstract class FacetProcessor<T extends FacetRequest> {
       }
     }
 
-    // recompute the base domain
-    fcontext.base = fcontext.searcher.getDocSet(qlist);
+    return qlist;
   }
 
   /** modifies the context base if there is a join field domain change */

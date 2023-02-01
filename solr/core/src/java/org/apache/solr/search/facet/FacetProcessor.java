@@ -202,13 +202,18 @@ public abstract class FacetProcessor<T extends FacetRequest> {
       return;
     }
 
-    List<Query> qlist = getContextQueries(excludeSet);
+    List<Query> qlist = getContextQueriesWithExclusions(excludeSet);
 
     // recompute the base domain
     fcontext.base = fcontext.searcher.getDocSet(qlist);
   }
 
-  protected List<Query> getContextQueries(Set<Query> excludeSet) {
+  protected List<Query> getContextQueries() {
+    Set<Query> excludeSet = QueryUtils.getTaggedQueries(fcontext.req, freq.domain.excludeTags);
+    return getContextQueriesWithExclusions(excludeSet);
+  }
+
+  private List<Query> getContextQueriesWithExclusions(Set<Query> excludeSet) {
     if (excludeSet == null) {
       excludeSet = QueryUtils.getTaggedQueries(fcontext.req, freq.domain.excludeTags);
     }

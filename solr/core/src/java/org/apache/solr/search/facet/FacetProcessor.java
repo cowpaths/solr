@@ -214,10 +214,6 @@ public abstract class FacetProcessor<T extends FacetRequest> {
   }
 
   private List<Query> getContextQueriesWithExclusions(Set<Query> excludeSet) {
-    if (excludeSet == null) {
-      excludeSet = QueryUtils.getTaggedQueries(fcontext.req, freq.domain.excludeTags);
-    }
-
     List<Query> qlist = new ArrayList<>();
 
     // TODO: somehow remove responsebuilder dependency

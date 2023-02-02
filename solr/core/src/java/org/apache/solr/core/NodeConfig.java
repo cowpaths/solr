@@ -182,7 +182,7 @@ public class NodeConfig {
     this.solrProperties = solrProperties;
     this.backupRepositoryPlugins = backupRepositoryPlugins;
     this.metricsConfig = metricsConfig;
-    if (cachesConfig.isEmpty()) {
+    if (cachesConfig == null || cachesConfig.isEmpty()) {
       this.caches = Collections.emptyMap();
     } else {
       Map<String, SolrCache<?, ?>> m = new HashMap<>(cachesConfig.size());

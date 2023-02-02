@@ -90,9 +90,11 @@ public class StrField extends PrimitiveFieldType {
     MultiTermQuery query;
     SolrParams lParams = parser == null ? null : parser.getLocalParams();
     if (lParams == null || !lParams.getBool("forceAutomaton", false)) {
-      boolean noInvert = !sf.hasDocValues() || (lParams != null && lParams.getBool("noInvert", false));
+      boolean noInvert =
+          !sf.hasDocValues() || (lParams != null && lParams.getBool("noInvert", false));
       boolean multivalued = sf.multiValued() || sf.getType().multiValuedFieldCache();
-      boolean forceCacheFieldExists = !noInvert && lParams != null && lParams.getBool("forceCacheFieldExists", false);
+      boolean forceCacheFieldExists =
+          !noInvert && lParams != null && lParams.getBool("forceCacheFieldExists", false);
       query = new DynamicComplementPrefixQuery(term, noInvert, multivalued, forceCacheFieldExists);
     } else {
       query = new PrefixQuery(term);

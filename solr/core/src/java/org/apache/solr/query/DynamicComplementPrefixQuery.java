@@ -16,9 +16,7 @@
  */
 package org.apache.solr.query;
 
-
 import java.io.IOException;
-
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.FilteredTermsEnum;
 import org.apache.lucene.index.IndexReader;
@@ -45,17 +43,20 @@ import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.UnicodeUtil;
 
-/** A Query that matches documents containing terms with a specified prefix. A PrefixQuery
- * is built by QueryParser for input like <code>app*</code>.
+/**
+ * A Query that matches documents containing terms with a specified prefix. A PrefixQuery is built
+ * by QueryParser for input like <code>app*</code>.
  *
  * <p>This query differs from {@link org.apache.lucene.search.PrefixQuery} in two ways:
- * 1. It does _not_ build an automaton representing the prefix; rather, it builds
- * {@link FilteredTermsEnum} instances that are optimized for common data patterns
- * (specifically, it compares the _end_ of BytesRefs first).
- * 2. In the event that the prefix matches a large proportion of terms in the index,
- * an inverse query is built against terms that do _not_ match the prefix.
- * */
-
+ *
+ * <ol>
+ *   <li>It does _not_ build an automaton representing the prefix; rather, it builds {@link
+ *       FilteredTermsEnum} instances that are optimized for common data patterns (specifically, it
+ *       compares the _end_ of BytesRefs first).
+ *   <li>In the event that the prefix matches a large proportion of terms in the index, an inverse
+ *       query is built against terms that do _not_ match the prefix.
+ * </ol>
+ */
 public class DynamicComplementPrefixQuery extends MultiTermQuery {
 
   private final Term termPrefix;
@@ -70,63 +71,78 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     this(prefix, noInvert, multiValued, false);
   }
 
-  public DynamicComplementPrefixQuery(Term prefix, boolean noInvert, boolean multiValued, boolean forceCacheFieldExists) {
-    super(prefix.field(), noInvert ? CONSTANT_SCORE_REWRITE : new InvertingRewriteMethod(CONSTANT_SCORE_REWRITE, multiValued));
+  public DynamicComplementPrefixQuery(
+      Term prefix, boolean noInvert, boolean multiValued, boolean forceCacheFieldExists) {
+    super(
+        prefix.field(),
+        noInvert
+            ? CONSTANT_SCORE_REWRITE
+            : new InvertingRewriteMethod(CONSTANT_SCORE_REWRITE, multiValued));
     this.termPrefix = prefix;
     BytesRef tmp = prefix.bytes();
     byte[] backing = new byte[tmp.length + UnicodeUtil.BIG_TERM.length];
     System.arraycopy(tmp.bytes, tmp.offset, backing, 0, tmp.length);
-    System.arraycopy(UnicodeUtil.BIG_TERM.bytes, 0, backing, tmp.length, UnicodeUtil.BIG_TERM.length);
+    System.arraycopy(
+        UnicodeUtil.BIG_TERM.bytes, 0, backing, tmp.length, UnicodeUtil.BIG_TERM.length);
     this.prefix = new BytesRef(backing, 0, tmp.length);
     this.limit = new BytesRef(backing);
     this.multiValued = multiValued;
     this.forceCacheFieldExists = forceCacheFieldExists;
-    inverted = noInvert ? null : new MultiTermQuery(field, CONSTANT_SCORE_REWRITE) {
-      @Override
-      protected TermsEnum getTermsEnum(Terms terms, AttributeSource atts) throws IOException {
-        TermsEnum te = terms.iterator();
-        BytesRef limit;
-        TermState limitTermState;
-        if (te.seekCeil(DynamicComplementPrefixQuery.this.limit) == TermsEnum.SeekStatus.END) {
-          limit = null;
-          limitTermState = null;
-        } else {
-          limit = BytesRef.deepCopyOf(te.term());
-          limitTermState = te.termState();
-        }
-        if (te.seekCeil(DynamicComplementPrefixQuery.this.prefix) == TermsEnum.SeekStatus.END) {
-          return TermsEnum.EMPTY;
-        }
-        BytesRef start = BytesRef.deepCopyOf(te.term());
-        te.seekCeil(new BytesRef());
-        if (start.bytesEquals(te.term())) {
-          // there exist no terms before prefix
-          if (limitTermState == null) {
-            // there exist no terms after
-            return TermsEnum.EMPTY;
-          } else {
-            // pre-position `te` and set `start` term to null. This will cause `InvertPrefixTermsEnum`
-            // to only (and unconditionally) iterate over the "tail" terms -- greater than would match
-            // the specified prefix.
-            te.seekExact(limit, limitTermState);
-            start = null;
-          }
-        }
-        return new InvertPrefixTermsEnum(te, start, limit, limitTermState);
-      }
+    inverted =
+        noInvert
+            ? null
+            : new MultiTermQuery(field, CONSTANT_SCORE_REWRITE) {
+              @Override
+              protected TermsEnum getTermsEnum(Terms terms, AttributeSource atts)
+                  throws IOException {
+                TermsEnum te = terms.iterator();
+                BytesRef limit;
+                TermState limitTermState;
+                if (te.seekCeil(DynamicComplementPrefixQuery.this.limit)
+                    == TermsEnum.SeekStatus.END) {
+                  limit = null;
+                  limitTermState = null;
+                } else {
+                  limit = BytesRef.deepCopyOf(te.term());
+                  limitTermState = te.termState();
+                }
+                if (te.seekCeil(DynamicComplementPrefixQuery.this.prefix)
+                    == TermsEnum.SeekStatus.END) {
+                  return TermsEnum.EMPTY;
+                }
+                BytesRef start = BytesRef.deepCopyOf(te.term());
+                te.seekCeil(new BytesRef());
+                if (start.bytesEquals(te.term())) {
+                  // there exist no terms before prefix
+                  if (limitTermState == null) {
+                    // there exist no terms after
+                    return TermsEnum.EMPTY;
+                  } else {
+                    // pre-position `te` and set `start` term to null. This will cause
+                    // `InvertPrefixTermsEnum`
+                    // to only (and unconditionally) iterate over the "tail" terms -- greater than
+                    // would match
+                    // the specified prefix.
+                    te.seekExact(limit, limitTermState);
+                    start = null;
+                  }
+                }
+                return new InvertPrefixTermsEnum(te, start, limit, limitTermState);
+              }
 
-      @Override
-      public String toString(String field) {
-        return DynamicComplementPrefixQuery.this.toString(field) + " (inverted)";
-      }
+              @Override
+              public String toString(String field) {
+                return DynamicComplementPrefixQuery.this.toString(field) + " (inverted)";
+              }
 
-      @Override
-      public void visit(QueryVisitor visitor) {
-        // NOTE: we obviously _do_ match on terms, but fully enumerating all matching terms here
-        // could be prohibitively expensive, so we pretend we _don't_ match on terms.
-        visitor.visitLeaf(this);
-      }
-    };
+              @Override
+              public void visit(QueryVisitor visitor) {
+                // NOTE: we obviously _do_ match on terms, but fully enumerating all matching terms
+                // here
+                // could be prohibitively expensive, so we pretend we _don't_ match on terms.
+                visitor.visitLeaf(this);
+              }
+            };
   }
 
   @Override
@@ -147,6 +163,7 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
   private static final class DirectPrefixTermsEnum extends FilteredTermsEnum {
     private boolean unpositioned = true;
     private final BytesRef limit;
+
     public DirectPrefixTermsEnum(TermsEnum tenum, BytesRef limit) {
       super(tenum);
       this.limit = limit;
@@ -185,7 +202,9 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     private final BytesRef limit;
     private final TermState limitTermState;
     private boolean tail;
-    public InvertPrefixTermsEnum(TermsEnum tenum, BytesRef initial, BytesRef limit, TermState limitTermState) {
+
+    public InvertPrefixTermsEnum(
+        TermsEnum tenum, BytesRef initial, BytesRef limit, TermState limitTermState) {
       super(tenum, false);
       this.initial = initial;
       this.limit = limit;
@@ -257,7 +276,8 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
 
     @Override
     public boolean equals(Object obj) {
-      return obj instanceof InvertingRewriteMethod && backing.equals(((InvertingRewriteMethod) obj).backing);
+      return obj instanceof InvertingRewriteMethod
+          && backing.equals(((InvertingRewriteMethod) obj).backing);
     }
 
     @Override
@@ -269,10 +289,13 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
   @Override
   @Deprecated
   public void setRewriteMethod(RewriteMethod method) {
-    super.setRewriteMethod(inverted == null ? method : new InvertingRewriteMethod(method, multiValued));
+    super.setRewriteMethod(
+        inverted == null ? method : new InvertingRewriteMethod(method, multiValued));
   }
 
-  private Query rewriteInverting(IndexReader reader, RewriteMethod internalRewriteMethod, boolean multiValued) throws IOException {
+  private Query rewriteInverting(
+      IndexReader reader, RewriteMethod internalRewriteMethod, boolean multiValued)
+      throws IOException {
     Query direct = internalRewriteMethod.rewrite(reader, this);
     BooleanQuery.Builder builder = new BooleanQuery.Builder();
     Query fieldExistsQuery = new DocValuesFieldExistsQuery(termPrefix.field());
@@ -293,7 +316,13 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     private final BytesRef prefix;
     private final BytesRef limit;
 
-    private DynamicallyInvertingPrefixQuery(Query direct, Query inverted, boolean multiValued, String field, BytesRef prefix, BytesRef limit) {
+    private DynamicallyInvertingPrefixQuery(
+        Query direct,
+        Query inverted,
+        boolean multiValued,
+        String field,
+        BytesRef prefix,
+        BytesRef limit) {
       this.direct = direct;
       this.inverted = inverted;
       this.multiValued = multiValued;
@@ -316,7 +345,8 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost)
+        throws IOException {
       Weight directWeight = direct.createWeight(searcher, scoreMode, boost);
       Weight invertedWeight = inverted.createWeight(searcher, scoreMode, boost);
       return new ConstantScoreWeight(this, boost) {
@@ -355,7 +385,7 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
           if (range < 1) {
             return null;
           }
-          if (range <= sdv.getValueCount()>>1) {
+          if (range <= sdv.getValueCount() >> 1) {
             return directWeight.scorer(context);
           } else {
             return invertedWeight.scorer(context);
@@ -387,7 +417,7 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
 
     @Override
     public int hashCode() {
-      return DynamicallyInvertingPrefixQuery.class.hashCode() ^ field.hashCode() ^ prefix.hashCode();
+      return classHash() ^ field.hashCode() ^ prefix.hashCode();
     }
   }
 

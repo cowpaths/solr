@@ -18,15 +18,14 @@ package org.apache.solr.query;
 
 import java.io.IOException;
 import java.util.Random;
-
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.MultiTermQuery;
 import org.apache.lucene.tests.util.TestUtil;
 import org.apache.lucene.util.UnicodeUtil;
+import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
-import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.index.NoMergePolicyFactory;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -49,11 +48,13 @@ public class TestDynamicComplementPrefixQuery extends SolrTestCaseJ4 {
 
   private static final String[] FIELD_TYPES = new String[] {"v_s", "v_s_dv", "v_ss", "v_ss_dv"};
   private static final String[] MULTIVALUED_FIELD_TYPES = new String[] {"v_ss", "v_ss_dv"};
-  private static final String IGNORE_PREFIX = new String(Character.toChars(UnicodeUtil.UNI_REPLACEMENT_CHAR));
+  private static final String IGNORE_PREFIX =
+      new String(Character.toChars(UnicodeUtil.UNI_REPLACEMENT_CHAR));
 
   private static String getUnignoredString(Random r, int minLength, int maxLength) {
     String ret;
-    while ((ret = TestUtil.randomRealisticUnicodeString(r, minLength, maxLength)).startsWith(IGNORE_PREFIX)) {
+    while ((ret = TestUtil.randomRealisticUnicodeString(r, minLength, maxLength))
+        .startsWith(IGNORE_PREFIX)) {
       // loop until we get an unignored prefix
     }
     return ret;
@@ -69,7 +70,8 @@ public class TestDynamicComplementPrefixQuery extends SolrTestCaseJ4 {
     q1.setRewriteMethod(MultiTermQuery.CONSTANT_SCORE_REWRITE);
     q2.setRewriteMethod(MultiTermQuery.CONSTANT_SCORE_REWRITE);
     assertEquals(q1, q2);
-    q2.setRewriteMethod(MultiTermQuery.SCORING_BOOLEAN_REWRITE); // this should never actually happen IRL
+    q2.setRewriteMethod(
+        MultiTermQuery.SCORING_BOOLEAN_REWRITE); // this should never actually happen IRL
     assertNotEquals(q1, q2);
   }
 
@@ -121,7 +123,11 @@ public class TestDynamicComplementPrefixQuery extends SolrTestCaseJ4 {
       } else {
         v = mainPrefix.concat(TestUtil.randomRealisticUnicodeString(r, 0, maxTermLenComplement));
       }
-      String[] params = new String[2 + (FIELD_TYPES.length * 2) + (reallyMultiValuedForSegment ? (MULTIVALUED_FIELD_TYPES.length * 2) : 0)];
+      int paramsSize = 2 + (FIELD_TYPES.length * 2);
+      if (reallyMultiValuedForSegment) {
+        paramsSize += MULTIVALUED_FIELD_TYPES.length * 2;
+      }
+      String[] params = new String[paramsSize];
       int j = 0;
       params[j++] = "id";
       params[j++] = Integer.toString(i);
@@ -153,18 +159,41 @@ public class TestDynamicComplementPrefixQuery extends SolrTestCaseJ4 {
     }
   }
 
-  private static void assertNumFoundConsistent(SolrClient client, String prefix, String[] fieldTypes) throws SolrServerException, IOException {
-    final long compareNumFound = client.query(params("q", "{!prefix forceAutomaton=true f=$f v=$v}",
-        "f", fieldTypes[0],
-        "v", prefix,
-        "rows", "0")).getResults().getNumFound();
+  private static void assertNumFoundConsistent(
+      SolrClient client, String prefix, String[] fieldTypes)
+      throws SolrServerException, IOException {
+    final long compareNumFound =
+        client
+            .query(
+                params(
+                    "q",
+                    "{!prefix forceAutomaton=true f=$f v=$v}",
+                    "f",
+                    fieldTypes[0],
+                    "v",
+                    prefix,
+                    "rows",
+                    "0"))
+            .getResults()
+            .getNumFound();
     for (String ft : fieldTypes) {
-      for (String noInvert : new String[] { "true", "false" }) {
-        final long numFound = client.query(params("q", "{!prefix noInvert=$noInvert f=$f v=$v}",
-            "noInvert", noInvert,
-            "f", ft,
-            "v", prefix,
-            "rows", "0")).getResults().getNumFound();
+      for (String noInvert : new String[] {"true", "false"}) {
+        final long numFound =
+            client
+                .query(
+                    params(
+                        "q",
+                        "{!prefix noInvert=$noInvert f=$f v=$v}",
+                        "noInvert",
+                        noInvert,
+                        "f",
+                        ft,
+                        "v",
+                        prefix,
+                        "rows",
+                        "0"))
+                .getResults()
+                .getNumFound();
         assertEquals(compareNumFound, numFound);
       }
     }

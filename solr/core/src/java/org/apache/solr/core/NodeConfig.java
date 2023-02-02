@@ -186,10 +186,11 @@ public class NodeConfig {
       this.caches = Collections.emptyMap();
     } else {
       Map<String, SolrCache<?, ?>> m = new HashMap<>(cachesConfig.size());
-      cachesConfig.forEach((k, c) -> {
-        SolrCache<?, ?> solrCache = c.newInstance(null);
-        m.put(k, solrCache);
-      });
+      cachesConfig.forEach(
+          (k, c) -> {
+            SolrCache<?, ?> solrCache = c.newInstance(null);
+            m.put(k, solrCache);
+          });
       this.caches = Collections.unmodifiableMap(m);
     }
     this.transientCacheConfig = transientCacheConfig;

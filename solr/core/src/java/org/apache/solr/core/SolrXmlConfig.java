@@ -671,8 +671,10 @@ public class SolrXmlConfig {
         .build();
   }
 
-  private static Map<String, CacheConfig> getCachesConfig(SolrResourceLoader loader, ConfigNode caches) {
-    Map<String, CacheConfig> ret = CacheConfig.getMultipleConfigs(loader, null, null, caches.getAll("cache"));
+  private static Map<String, CacheConfig> getCachesConfig(
+      SolrResourceLoader loader, ConfigNode caches) {
+    Map<String, CacheConfig> ret =
+        CacheConfig.getMultipleConfigs(loader, null, null, caches.getAll("cache"));
     for (CacheConfig c : ret.values()) {
       if (c.getRegenerator() != null) {
         throw new SolrException(

@@ -111,7 +111,11 @@ public class CacheConfig implements MapSerializable {
   }
 
   public static CacheConfig getConfig(
-      SolrResourceLoader loader, SolrConfig solrConfig, String nodeName, Map<String, String> attrs, String xpath) {
+      SolrResourceLoader loader,
+      SolrConfig solrConfig,
+      String nodeName,
+      Map<String, String> attrs,
+      String xpath) {
     CacheConfig config = new CacheConfig();
     config.nodeName = nodeName;
     Map<String, String> attrsCopy = new LinkedHashMap<>(attrs.size());

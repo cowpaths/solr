@@ -25,6 +25,7 @@ import static org.apache.solr.common.cloud.ZkStateReader.NODE_NAME_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.REJOIN_AT_HEAD_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
 import static org.apache.solr.common.params.CollectionParams.CollectionAction.ADDROLE;
+import static org.apache.solr.common.params.CommonParams.ID;
 import static org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE;
 
 import com.google.common.base.Strings;
@@ -2339,6 +2340,22 @@ public class ZkController implements Closeable {
 
   public Overseer getOverseer() {
     return overseer;
+  }
+
+  public String getOverseerLeader() {
+    org.apache.zookeeper.data.Stat stat = new org.apache.zookeeper.data.Stat();
+    final String path = Overseer.OVERSEER_ELECT + "/leader";
+    byte[] data;
+    try {
+      data = zkClient.getData(path, null, stat, true);
+      Map<?, ?> m = (Map<?, ?>) Utils.fromJSON(data);
+      return (String) m.get(ID);
+    } catch (AlreadyClosedException e) {
+      return null;
+    } catch (Exception e) {
+      log.warn("Error communicating with ZooKeeper", e);
+      return null;
+    }
   }
 
   public LeaderElector getOverseerElector() {

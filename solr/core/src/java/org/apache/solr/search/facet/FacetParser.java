@@ -577,7 +577,10 @@ public abstract class FacetParser<T extends FacetRequest> {
       } else if (arg instanceof Map) {
         @SuppressWarnings({"unchecked"})
         Map<String, Object> m = (Map<String, Object>) arg;
-        facet.field = getField(m);
+        facet.fields = (String[]) m.get("fields");
+        if (facet.fields == null || facet.fields.length == 0) {
+          facet.field = getField(m);
+        }
         facet.offset = getLong(m, "offset", facet.offset);
         facet.limit = getLong(m, "limit", facet.limit);
         facet.overrequest = (int) getLong(m, "overrequest", facet.overrequest);

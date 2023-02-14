@@ -33,6 +33,7 @@ public class FacetField extends FacetRequestSorted {
   boolean numBuckets;
   String prefix;
   FacetMethod method;
+  String[] fields;
   int cacheDf; // 0 means "default", -1 means "never cache"
 
   // experimental - force perSeg collection when using dv method, currently for testing purposes
@@ -46,6 +47,7 @@ public class FacetField extends FacetRequestSorted {
   }
 
   public enum FacetMethod {
+    MF, // Multi field, custom!
     DV, // DocValues, collect into ordinal array
     UIF, // UnInvertedField, collect into ordinal array
     DVHASH, // DocValues, collect into hash
@@ -57,6 +59,8 @@ public class FacetField extends FacetRequestSorted {
     public static FacetMethod fromString(String method) {
       if (method == null || method.length() == 0) return DEFAULT_METHOD;
       switch (method) {
+        case "mf":
+          return MF;
         case "dv":
           return DV;
         case "uif":
@@ -80,6 +84,15 @@ public class FacetField extends FacetRequestSorted {
 
   @Override
   public FacetProcessor<FacetField> createFacetProcessor(FacetContext fcontext) {
+    if (method == FacetMethod.MF) {
+      SchemaField[] sfs = new SchemaField[fields.length];
+      for (int i = 0; i < fields.length; i++) {
+        sfs[i] = fcontext.searcher.getSchema().getField(fields[i]);
+      }
+
+      return new FacetFieldProcessorByHashMF(fcontext, this, sfs);
+    }
+
     SchemaField sf = fcontext.searcher.getSchema().getField(field);
     FieldType ft = sf.getType();
     boolean multiToken = sf.multiValued() || ft.multiValuedFieldCache();

@@ -57,4 +57,8 @@ abstract class FacetRequestSorted extends FacetRequest {
   public boolean returnsPartial() {
     return super.returnsPartial() || (limit > 0);
   }
+
+  public void setSort(FacetSort sort) {
+    this.sort = sort;
+  }
 }

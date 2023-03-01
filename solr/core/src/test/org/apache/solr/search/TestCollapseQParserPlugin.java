@@ -490,7 +490,8 @@ public class TestCollapseQParserPlugin extends SolrTestCaseJ4 {
     assertU(adoc(doc4));
     assertU(commit());
     String[] doc5 = {
-      "id", "6", "term_s", "YYYY", group, highGroup, "test_i", "10", "test_l", "100", "test_f", "200"
+      "id", "6", "term_s", "YYYY", group, highGroup, "test_i", "10", "test_l", "100", "test_f",
+      "200"
     };
     assertU(adoc(doc5));
     assertU(commit());
@@ -797,7 +798,7 @@ public class TestCollapseQParserPlugin extends SolrTestCaseJ4 {
           "//result/doc[1]/str[@name='id'][.='2']",
           "//result/doc[2]/str[@name='id'][.='6']");
     } catch (Exception e) {
-      if(numberType == null) {
+      if (numberType == null) {
         throw e;
       }
     }
@@ -1260,11 +1261,11 @@ public class TestCollapseQParserPlugin extends SolrTestCaseJ4 {
 
   @Test
   public void test64BitCollapseFieldException() {
-//    assertQEx(
-//        "Should Fail For collapsing on Long fields",
-//        "Collapsing field should be of either String, Int or Float type",
-//        req("q", "*:*", "fq", "{!collapse field=group_l}"),
-//        SolrException.ErrorCode.BAD_REQUEST);
+    // assertQEx(
+    //    "Should Fail For collapsing on Long fields",
+    //    "Collapsing field should be of either String, Int or Float type",
+    //    req("q", "*:*", "fq", "{!collapse field=group_l}"),
+    //    SolrException.ErrorCode.BAD_REQUEST);
 
     assertQEx(
         "Should Fail For collapsing on Double fields",
@@ -1388,17 +1389,20 @@ public class TestCollapseQParserPlugin extends SolrTestCaseJ4 {
                 "max=sub(0,desc" + suffix + ")",
                 "min=sub(0,asc" + suffix + ")")) {
 
-          // NOTE: I don't understand why this limitation existed? I think it may have been obviated by
-          // subsequent changes, since score is now tracked separately (not bit-shifted and melded with docId)
-//          if (selector.endsWith("_l") && f.endsWith("_i")) {
-//            assertQEx(
-//                "expected known limitation of using long for min/max selector when doing numeric collapse",
-//                "min/max must be Int or Float",
-//                req("q", q, "fq", "{!collapse field=" + f + " nullPolicy=ignore " + selector + "}"),
-//                SolrException.ErrorCode.BAD_REQUEST);
-//
-//            continue;
-//          }
+          // NOTE: I don't understand why this limitation existed? I think it may have been obviated
+          // by subsequent changes, since score is now tracked separately (not bit-shifted and
+          // melded with docId)
+          // if (selector.endsWith("_l") && f.endsWith("_i")) {
+          //  assertQEx(
+          //      "expected known limitation of using long for min/max selector when doing numeric
+          // collapse",
+          //      "min/max must be Int or Float",
+          //      req("q", q, "fq", "{!collapse field=" + f + " nullPolicy=ignore " + selector +
+          // "}"),
+          //      SolrException.ErrorCode.BAD_REQUEST);
+          //
+          //  continue;
+          // }
 
           // ignore nulls
           assertQ(

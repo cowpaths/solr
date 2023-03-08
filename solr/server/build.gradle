@@ -82,6 +82,7 @@ dependencies {
     exclude group: "org.eclipse.jetty.http2", module: "*"
     exclude group: "org.eclipse.jetty.toolchain", module: "*"
   })
+  libExt project(':solr:jetty')
   libExt 'io.dropwizard.metrics:metrics-jvm'
   libExt 'io.dropwizard.metrics:metrics-jmx'
 

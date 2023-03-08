@@ -30,7 +30,7 @@
   <!-- for all configuration that may be set here.                 -->
   <!-- =========================================================== -->
   <Arg name="threadpool">
-    <New id="threadpool" class="io.dropwizard.metrics.jetty10.InstrumentedQueuedThreadPool">
+    <New id="threadpool" class="org.apache.solr.jetty.InstrumentedQueuedThreadPool">
       <Arg name="registry">
         <Call id="solrJettyMetricRegistry" name="getOrCreate" class="com.codahale.metrics.SharedMetricRegistries">
           <Arg>solr.jetty</Arg>
@@ -43,6 +43,7 @@
     <Set name="minThreads" type="int"><Property name="solr.jetty.threads.min" default="10"/></Set>
     <Set name="maxThreads" type="int"><Property name="solr.jetty.threads.max" default="10000"/></Set>
     <Set name="idleTimeout" type="int"><Property name="solr.jetty.threads.idle.timeout" default="120000"/></Set>
+    <Set name="idleTimeoutDecay" type="int"><Property name="solr.jetty.threads.idle.timeout.decay" default="10000"/></Set>
     <Set name="stopTimeout" type="int"><Property name="solr.jetty.threads.stop.timeout" default="60000"/></Set>
     <Set name="detailedDump">false</Set>
   </Get>

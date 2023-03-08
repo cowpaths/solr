@@ -11,10 +11,12 @@
 // ========================================================================
 //
 
-package org.eclipse.jetty.util.thread;
+package org.apache.solr.jetty;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -37,7 +39,11 @@ import org.eclipse.jetty.util.annotation.Name;
 import org.eclipse.jetty.util.component.ContainerLifeCycle;
 import org.eclipse.jetty.util.component.Dumpable;
 import org.eclipse.jetty.util.component.DumpableCollection;
+import org.eclipse.jetty.util.thread.AutoLock;
+import org.eclipse.jetty.util.thread.ReservedThreadExecutor;
 import org.eclipse.jetty.util.thread.ThreadPool.SizedThreadPool;
+import org.eclipse.jetty.util.thread.ThreadPoolBudget;
+import org.eclipse.jetty.util.thread.TryExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -912,7 +918,8 @@ public class QueuedThreadPool extends ContainerLifeCycle implements ThreadFactor
     @Override
     public Thread newThread(Runnable runnable)
     {
-        return PrivilegedThreadFactory.newThread(() ->
+        // NOTE: see `org.eclipse.jetty.util.thread.PrivilegedThreadFactory`
+        return AccessController.doPrivileged((PrivilegedAction<Thread>) () ->
         {
             Thread thread = new Thread(_threadGroup, runnable);
             thread.setDaemon(isDaemon());

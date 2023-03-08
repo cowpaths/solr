@@ -1,9 +1,8 @@
-package io.dropwizard.metrics.jetty10;
+package org.apache.solr.jetty;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.RatioGauge;
 import org.eclipse.jetty.util.annotation.Name;
-import org.eclipse.jetty.util.thread.QueuedThreadPool;
 
 import java.util.concurrent.BlockingQueue;
 

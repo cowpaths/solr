@@ -11,7 +11,7 @@
 // ========================================================================
 //
 
-package org.eclipse.jetty.util.thread;
+package org.apache.solr.jetty;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,13 +24,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class QueuedThreadPoolShrinkTest
 {
@@ -81,11 +81,11 @@ public class QueuedThreadPoolShrinkTest
             // We expect all requests to be served by the exact same batch of threads (i.e., no
             // threads idled out, which would have necessitated the creation of replacement
             // threads)
-            assertEquals(targetThreadCount, threads.size(), configMsg);
+            assertEquals(configMsg, targetThreadCount, threads.size());
 
             // The overall pool size should account for our requests, plus the background job that
             // issues the requests
-            assertEquals(targetThreadCount + 1, qtp.getThreads(), configMsg);
+            assertEquals(configMsg, targetThreadCount + 1, qtp.getThreads());
         }
         finally
         {
@@ -216,13 +216,13 @@ public class QueuedThreadPoolShrinkTest
                         if (busy)
                         {
                             long expectMillis = TimeUnit.NANOSECONDS.toMillis(expectDurationNanos + precisionCorrect + tolerance);
-                            assertTrue(actualMillis <= expectMillis, configMsg + ", expect=" + expectMillis + ", actual=" + actualMillis);
+                            assertTrue(configMsg + ", expect=" + expectMillis + ", actual=" + actualMillis, actualMillis <= expectMillis);
                         }
                         else
                         {
                             long expectMillis = TimeUnit.NANOSECONDS.toMillis(expectDurationNanos);
                             long delta = TimeUnit.NANOSECONDS.toMillis(precisionCorrect + tolerance);
-                            assertEquals(expectMillis, actualMillis, delta, configMsg);
+                            assertEquals(configMsg, expectMillis, actualMillis, delta);
                         }
                     }
                     LOG.info("OK finished threshold=" + expectStableThreadCount + ", actual=" + threadCount);

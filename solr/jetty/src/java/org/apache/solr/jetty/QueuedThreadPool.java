@@ -85,6 +85,7 @@ import org.slf4j.LoggerFactory;
 public class QueuedThreadPool extends ContainerLifeCycle implements ThreadFactory, SizedThreadPool, Dumpable, TryExecutor, VirtualThreads.Configurable
 {
     private static final Logger LOG = LoggerFactory.getLogger(QueuedThreadPool.class);
+    @SuppressWarnings("UnnecessaryLambda") // suppress, otherwise errorprone complains
     private static final Runnable NOOP = () ->
     {
     };

@@ -220,9 +220,10 @@ public class QueuedThreadPoolShrinkTest
                         }
                         else
                         {
-                            long expectMillis = TimeUnit.NANOSECONDS.toMillis(expectDurationNanos);
-                            long delta = TimeUnit.NANOSECONDS.toMillis(precisionCorrect + tolerance);
-                            assertEquals(configMsg, expectMillis, actualMillis, delta);
+                            // doubles, to facilitate equality comparison with tolerance
+                            double expectMillis = TimeUnit.NANOSECONDS.toMillis(expectDurationNanos);
+                            double delta = TimeUnit.NANOSECONDS.toMillis(precisionCorrect + tolerance);
+                            assertEquals(configMsg, expectMillis, (double)actualMillis, delta);
                         }
                     }
                     LOG.info("OK finished threshold=" + expectStableThreadCount + ", actual=" + threadCount);
@@ -480,7 +481,7 @@ public class QueuedThreadPoolShrinkTest
                 CountDownLatch latch = cdl;
                 for (int i = 0; i < targetThreadCount; i++)
                 {
-                    long delay = r.nextInt((int)pauseMillis >> 1) + 1;
+                    long delay = r.nextInt((int)pauseMillis >> 1) + 1L;
                     exec.submit(() ->
                     {
                         qtp.execute(() ->

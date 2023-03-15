@@ -179,13 +179,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     Map<String, Object> props = new HashMap<>();
     props.put("x", "y");
     props.put(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME);
-    state =
-        new DocCollection(
-            "c1",
-            new HashMap<>(),
-            props,
-            DocRouter.DEFAULT,
-            0);
+    state = new DocCollection("c1", new HashMap<>(), props, DocRouter.DEFAULT, 0);
     wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -299,8 +293,9 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     assertEquals(0, ref.get().getZNodeVersion()); // no change in Znode version
     assertEquals(3, ref.get().getChildNodesVersion()); // but child version should be 1 now
 
-    prs = PerReplicaStatesFetcher.fetch(
-                    collection.getZNode(), fixture.zkClient, collection.getPerReplicaStates());
+    prs =
+        PerReplicaStatesFetcher.fetch(
+            collection.getZNode(), fixture.zkClient, collection.getPerReplicaStates());
     PerReplicaStatesOps.flipState("r1", Replica.State.ACTIVE, prs)
         .persist(collection.getZNode(), fixture.zkClient);
     timeOut.waitFor(

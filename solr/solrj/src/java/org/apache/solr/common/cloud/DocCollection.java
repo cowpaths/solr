@@ -74,11 +74,15 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   }
 
   public DocCollection(
-          String name, Map<String, Slice> slices, Map<String, Object> props, DocRouter router, int zkVersion) {
+      String name,
+      Map<String, Slice> slices,
+      Map<String, Object> props,
+      DocRouter router,
+      int zkVersion) {
     this(name, slices, props, router, zkVersion, null);
   }
 
-   /**
+  /**
    * @param name The name of the collection
    * @param slices The logical shards of the collection. This is used directly and a copy is not
    *     made.
@@ -118,8 +122,8 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     } else {
       if (perReplicaStates == null) {
         throw new RuntimeException(
-                  CollectionStateProps.PER_REPLICA_STATE
-                          + " = true , but perReplicaStates is not provided");
+            CollectionStateProps.PER_REPLICA_STATE
+                + " = true , but perReplicaStates is not provided");
       }
       this.slices = mergePerReplicaStatesToSlices(slices, perReplicaStates);
     }
@@ -165,29 +169,27 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     }
   }
 
-
-  private static Map<String, Slice> mergePerReplicaStatesToSlices(Map<String, Slice> slices, PerReplicaStates perReplicaStates) {
-    //could use replaceAll, but probably better to NOT modify the input map
+  private static Map<String, Slice> mergePerReplicaStatesToSlices(
+      Map<String, Slice> slices, PerReplicaStates perReplicaStates) {
+    // could use replaceAll, but probably better to NOT modify the input map
     Map<String, Slice> result = new HashMap<>();
     for (Map.Entry<String, Slice> sliceEntry : slices.entrySet()) {
       Slice slice = sliceEntry.getValue();
-      LinkedHashMap<String, Replica> updatingReplicas = new LinkedHashMap<>(slice.getReplicasMap()); //make a copy
+      LinkedHashMap<String, Replica> updatingReplicas =
+          new LinkedHashMap<>(slice.getReplicasMap()); // make a copy
       for (Map.Entry<String, Replica> replicaEntry : slice.getReplicasMap().entrySet()) {
         Replica replica = replicaEntry.getValue();
         PerReplicaStates.State prsState = perReplicaStates.states.get(replica.getName());
         if (prsState != null) {
           updatingReplicas.put(replicaEntry.getKey(), replica.copyWith(prsState));
         } else {
-          //TODO mismatch?
+          // TODO mismatch?
         }
       }
       result.put(sliceEntry.getKey(), slice.copyWith(updatingReplicas));
     }
     return result;
   }
-
-
-
 
   private void addNodeNameReplica(Replica replica) {
     List<Replica> replicas = nodeNameReplicas.get(replica.getNodeName());

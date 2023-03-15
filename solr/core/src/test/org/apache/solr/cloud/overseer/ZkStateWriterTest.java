@@ -33,7 +33,6 @@ import org.apache.solr.cloud.ZkTestServer;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.DocRouter;
-import org.apache.solr.common.cloud.PerReplicaStatesFetcher;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.SolrZkClient;
@@ -177,13 +176,7 @@ public class ZkStateWriterTest extends SolrTestCaseJ4 {
         prsProps.put("perReplicaState", Boolean.TRUE);
         ZkWriteCommand prs1 =
             new ZkWriteCommand(
-                "prs1",
-                new DocCollection(
-                    "prs1",
-                    new HashMap<>(),
-                    prsProps,
-                    DocRouter.DEFAULT,
-                    0));
+                "prs1", new DocCollection("prs1", new HashMap<>(), prsProps, DocRouter.DEFAULT, 0));
         ZkStateWriter writer =
             new ZkStateWriter(reader, new Stats(), -1, STATE_COMPRESSION_PROVIDER);
 
@@ -245,29 +238,20 @@ public class ZkStateWriterTest extends SolrTestCaseJ4 {
         ZkWriteCommand c1 =
             new ZkWriteCommand(
                 "c1",
-                new DocCollection(
-                    "c1", new HashMap<>(), new HashMap<>(), DocRouter.DEFAULT, 0));
+                new DocCollection("c1", new HashMap<>(), new HashMap<>(), DocRouter.DEFAULT, 0));
         ZkWriteCommand c2 =
             new ZkWriteCommand(
                 "c2",
-                new DocCollection(
-                    "c2", new HashMap<>(), new HashMap<>(), DocRouter.DEFAULT, 0));
+                new DocCollection("c2", new HashMap<>(), new HashMap<>(), DocRouter.DEFAULT, 0));
         ZkWriteCommand c3 =
             new ZkWriteCommand(
                 "c3",
-                new DocCollection(
-                    "c3", new HashMap<>(), new HashMap<>(), DocRouter.DEFAULT, 0));
+                new DocCollection("c3", new HashMap<>(), new HashMap<>(), DocRouter.DEFAULT, 0));
         Map<String, Object> prsProps = new HashMap<>();
         prsProps.put("perReplicaState", Boolean.TRUE);
         ZkWriteCommand prs1 =
             new ZkWriteCommand(
-                "prs1",
-                new DocCollection(
-                    "prs1",
-                    new HashMap<>(),
-                    prsProps,
-                    DocRouter.DEFAULT,
-                    0));
+                "prs1", new DocCollection("prs1", new HashMap<>(), prsProps, DocRouter.DEFAULT, 0));
         ZkStateWriter writer =
             new ZkStateWriter(reader, new Stats(), -1, STATE_COMPRESSION_PROVIDER);
 

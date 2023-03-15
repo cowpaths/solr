@@ -113,10 +113,7 @@ public class ZkClientClusterStateProvider implements ClusterStateProvider {
         }
       }
     }
-    return ClusterState.createFromCollectionMap(
-        version,
-        stateMap,
-        liveNodes);
+    return ClusterState.createFromCollectionMap(version, stateMap, liveNodes);
   }
 
   @Override

@@ -271,7 +271,8 @@ public class ClusterState implements JSONWriter.Writable {
     Map<String, Object> props;
     Map<String, Slice> slices;
 
-    boolean isPrsEnabledCollection = Boolean.parseBoolean(String.valueOf(objs.get(CollectionStateProps.PER_REPLICA_STATE)));
+    boolean isPrsEnabledCollection =
+        Boolean.parseBoolean(String.valueOf(objs.get(CollectionStateProps.PER_REPLICA_STATE)));
     if (isPrsEnabledCollection) {
       if (log.isDebugEnabled()) {
         log.debug("a collection {} has per-replica state", name);
@@ -304,15 +305,13 @@ public class ClusterState implements JSONWriter.Writable {
       router = DocRouter.getDocRouter((String) routerProps.get("name"));
     }
 
-    PerReplicaStates perReplicaStates = isPrsEnabledCollection && prsSupplier != null ? prsSupplier.get() : null;
-    DocCollection docCollection = new DocCollection(name, slices, props, router, version, perReplicaStates);
-
+    PerReplicaStates perReplicaStates =
+        isPrsEnabledCollection && prsSupplier != null ? prsSupplier.get() : null;
+    DocCollection docCollection =
+        new DocCollection(name, slices, props, router, version, perReplicaStates);
 
     return docCollection;
   }
-
-
-
 
   @Override
   public void write(JSONWriter jsonWriter) {

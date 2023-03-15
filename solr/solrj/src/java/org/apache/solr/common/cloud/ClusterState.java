@@ -305,10 +305,7 @@ public class ClusterState implements JSONWriter.Writable {
       router = DocRouter.getDocRouter((String) routerProps.get("name"));
     }
 
-    PerReplicaStates perReplicaStates =
-        isPrsEnabledCollection && prsSupplier != null ? prsSupplier.get() : null;
-    DocCollection docCollection =
-        new DocCollection(name, slices, props, router, version, perReplicaStates);
+    DocCollection docCollection = DocCollection.buildDocCollection(name, slices, props, router, version, prsSupplier);
 
     return docCollection;
   }

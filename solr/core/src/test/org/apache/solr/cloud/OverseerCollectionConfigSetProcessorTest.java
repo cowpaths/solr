@@ -685,13 +685,13 @@ public class OverseerCollectionConfigSetProcessorTest extends SolrTestCaseJ4 {
           collectionsSet.put(
               collName,
               new ClusterState.CollectionRef(
-                  new DocCollection(
+                  DocCollection.buildDocCollection(
                       collName,
                       new HashMap<>(),
                       props.getProperties(),
                       DocRouter.DEFAULT,
                       0,
-                      distribStateManagerMock.getPrsSupplier(collName).get())));
+                      distribStateManagerMock.getPrsSupplier(collName))));
       }
       if (CollectionParams.CollectionAction.ADDREPLICA.isEqual(props.getStr("operation"))) {
         replicas.add(props);

@@ -33,7 +33,6 @@ import org.apache.solr.cloud.ZkTestServer;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.DocRouter;
-import org.apache.solr.common.cloud.PerReplicaStates;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.SolrZkClient;
@@ -177,14 +176,7 @@ public class ZkStateWriterTest extends SolrTestCaseJ4 {
         prsProps.put("perReplicaState", Boolean.TRUE);
         ZkWriteCommand prs1 =
             new ZkWriteCommand(
-                "prs1",
-                new DocCollection(
-                    "prs1",
-                    new HashMap<>(),
-                    prsProps,
-                    DocRouter.DEFAULT,
-                    0,
-                    PerReplicaStates.empty("prs1")));
+                "prs1", new DocCollection("prs1", new HashMap<>(), prsProps, DocRouter.DEFAULT, 0));
         ZkStateWriter writer =
             new ZkStateWriter(reader, new Stats(), -1, STATE_COMPRESSION_PROVIDER);
 
@@ -259,14 +251,7 @@ public class ZkStateWriterTest extends SolrTestCaseJ4 {
         prsProps.put("perReplicaState", Boolean.TRUE);
         ZkWriteCommand prs1 =
             new ZkWriteCommand(
-                "prs1",
-                new DocCollection(
-                    "prs1",
-                    new HashMap<>(),
-                    prsProps,
-                    DocRouter.DEFAULT,
-                    0,
-                    PerReplicaStates.empty("prs1")));
+                "prs1", new DocCollection("prs1", new HashMap<>(), prsProps, DocRouter.DEFAULT, 0));
         ZkStateWriter writer =
             new ZkStateWriter(reader, new Stats(), -1, STATE_COMPRESSION_PROVIDER);
 

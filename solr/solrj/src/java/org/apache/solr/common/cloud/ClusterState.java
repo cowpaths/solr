@@ -233,7 +233,7 @@ public class ClusterState implements JSONWriter.Writable {
     @SuppressWarnings({"unchecked"})
     Map<String, Object> stateMap =
         (Map<String, Object>) Utils.fromJSON(bytes, 0, bytes.length, STR_INTERNER_OBJ_BUILDER);
-    return createFromCollectionMap(version, stateMap, liveNodes);
+    return createFromCollectionMap(version, stateMap, liveNodes, prsSupplier);
   }
 
   @Deprecated
@@ -287,7 +287,6 @@ public class ClusterState implements JSONWriter.Writable {
       props = Collections.emptyMap();
     } else {
       slices = Slice.loadAllFromMap(name, sliceObjs);
-
       props = new HashMap<>(objs);
       objs.remove(CollectionStateProps.SHARDS);
     }

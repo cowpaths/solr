@@ -171,13 +171,13 @@ public class CollectionMutator {
     }
 
     DocCollection collection =
-        new DocCollection(
+        DocCollection.buildDocCollection(
             coll.getName(),
             coll.getSlicesMap(),
             props,
             coll.getRouter(),
             coll.getZNodeVersion(),
-            coll.getPerReplicaStates());
+            stateManager.getPrsSupplier(coll.getName()));
     if (replicaOps == null) {
       return new ZkWriteCommand(coll.getName(), collection);
     } else {

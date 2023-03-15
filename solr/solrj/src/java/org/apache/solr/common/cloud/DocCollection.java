@@ -79,7 +79,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     PerReplicaStates perReplicaStates;
     if (perReplicaState) {
       if (prsSupplier == null) {
-        throw new RuntimeException(
+        throw new IllegalArgumentException(
             CollectionStateProps.PER_REPLICA_STATE + " = true , but prsSuppler is not provided");
       }
 
@@ -151,7 +151,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       this.slices = slices;
     } else {
       if (perReplicaStates == null) {
-        throw new RuntimeException(
+        throw new IllegalArgumentException(
             CollectionStateProps.PER_REPLICA_STATE
                 + " = true , but perReplicaStates is not provided");
       }

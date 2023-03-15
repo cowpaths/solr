@@ -333,8 +333,14 @@ public class ZkStateReader implements SolrCloseable {
               log.debug("Removing cached collection state for [{}]", collection);
               watch.currentState = null;
             } else { // both new and old states are non-null
-              int oldCVersion = oldState.getChildNodesVersion();
-              int newCVersion = newState.getChildNodesVersion();
+              int oldCVersion =
+                  oldState.getPerReplicaStates() == null
+                      ? -1
+                      : oldState.getPerReplicaStates().cversion;
+              int newCVersion =
+                  newState.getPerReplicaStates() == null
+                      ? -1
+                      : newState.getPerReplicaStates().cversion;
               if (oldState.getZNodeVersion() < newState.getZNodeVersion()
                   || oldCVersion < newCVersion) {
                 watch.currentState = newState;

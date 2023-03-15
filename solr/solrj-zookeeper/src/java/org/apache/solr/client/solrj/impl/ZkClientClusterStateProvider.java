@@ -28,6 +28,7 @@ import org.apache.solr.common.AlreadyClosedException;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.cloud.PerReplicaStatesFetcher;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
@@ -113,7 +114,14 @@ public class ZkClientClusterStateProvider implements ClusterStateProvider {
         }
       }
     }
-    return ClusterState.createFromCollectionMap(version, stateMap, liveNodes);
+    return ClusterState.createFromCollectionMap(
+        version,
+        stateMap,
+        liveNodes,
+        new DocCollection.PrsSupplier(
+            () ->
+                PerReplicaStatesFetcher.fetch(
+                    DocCollection.getCollectionPath(coll), zkClient, null)));
   }
 
   @Override

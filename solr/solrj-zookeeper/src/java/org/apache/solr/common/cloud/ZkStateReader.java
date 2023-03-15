@@ -334,13 +334,9 @@ public class ZkStateReader implements SolrCloseable {
               watch.currentState = null;
             } else { // both new and old states are non-null
               int oldCVersion =
-                  oldState.getPerReplicaStates() == null
-                      ? -1
-                      : oldState.getPerReplicaStates().cversion;
+                  oldState.isPerReplicaState() ? oldState.getChildNodesVersion() : -1;
               int newCVersion =
-                  newState.getPerReplicaStates() == null
-                      ? -1
-                      : newState.getPerReplicaStates().cversion;
+                  newState.isPerReplicaState() ? newState.getChildNodesVersion() : -1;
               if (oldState.getZNodeVersion() < newState.getZNodeVersion()
                   || oldCVersion < newCVersion) {
                 watch.currentState = newState;

@@ -158,7 +158,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       this.slices = mergePerReplicaStatesToSlices(slices, perReplicaStates);
     }
 
-    Iterator<Map.Entry<String, Slice>> iter = slices.entrySet().iterator();
+    Iterator<Map.Entry<String, Slice>> iter = this.slices.entrySet().iterator();
 
     while (iter.hasNext()) {
       Map.Entry<String, Slice> slice = iter.next();

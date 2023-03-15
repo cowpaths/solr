@@ -81,6 +81,13 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       if (prsSupplier == null) {
         throw new RuntimeException(
             CollectionStateProps.PER_REPLICA_STATE + " = true , but prsSuppler is not provided");
+      }
+
+      if (!hasAnyReplica(
+          slices)) { // a special case, if there is no replica, it should not fetch (first PRS
+        // collection creation with no replicas). Otherwise, it would trigger exception
+        // on fetching a state.json that does not exist yet
+        perReplicaStates = PerReplicaStates.empty(name);
       } else {
         perReplicaStates = prsSupplier.get();
       }
@@ -523,6 +530,15 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     if (type == Replica.Type.PULL) result = numPullReplicas;
     if (type == Replica.Type.TLOG) result = numTlogReplicas;
     return result == null ? def : result;
+  }
+
+  private static boolean hasAnyReplica(Map<String, Slice> slices) {
+    for (Slice slice : slices.values()) {
+      if (!slice.getReplicasMap().isEmpty()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** JSON properties related to a collection's state. */

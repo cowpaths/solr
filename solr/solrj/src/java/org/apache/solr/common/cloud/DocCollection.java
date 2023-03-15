@@ -116,6 +116,11 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     if (!perReplicaState) {
       this.slices = slices;
     } else {
+      if (perReplicaStates == null) {
+        throw new RuntimeException(
+                  CollectionStateProps.PER_REPLICA_STATE
+                          + " = true , but perReplicaStates is not provided");
+      }
       this.slices = mergePerReplicaStatesToSlices(slices, perReplicaStates);
     }
 

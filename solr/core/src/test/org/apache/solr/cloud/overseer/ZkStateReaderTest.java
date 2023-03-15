@@ -290,8 +290,9 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
         "Timeout on waiting for c1 updated to have PRS state r1",
         () -> {
           DocCollection c = reader.getCollection("c1");
-          return c.getReplica("r1") != null
-              && c.getReplica("r1").getState() == Replica.State.DOWN;
+          return c.getPerReplicaStates() != null
+              && c.getPerReplicaStates().get("r1") != null
+              && c.getPerReplicaStates().get("r1").state == Replica.State.DOWN;
         });
 
     ref = reader.getClusterState().getCollectionRef("c1");
@@ -305,7 +306,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     timeOut.waitFor(
         "Timeout on waiting for c1 updated to have PRS state r1 marked as DOWN",
         () ->
-            reader.getCollection("c1").getReplica("r1").getState()
+            reader.getCollection("c1").getPerReplicaStates().get("r1").state
                 == Replica.State.ACTIVE);
 
     ref = reader.getClusterState().getCollectionRef("c1");
@@ -349,8 +350,9 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
         "Timeout on waiting for c1 updated to have PRS state r1",
         () -> {
           DocCollection c = reader.getCollection("c1");
-          return c.getReplica("r1") != null
-              && c.getReplica("r1").getState() == Replica.State.DOWN;
+          return c.getPerReplicaStates() != null
+              && c.getPerReplicaStates().get("r1") != null
+              && c.getPerReplicaStates().get("r1").state == Replica.State.DOWN;
         });
 
     ref = reader.getClusterState().getCollectionRef("c1");

@@ -273,7 +273,7 @@ public class ZkStateWriter {
                     name,
                     cmd.collection.copyWith(
                         PerReplicaStatesFetcher.fetch(
-                            cmd.collection.getZNode(), reader.getZkClient(), null)));
+                            cmd.collection.getZNode(), reader.getZkClient())));
           }
 
           // Update the state.json file if needed
@@ -295,24 +295,13 @@ public class ZkStateWriter {
               Stat stat = reader.getZkClient().setData(path, data, c.getZNodeVersion(), true);
               DocCollection newCollection =
                   new DocCollection(
-                      name,
-                      c.getSlicesMap(),
-                      c.getProperties(),
-                      c.getRouter(),
-                      stat.getVersion(),
-                      c.getPerReplicaStates());
+                      name, c.getSlicesMap(), c.getProperties(), c.getRouter(), stat.getVersion());
               clusterState = clusterState.copyWith(name, newCollection);
             } else {
               log.debug("going to create_collection {}", path);
               reader.getZkClient().create(path, data, CreateMode.PERSISTENT, true);
               DocCollection newCollection =
-                  new DocCollection(
-                      name,
-                      c.getSlicesMap(),
-                      c.getProperties(),
-                      c.getRouter(),
-                      0,
-                      c.getPerReplicaStates());
+                  new DocCollection(name, c.getSlicesMap(), c.getProperties(), c.getRouter(), 0);
               clusterState = clusterState.copyWith(name, newCollection);
             }
           }
@@ -325,7 +314,7 @@ public class ZkStateWriter {
                       name,
                       currentCollState.copyWith(
                           PerReplicaStatesFetcher.fetch(
-                              currentCollState.getZNode(), reader.getZkClient(), null)));
+                              currentCollState.getZNode(), reader.getZkClient())));
             }
           }
         }

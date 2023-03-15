@@ -56,6 +56,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   private final Map<String, List<Replica>> nodeNameLeaderReplicas;
   private final DocRouter router;
   private final String znode;
+  private final Integer childNodesVersion;
 
   private final Integer replicationFactor;
   private final Integer numNrtReplicas;
@@ -65,7 +66,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   private final Boolean perReplicaState;
   private final Map<String, Replica> replicaMap = new HashMap<>();
 
-  private final PerReplicaStates perReplicaStates;
+  //  private final PerReplicaStates perReplicaStates;
 
   public static DocCollection buildDocCollection(
       String name,
@@ -94,7 +95,17 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     } else {
       perReplicaStates = null;
     }
-    return new DocCollection(name, slices, props, router, zkVersion, perReplicaStates);
+    if (perReplicaStates != null) {
+      slices = mergePerReplicaStatesToSlices(slices, perReplicaStates);
+    }
+
+    return new DocCollection(
+        name,
+        slices,
+        props,
+        router,
+        zkVersion,
+        perReplicaStates != null ? perReplicaStates.cversion : null);
   }
 
   @Deprecated
@@ -102,6 +113,16 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       String name, Map<String, Slice> slices, Map<String, Object> props, DocRouter router) {
     this(name, slices, props, router, Integer.MAX_VALUE, null);
   }
+
+  //  public DocCollection(
+  //          String name,
+  //          Map<String, Slice> slices,
+  //          Map<String, Object> props,
+  //          DocRouter router,
+  //          int zkVersion,
+  //          PerReplicaStates d) {
+  //
+  //  }
 
   public DocCollection(
       String name,
@@ -111,6 +132,15 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       int zkVersion) {
     this(name, slices, props, router, zkVersion, null);
   }
+
+  //  public DocCollection(
+  //      String name,
+  //      Map<String, Slice> slices,
+  //      Map<String, Object> props,
+  //      DocRouter router,
+  //      int zkVersion) {
+  //    this(name, slices, props, router, zkVersion, null);
+  //  }
 
   /**
    * @param name The name of the collection
@@ -126,12 +156,12 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       Map<String, Object> props,
       DocRouter router,
       int zkVersion,
-      PerReplicaStates perReplicaStates) {
+      Integer childNodesVersion) {
     super(props);
     // -1 means any version in ZK CAS, so we choose Integer.MAX_VALUE instead to avoid accidental
     // overwrites
     this.znodeVersion = zkVersion == -1 ? Integer.MAX_VALUE : zkVersion;
-    this.perReplicaStates = perReplicaStates;
+    this.childNodesVersion = childNodesVersion;
     this.name = name;
     this.configName = (String) props.get(CollectionStateProps.CONFIGNAME);
 
@@ -147,16 +177,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     Boolean readOnly = (Boolean) verifyProp(props, CollectionStateProps.READ_ONLY);
     this.readOnly = readOnly == null ? Boolean.FALSE : readOnly;
 
-    if (!perReplicaState) {
-      this.slices = slices;
-    } else {
-      if (perReplicaStates == null) {
-        throw new IllegalArgumentException(
-            CollectionStateProps.PER_REPLICA_STATE
-                + " = true , but perReplicaStates is not provided");
-      }
-      this.slices = mergePerReplicaStatesToSlices(slices, perReplicaStates);
-    }
+    this.slices = slices;
 
     Iterator<Map.Entry<String, Slice>> iter = this.slices.entrySet().iterator();
 
@@ -193,7 +214,13 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   public DocCollection copyWith(PerReplicaStates newPerReplicaStates) {
     if (newPerReplicaStates != null) {
       log.debug("Copy with newPerReplicaStates: {}", newPerReplicaStates);
-      return new DocCollection(name, slices, propMap, router, znodeVersion, newPerReplicaStates);
+      return new DocCollection(
+          name,
+          mergePerReplicaStatesToSlices(slices, newPerReplicaStates),
+          propMap,
+          router,
+          znodeVersion,
+          childNodesVersion);
     } else {
       return this;
     }
@@ -270,7 +297,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
    */
   public DocCollection copyWithSlices(Map<String, Slice> slices) {
     DocCollection result =
-        new DocCollection(getName(), slices, propMap, router, znodeVersion, perReplicaStates);
+        new DocCollection(getName(), slices, propMap, router, znodeVersion, childNodesVersion);
     return result;
   }
   /** Return collection name. */
@@ -337,7 +364,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   }
 
   public int getChildNodesVersion() {
-    return perReplicaStates != null ? perReplicaStates.cversion : 0;
+    return childNodesVersion != null ? childNodesVersion : 0;
   }
 
   public boolean isModified(int dataVersion, int childVersion) {
@@ -361,9 +388,9 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     return router;
   }
 
-  public PerReplicaStates getPerReplicaStates() {
-    return perReplicaStates;
-  }
+  //  public PerReplicaStates getPerReplicaStates() {
+  //    return perReplicaStates;
+  //  }
 
   public boolean isReadOnly() {
     return readOnly;
@@ -378,7 +405,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
         + "/"
         + znodeVersion
         + " "
-        + perReplicaStates
+        //        + perReplicaStates
         + ")="
         + toJSONString(this);
   }

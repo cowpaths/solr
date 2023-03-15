@@ -128,7 +128,7 @@ public class CollectionMutator {
           log.error("trying to set perReplicaState to {} from {}", val, coll.isPerReplicaState());
           continue;
         }
-        PerReplicaStates prs = PerReplicaStatesFetcher.fetch(coll.getZNode(), zkClient, null);
+        PerReplicaStates prs = PerReplicaStatesFetcher.fetch(coll.getZNode(), zkClient);
         replicaOps =
             enable ? PerReplicaStatesOps.enable(coll, prs) : PerReplicaStatesOps.disable(prs);
         if (!enable) {

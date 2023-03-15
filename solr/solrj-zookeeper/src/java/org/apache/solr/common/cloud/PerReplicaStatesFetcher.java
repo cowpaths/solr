@@ -20,6 +20,7 @@ package org.apache.solr.common.cloud;
 import java.lang.invoke.MethodHandles;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.solr.common.SolrException;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
@@ -28,13 +29,15 @@ import org.slf4j.LoggerFactory;
 
 public class PerReplicaStatesFetcher {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final ConcurrentHashMap<String, PerReplicaStates> fetchedStates =
+      new ConcurrentHashMap<>();
   /**
    * Fetch the latest {@link PerReplicaStates} . It fetches data after checking the {@link
    * Stat#getCversion()} of state.json. If this is not modified, the same object is returned
    */
-  public static PerReplicaStates fetch(
-      String path, SolrZkClient zkClient, PerReplicaStates current) {
+  public static PerReplicaStates fetch(String path, SolrZkClient zkClient) {
     try {
+      PerReplicaStates current = fetchedStates.get(path);
       if (current != null) {
         Stat stat = zkClient.exists(current.path, null, true);
         if (stat == null) return new PerReplicaStates(path, 0, Collections.emptyList());
@@ -42,7 +45,10 @@ public class PerReplicaStatesFetcher {
       }
       Stat stat = new Stat();
       List<String> children = zkClient.getChildren(path, null, stat, true);
-      return new PerReplicaStates(path, stat.getCversion(), Collections.unmodifiableList(children));
+      PerReplicaStates newStates =
+          new PerReplicaStates(path, stat.getCversion(), Collections.unmodifiableList(children));
+      fetchedStates.put(path, newStates);
+      return newStates;
     } catch (KeeperException e) {
       throw new SolrException(
           SolrException.ErrorCode.SERVER_ERROR, "Error fetching per-replica states", e);

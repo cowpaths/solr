@@ -322,4 +322,8 @@ public class PerReplicaStates implements ReflectMapWriter {
           }
         });
   }
+
+  public static PerReplicaStates empty(String collectionName) {
+    return new PerReplicaStates(DocCollection.getCollectionPath(collectionName), 0, List.of());
+  }
 }

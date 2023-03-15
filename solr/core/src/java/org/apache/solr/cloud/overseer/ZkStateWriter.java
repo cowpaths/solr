@@ -300,7 +300,7 @@ public class ZkStateWriter {
                       c.getProperties(),
                       c.getRouter(),
                       stat.getVersion(),
-                      new PerReplicaStatesFetcher.LazyPrsSupplier(reader.getZkClient(), path));
+                      c.getPerReplicaStates());
               clusterState = clusterState.copyWith(name, newCollection);
             } else {
               log.debug("going to create_collection {}", path);
@@ -312,7 +312,7 @@ public class ZkStateWriter {
                       c.getProperties(),
                       c.getRouter(),
                       0,
-                      new PerReplicaStatesFetcher.LazyPrsSupplier(reader.getZkClient(), path));
+                      c.getPerReplicaStates());
               clusterState = clusterState.copyWith(name, newCollection);
             }
           }

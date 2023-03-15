@@ -64,7 +64,38 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   private final Boolean readOnly;
   private final Boolean perReplicaState;
   private final Map<String, Replica> replicaMap = new HashMap<>();
-  private PrsSupplier prsSupplier;
+
+  private final PerReplicaStates perReplicaStates;
+
+  public static DocCollection buildDocCollection(
+      String name,
+      Map<String, Slice> slices,
+      Map<String, Object> props,
+      DocRouter router,
+      int zkVersion,
+      DocCollection.PrsSupplier prsSupplier) {
+    boolean perReplicaState =
+        (Boolean) verifyProp(props, CollectionStateProps.PER_REPLICA_STATE, Boolean.FALSE);
+    PerReplicaStates perReplicaStates;
+    if (perReplicaState) {
+      if (prsSupplier == null) {
+        throw new IllegalArgumentException(
+            CollectionStateProps.PER_REPLICA_STATE + " = true , but prsSuppler is not provided");
+      }
+
+      if (!hasAnyReplica(
+          slices)) { // a special case, if there is no replica, it should not fetch (first PRS
+        // collection creation with no replicas). Otherwise, it would trigger exception
+        // on fetching a state.json that does not exist yet
+        perReplicaStates = PerReplicaStates.empty(name);
+      } else {
+        perReplicaStates = prsSupplier.get();
+      }
+    } else {
+      perReplicaStates = null;
+    }
+    return new DocCollection(name, slices, props, router, zkVersion, perReplicaStates);
+  }
 
   @Deprecated
   public DocCollection(
@@ -72,7 +103,6 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     this(name, slices, props, router, Integer.MAX_VALUE, null);
   }
 
-  @Deprecated
   public DocCollection(
       String name,
       Map<String, Slice> slices,
@@ -81,6 +111,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       int zkVersion) {
     this(name, slices, props, router, zkVersion, null);
   }
+
   /**
    * @param name The name of the collection
    * @param slices The logical shards of the collection. This is used directly and a copy is not
@@ -95,14 +126,15 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
       Map<String, Object> props,
       DocRouter router,
       int zkVersion,
-      PrsSupplier prsSupplier) {
+      PerReplicaStates perReplicaStates) {
     super(props);
     // -1 means any version in ZK CAS, so we choose Integer.MAX_VALUE instead to avoid accidental
     // overwrites
     this.znodeVersion = zkVersion == -1 ? Integer.MAX_VALUE : zkVersion;
+    this.perReplicaStates = perReplicaStates;
     this.name = name;
     this.configName = (String) props.get(CollectionStateProps.CONFIGNAME);
-    this.slices = slices;
+
     this.activeSlices = new HashMap<>();
     this.nodeNameLeaderReplicas = new HashMap<>();
     this.nodeNameReplicas = new HashMap<>();
@@ -112,21 +144,21 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     this.numPullReplicas = (Integer) verifyProp(props, CollectionStateProps.PULL_REPLICAS, 0);
     this.perReplicaState =
         (Boolean) verifyProp(props, CollectionStateProps.PER_REPLICA_STATE, Boolean.FALSE);
-    if (this.perReplicaState) {
-      if (prsSupplier == null) {
-        throw new RuntimeException(
-            CollectionStateProps.PER_REPLICA_STATE
-                + " = true , but per-replica state supplier is not provided");
-      }
-      this.prsSupplier = prsSupplier;
-      for (Slice s : this.slices.values()) {
-        s.setPrsSupplier(prsSupplier);
-      }
-    }
     Boolean readOnly = (Boolean) verifyProp(props, CollectionStateProps.READ_ONLY);
     this.readOnly = readOnly == null ? Boolean.FALSE : readOnly;
 
-    Iterator<Map.Entry<String, Slice>> iter = slices.entrySet().iterator();
+    if (!perReplicaState) {
+      this.slices = slices;
+    } else {
+      if (perReplicaStates == null) {
+        throw new IllegalArgumentException(
+            CollectionStateProps.PER_REPLICA_STATE
+                + " = true , but perReplicaStates is not provided");
+      }
+      this.slices = mergePerReplicaStatesToSlices(slices, perReplicaStates);
+    }
+
+    Iterator<Map.Entry<String, Slice>> iter = this.slices.entrySet().iterator();
 
     while (iter.hasNext()) {
       Map.Entry<String, Slice> slice = iter.next();
@@ -156,14 +188,37 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
 
   /**
    * Update our state with a state of a {@link Replica} Used to create a new Collection State when
-   * only a replica is updated
+   * only PerReplicaStates are updated
    */
   public DocCollection copyWith(PerReplicaStates newPerReplicaStates) {
-    if (this.prsSupplier != null) {
-      log.debug("In-place update of PRS: {}", newPerReplicaStates);
-      this.prsSupplier.prs = newPerReplicaStates;
+    if (newPerReplicaStates != null) {
+      log.debug("Copy with newPerReplicaStates: {}", newPerReplicaStates);
+      return new DocCollection(name, slices, propMap, router, znodeVersion, newPerReplicaStates);
+    } else {
+      return this;
     }
-    return this;
+  }
+
+  private static Map<String, Slice> mergePerReplicaStatesToSlices(
+      Map<String, Slice> slices, PerReplicaStates perReplicaStates) {
+    // could use replaceAll, but probably better to NOT modify the input map
+    Map<String, Slice> result = new HashMap<>();
+    for (Map.Entry<String, Slice> sliceEntry : slices.entrySet()) {
+      Slice slice = sliceEntry.getValue();
+      LinkedHashMap<String, Replica> updatingReplicas =
+          new LinkedHashMap<>(slice.getReplicasMap()); // make a copy
+      for (Map.Entry<String, Replica> replicaEntry : slice.getReplicasMap().entrySet()) {
+        Replica replica = replicaEntry.getValue();
+        PerReplicaStates.State prsState = perReplicaStates.states.get(replica.getName());
+        if (prsState != null) {
+          updatingReplicas.put(replicaEntry.getKey(), replica.copyWith(prsState));
+        } else {
+          // TODO mismatch?
+        }
+      }
+      result.put(sliceEntry.getKey(), slice.copyWith(updatingReplicas));
+    }
+    return result;
   }
 
   private void addNodeNameReplica(Replica replica) {
@@ -215,7 +270,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
    */
   public DocCollection copyWithSlices(Map<String, Slice> slices) {
     DocCollection result =
-        new DocCollection(getName(), slices, propMap, router, znodeVersion, prsSupplier);
+        new DocCollection(getName(), slices, propMap, router, znodeVersion, perReplicaStates);
     return result;
   }
   /** Return collection name. */
@@ -282,8 +337,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   }
 
   public int getChildNodesVersion() {
-    PerReplicaStates prs = prsSupplier == null ? null : prsSupplier.get();
-    return prs == null ? 0 : prs.cversion;
+    return perReplicaStates != null ? perReplicaStates.cversion : 0;
   }
 
   public boolean isModified(int dataVersion, int childVersion) {
@@ -307,6 +361,10 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     return router;
   }
 
+  public PerReplicaStates getPerReplicaStates() {
+    return perReplicaStates;
+  }
+
   public boolean isReadOnly() {
     return readOnly;
   }
@@ -320,7 +378,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
         + "/"
         + znodeVersion
         + " "
-        + (prsSupplier == null ? "" : prsSupplier.get())
+        + perReplicaStates
         + ")="
         + toJSONString(this);
   }
@@ -466,20 +524,21 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     return Boolean.TRUE.equals(perReplicaState);
   }
 
-  public PerReplicaStates getPerReplicaStates() {
-    return prsSupplier != null ? prsSupplier.get() : null;
-  }
-
-  public PrsSupplier getPrsSupplier() {
-    return prsSupplier;
-  }
-
   public int getExpectedReplicaCount(Replica.Type type, int def) {
     Integer result = null;
     if (type == Replica.Type.NRT) result = numNrtReplicas;
     if (type == Replica.Type.PULL) result = numPullReplicas;
     if (type == Replica.Type.TLOG) result = numTlogReplicas;
     return result == null ? def : result;
+  }
+
+  private static boolean hasAnyReplica(Map<String, Slice> slices) {
+    for (Slice slice : slices.values()) {
+      if (!slice.getReplicasMap().isEmpty()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** JSON properties related to a collection's state. */

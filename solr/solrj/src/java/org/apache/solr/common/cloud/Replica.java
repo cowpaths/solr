@@ -137,14 +137,9 @@ public class Replica extends ZkNodeProps implements MapWriter {
   public final String core;
   public final Type type;
   public final String shard, collection;
-  private DocCollection.PrsSupplier prsSupplier;
 
   // mutable
   private State state;
-
-  void setPrsSupplier(DocCollection.PrsSupplier prsSupplier) {
-    this.prsSupplier = prsSupplier;
-  }
 
   public Replica(String name, Map<String, Object> map, String collection, String shard) {
     super(new HashMap<>());
@@ -285,14 +280,6 @@ public class Replica extends ZkNodeProps implements MapWriter {
 
   /** Returns the {@link State} of this replica. */
   public State getState() {
-    if (prsSupplier != null) {
-      PerReplicaStates.State s = prsSupplier.get().get(name);
-      if (s != null) {
-        return s.state;
-      } else {
-        return State.DOWN;
-      }
-    }
     return state;
   }
 
@@ -310,10 +297,6 @@ public class Replica extends ZkNodeProps implements MapWriter {
   }
 
   public boolean isLeader() {
-    if (prsSupplier != null) {
-      PerReplicaStates.State st = prsSupplier.get().get(name);
-      return st == null ? false : st.isLeader;
-    }
     return getBool(ReplicaStateProps.LEADER, false);
   }
 
@@ -351,12 +334,12 @@ public class Replica extends ZkNodeProps implements MapWriter {
     return r;
   }
 
-  public PerReplicaStates.State getReplicaState() {
-    if (prsSupplier != null) {
-      return prsSupplier.get().get(name);
-    }
-    return null;
-  }
+  //  public PerReplicaStates.State getReplicaState() {
+  //    if (prsSupplier != null) {
+  //      return prsSupplier.get().get(name);
+  //    }
+  //    return null;
+  //  }
 
   @Override
   public Object clone() {

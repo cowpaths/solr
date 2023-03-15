@@ -118,8 +118,10 @@ public class ZkClientClusterStateProvider implements ClusterStateProvider {
         version,
         stateMap,
         liveNodes,
-        new PerReplicaStatesFetcher.LazyPrsSupplier(
-            zkClient, DocCollection.getCollectionPath(coll)));
+        new DocCollection.PrsSupplier(
+            () ->
+                PerReplicaStatesFetcher.fetch(
+                    DocCollection.getCollectionPath(coll), zkClient, null)));
   }
 
   @Override

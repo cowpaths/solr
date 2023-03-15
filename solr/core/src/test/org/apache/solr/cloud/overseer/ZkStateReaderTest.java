@@ -143,9 +143,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
                 new HashMap<>(),
                 Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
                 DocRouter.DEFAULT,
-                0,
-                new PerReplicaStatesFetcher.LazyPrsSupplier(
-                    fixture.zkClient, DocCollection.getCollectionPath("c1"))));
+                0));
 
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(c1), null);
     writer.writePendingUpdates();
@@ -170,9 +168,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
             new HashMap<>(),
             Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
             DocRouter.DEFAULT,
-            0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+            0);
     ZkWriteCommand wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -183,15 +179,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     Map<String, Object> props = new HashMap<>();
     props.put("x", "y");
     props.put(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME);
-    state =
-        new DocCollection(
-            "c1",
-            new HashMap<>(),
-            props,
-            DocRouter.DEFAULT,
-            0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+    state = new DocCollection("c1", new HashMap<>(), props, DocRouter.DEFAULT, 0);
     wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -230,9 +218,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
             new HashMap<>(),
             Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
             DocRouter.DEFAULT,
-            0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+            0);
     ZkWriteCommand wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -269,8 +255,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
                 "true"),
             DocRouter.DEFAULT,
             0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+            PerReplicaStates.empty("c1"));
     ZkWriteCommand wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(clusterState, Collections.singletonList(wc), null);
     clusterState = writer.writePendingUpdates();
@@ -309,7 +294,9 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     assertEquals(0, ref.get().getZNodeVersion()); // no change in Znode version
     assertEquals(1, ref.get().getChildNodesVersion()); // but child version should be 1 now
 
-    prs = ref.get().getPerReplicaStates();
+    prs =
+        PerReplicaStatesFetcher.fetch(
+            collection.getZNode(), fixture.zkClient, collection.getPerReplicaStates());
     PerReplicaStatesOps.flipState("r1", Replica.State.ACTIVE, prs)
         .persist(collection.getZNode(), fixture.zkClient);
     timeOut.waitFor(
@@ -388,9 +375,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
             new HashMap<>(),
             Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
             DocRouter.DEFAULT,
-            0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+            0);
     ZkWriteCommand wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -410,9 +395,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
             new HashMap<>(),
             Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
             DocRouter.DEFAULT,
-            ref.get().getZNodeVersion(),
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+            ref.get().getZNodeVersion());
     wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(reader.getClusterState(), Collections.singletonList(wc), null);
     writer.writePendingUpdates();
@@ -433,9 +416,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
             new HashMap<>(),
             Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
             DocRouter.DEFAULT,
-            0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c2")));
+            0);
     ZkWriteCommand wc2 = new ZkWriteCommand("c2", state);
 
     writer.enqueueUpdate(reader.getClusterState(), Arrays.asList(wc1, wc2), null);
@@ -549,9 +530,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
             new HashMap<>(),
             Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
             DocRouter.DEFAULT,
-            0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+            0);
     ZkWriteCommand wc1 = new ZkWriteCommand("c1", state1);
     DocCollection state2 =
         new DocCollection(
@@ -559,9 +538,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
             new HashMap<>(),
             Map.of(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
             DocRouter.DEFAULT,
-            0,
-            new PerReplicaStatesFetcher.LazyPrsSupplier(
-                fixture.zkClient, DocCollection.getCollectionPath("c1")));
+            0);
 
     // do not listen to c2
     fixture.zkClient.makePath(ZkStateReader.COLLECTIONS_ZKNODE + "/c2", true);
@@ -614,9 +591,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
                             ZkStateReader.CONFIGNAME_PROP,
                             ConfigSetsHandler.DEFAULT_CONFIGSET_NAME),
                         DocRouter.DEFAULT,
-                        currentVersion,
-                        new PerReplicaStatesFetcher.LazyPrsSupplier(
-                            fixture.zkClient, DocCollection.getCollectionPath("c1")));
+                        currentVersion);
                 ZkWriteCommand wc = new ZkWriteCommand("c1", state);
                 writer.enqueueUpdate(clusterState, Collections.singletonList(wc), null);
                 clusterState = writer.writePendingUpdates();

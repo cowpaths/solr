@@ -67,20 +67,20 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
 
   private final PerReplicaStates perReplicaStates;
 
-  public static DocCollection buildDocCollection(String name,
-                                   Map<String, Slice> slices,
-                                   Map<String, Object> props,
-                                   DocRouter router,
-                                   int zkVersion,
-                                   DocCollection.PrsSupplier prsSupplier) {
+  public static DocCollection buildDocCollection(
+      String name,
+      Map<String, Slice> slices,
+      Map<String, Object> props,
+      DocRouter router,
+      int zkVersion,
+      DocCollection.PrsSupplier prsSupplier) {
     boolean perReplicaState =
-            (Boolean) verifyProp(props, CollectionStateProps.PER_REPLICA_STATE, Boolean.FALSE);
+        (Boolean) verifyProp(props, CollectionStateProps.PER_REPLICA_STATE, Boolean.FALSE);
     PerReplicaStates perReplicaStates;
     if (perReplicaState) {
       if (prsSupplier == null) {
         throw new RuntimeException(
-                CollectionStateProps.PER_REPLICA_STATE
-                        + " = true , but prsSuppler is not provided");
+            CollectionStateProps.PER_REPLICA_STATE + " = true , but prsSuppler is not provided");
       } else {
         perReplicaStates = prsSupplier.get();
       }

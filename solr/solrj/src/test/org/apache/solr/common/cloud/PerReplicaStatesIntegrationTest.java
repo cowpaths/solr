@@ -76,7 +76,6 @@ public class PerReplicaStatesIntegrationTest extends SolrCloudTestCase {
       final SolrPingResponse response = clientUnderTest.ping(testCollection);
       assertEquals("This should be OK", 0, response.getStatus());
       DocCollection c = cluster.getZkStateReader().getCollection(testCollection);
-      c.forEachReplica((s, replica) -> assertNotNull(replica.getReplicaState()));
       PerReplicaStates prs =
           PerReplicaStatesFetcher.fetch(
               DocCollection.getCollectionPath(testCollection), cluster.getZkClient(), null);
@@ -110,7 +109,7 @@ public class PerReplicaStatesIntegrationTest extends SolrCloudTestCase {
           .process(cluster.getSolrClient());
       cluster.waitForActiveCollection(testCollection, 2, 4);
       c = cluster.getZkStateReader().getCollection(testCollection);
-      c.forEachReplica((s, replica) -> assertNotNull(replica.getReplicaState()));
+
       prs =
           PerReplicaStatesFetcher.fetch(
               DocCollection.getCollectionPath(testCollection), cluster.getZkClient(), null);
@@ -141,7 +140,6 @@ public class PerReplicaStatesIntegrationTest extends SolrCloudTestCase {
       cluster.waitForActiveCollection(testCollection, 1, 1);
 
       DocCollection c = cluster.getZkStateReader().getCollection(testCollection);
-      c.forEachReplica((s, replica) -> assertNotNull(replica.getReplicaState()));
       String collectionPath = DocCollection.getCollectionPath(testCollection);
       PerReplicaStates prs =
           PerReplicaStatesFetcher.fetch(

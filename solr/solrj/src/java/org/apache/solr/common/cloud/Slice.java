@@ -45,18 +45,6 @@ public class Slice extends ZkNodeProps implements Iterable<Replica> {
 
   public final String collection;
 
-  private DocCollection.PrsSupplier prsSupplier;
-
-  void setPrsSupplier(DocCollection.PrsSupplier prsSupplier) {
-    this.prsSupplier = prsSupplier;
-    for (Replica r : replicas.values()) {
-      r.setPrsSupplier(prsSupplier);
-    }
-    if (leader == null) {
-      leader = findLeader();
-    }
-  }
-
   /**
    * Loads multiple slices into a Map from a generic Map that probably came from deserialized JSON.
    */
@@ -294,15 +282,10 @@ public class Slice extends ZkNodeProps implements Iterable<Replica> {
   }
 
   public Replica getLeader() {
-    if (prsSupplier != null) {
-      // this  is a PRS collection. leader may keep changing
-      return findLeader();
-    } else {
-      if (leader == null) {
-        leader = findLeader();
-      }
-      return leader;
+    if (leader == null) {
+      leader = findLeader();
     }
+    return leader;
   }
 
   public int getNumLeaderReplicas() {

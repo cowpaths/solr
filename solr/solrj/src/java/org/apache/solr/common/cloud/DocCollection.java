@@ -220,7 +220,7 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
           propMap,
           router,
           znodeVersion,
-          childNodesVersion);
+          newPerReplicaStates.cversion);
     } else {
       return this;
     }

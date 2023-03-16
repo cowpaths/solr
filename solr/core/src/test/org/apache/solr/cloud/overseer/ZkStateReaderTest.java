@@ -287,8 +287,6 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     // no more dummy node
     assertEquals(0, ref.get().getChildNodesVersion());
 
-
-
     DocCollection collection = ref.get();
     PerReplicaStates prs = PerReplicaStatesFetcher.fetch(collection.getZNode(), fixture.zkClient);
     PerReplicaStatesOps.addReplica("r1", Replica.State.DOWN, false, prs)
@@ -296,11 +294,13 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     timeOut.waitFor(
         "Timeout on waiting for PRS state r1 to be visible",
         () -> {
-            DocCollection c = reader.getCollection("c1");
+          DocCollection c = reader.getCollection("c1");
           return c.getReplica("r1") != null && c.getReplica("r1").getState() == Replica.State.DOWN;
-//          //the best we could verify now is PerReplicaStatesFetch eventually see the change on c1 eventually
-//          PerReplicaStates perReplicaStates = PerReplicaStatesFetcher.fetch(DocCollection.getCollectionPath("c1"), fixture.zkClient);
-//          return perReplicaStates
+          //          //the best we could verify now is PerReplicaStatesFetch eventually see the
+          // change on c1 eventually
+          //          PerReplicaStates perReplicaStates =
+          // PerReplicaStatesFetcher.fetch(DocCollection.getCollectionPath("c1"), fixture.zkClient);
+          //          return perReplicaStates
         });
 
     ref = reader.getClusterState().getCollectionRef("c1");
@@ -353,7 +353,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
         "Timeout on waiting for c1 updated to have PRS state r1",
         () -> {
           DocCollection c = reader.getCollection("c1");
-          return  c.getReplica("r1") != null && c.getReplica("r1").getState() == Replica.State.DOWN;
+          return c.getReplica("r1") != null && c.getReplica("r1").getState() == Replica.State.DOWN;
         });
 
     ref = reader.getClusterState().getCollectionRef("c1");
@@ -392,7 +392,6 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     assertNotNull(ref);
     assertFalse(ref.isLazilyLoaded());
     assertEquals(0, ref.get().getZNodeVersion());
-
 
     // update the collection
     state =

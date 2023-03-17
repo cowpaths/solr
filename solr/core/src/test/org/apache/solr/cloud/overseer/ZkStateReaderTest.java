@@ -276,7 +276,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     // inserted
     reader.registerCore("c1");
 
-    TimeOut timeOut = new TimeOut(500000, TimeUnit.MILLISECONDS, TimeSource.NANO_TIME);
+    TimeOut timeOut = new TimeOut(5000, TimeUnit.MILLISECONDS, TimeSource.NANO_TIME);
     timeOut.waitFor(
         "Timeout on waiting for c1 to show up in cluster state",
         () -> reader.getClusterState().getCollectionOrNull("c1") != null);

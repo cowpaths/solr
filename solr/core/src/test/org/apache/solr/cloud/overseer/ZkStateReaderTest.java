@@ -246,7 +246,6 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
 
     ClusterState clusterState = reader.getClusterState();
 
-    Map<String, Slice> slices = new HashMap<>();
     Map<String, Object> props = new HashMap<>();
     String nodeName = "node1:10000_solr";
     props.put(ZkStateReader.NODE_NAME_PROP, nodeName);

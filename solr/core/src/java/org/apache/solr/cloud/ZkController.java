@@ -1799,7 +1799,7 @@ public class ZkController implements Closeable {
       // as overseer does not and should not handle those entries
       if (coll != null && coll.isPerReplicaState() && coreNodeName != null) {
         PerReplicaStates perReplicaStates =
-            PerReplicaStatesFetcher.fetch(coll.getZNode(), zkClient, coll.getPerReplicaStates());
+            PerReplicaStatesFetcher.fetch(coll.getZNode(), zkClient);
         PerReplicaStatesOps.flipState(coreNodeName, state, perReplicaStates)
             .persist(coll.getZNode(), zkClient);
       }
@@ -1884,8 +1884,7 @@ public class ZkController implements Closeable {
               docCollection.getName());
         }
         PerReplicaStates perReplicaStates =
-            PerReplicaStatesFetcher.fetch(
-                docCollection.getZNode(), zkClient, docCollection.getPerReplicaStates());
+            PerReplicaStatesFetcher.fetch(docCollection.getZNode(), zkClient);
         PerReplicaStatesOps.deleteReplica(coreNodeName, perReplicaStates)
             .persist(docCollection.getZNode(), zkClient);
       }
@@ -2958,9 +2957,7 @@ public class ZkController implements Closeable {
                   }
                 });
             PerReplicaStatesOps.downReplicas(
-                    replicasToDown,
-                    PerReplicaStatesFetcher.fetch(
-                        coll.getZNode(), zkClient, coll.getPerReplicaStates()))
+                    replicasToDown, PerReplicaStatesFetcher.fetch(coll.getZNode(), zkClient))
                 .persist(coll.getZNode(), zkClient);
           }
         }

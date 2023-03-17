@@ -36,7 +36,6 @@ import org.apache.solr.client.solrj.response.CollectionAdminResponse;
 import org.apache.solr.common.cloud.Aliases;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
-import org.apache.solr.common.cloud.PerReplicaStates;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
@@ -169,16 +168,17 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
   @SuppressWarnings({"rawtypes", "unchecked"})
   private DocCollection fillPrs(int znodeVersion, Map.Entry<String, Object> e, Map m) {
     DocCollection.PrsSupplier prsSupplier = null;
-    if (m.containsKey("PRS")) {
-      Map prs = (Map) m.remove("PRS");
-      prsSupplier =
-          new DocCollection.PrsSupplier(
-              () ->
-                  new PerReplicaStates(
-                      (String) prs.get("path"),
-                      (Integer) prs.get("cversion"),
-                      (List<String>) prs.get("states")));
-    }
+    //    if (m.containsKey("PRS")) { //TODO this probably has never worked? "PRS" set is
+    // PerReplicateStates which is not a map anyway?
+    //      Map prs = (Map) m.remove("PRS");
+    //      prsSupplier =
+    //          new DocCollection.PrsSupplier(
+    //              () ->
+    //                  new PerReplicaStates(
+    //                      (String) prs.get("path"),
+    //                      (Integer) prs.get("cversion"),
+    //                      (List<String>) prs.get("states")));
+    //    }
     return ClusterState.collectionFromObjects(e.getKey(), m, znodeVersion, prsSupplier);
   }
 

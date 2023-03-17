@@ -44,12 +44,14 @@ import org.apache.solr.common.cloud.PerReplicaStates;
 import org.apache.solr.common.cloud.PerReplicaStatesFetcher;
 import org.apache.solr.common.cloud.PerReplicaStatesOps;
 import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.CommonTestInjection;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.common.util.TimeSource;
+import org.apache.solr.common.util.Utils;
 import org.apache.solr.common.util.ZLibCompressor;
 import org.apache.solr.handler.admin.ConfigSetsHandler;
 import org.apache.solr.util.LogLevel;
@@ -243,19 +245,28 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     fixture.zkClient.makePath(ZkStateReader.COLLECTIONS_ZKNODE + "/c1", true);
 
     ClusterState clusterState = reader.getClusterState();
+
+    Map<String, Object> props = new HashMap<>();
+    String nodeName = "node1:10000_solr";
+    props.put(ZkStateReader.NODE_NAME_PROP, nodeName);
+    props.put(ZkStateReader.BASE_URL_PROP, Utils.getBaseUrlForNodeName(nodeName, "http"));
+    props.put(ZkStateReader.CORE_NAME_PROP, "core1");
+    props.put(ZkStateReader.CONFIGNAME_PROP, ConfigSetsHandler.DEFAULT_CONFIGSET_NAME);
+    Replica replica = new Replica("r1", props, "c1", "shard1");
+    Slice slice = new Slice("shard1", Map.of("r1", replica), null, "c1");
+
     // create new collection
     DocCollection state =
         new DocCollection(
             "c1",
-            new HashMap<>(),
+            Map.of("shard1", slice),
             Map.of(
                 ZkStateReader.CONFIGNAME_PROP,
                 ConfigSetsHandler.DEFAULT_CONFIGSET_NAME,
                 DocCollection.CollectionStateProps.PER_REPLICA_STATE,
                 "true"),
             DocRouter.DEFAULT,
-            0,
-            PerReplicaStates.empty("c1"));
+            0);
     ZkWriteCommand wc = new ZkWriteCommand("c1", state);
     writer.enqueueUpdate(clusterState, Collections.singletonList(wc), null);
     clusterState = writer.writePendingUpdates();
@@ -276,34 +287,31 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     assertEquals(0, ref.get().getChildNodesVersion());
 
     DocCollection collection = ref.get();
-    PerReplicaStates prs =
-        PerReplicaStatesFetcher.fetch(
-            collection.getZNode(), fixture.zkClient, collection.getPerReplicaStates());
+    PerReplicaStates prs = PerReplicaStatesFetcher.fetch(collection.getZNode(), fixture.zkClient);
     PerReplicaStatesOps.addReplica("r1", Replica.State.DOWN, false, prs)
         .persist(collection.getZNode(), fixture.zkClient);
     timeOut.waitFor(
-        "Timeout on waiting for c1 updated to have PRS state r1",
+        "Timeout on waiting for PRS state r1 to be visible",
         () -> {
           DocCollection c = reader.getCollection("c1");
-          return c.getPerReplicaStates() != null
-              && c.getPerReplicaStates().get("r1") != null
-              && c.getPerReplicaStates().get("r1").state == Replica.State.DOWN;
+          return c.getReplica("r1") != null && c.getReplica("r1").getState() == Replica.State.DOWN;
+          //          //the best we could verify now is PerReplicaStatesFetch eventually see the
+          // change on c1 eventually
+          //          PerReplicaStates perReplicaStates =
+          // PerReplicaStatesFetcher.fetch(DocCollection.getCollectionPath("c1"), fixture.zkClient);
+          //          return perReplicaStates
         });
 
     ref = reader.getClusterState().getCollectionRef("c1");
     assertEquals(0, ref.get().getZNodeVersion()); // no change in Znode version
     assertEquals(1, ref.get().getChildNodesVersion()); // but child version should be 1 now
 
-    prs =
-        PerReplicaStatesFetcher.fetch(
-            collection.getZNode(), fixture.zkClient, collection.getPerReplicaStates());
+    prs = PerReplicaStatesFetcher.fetch(collection.getZNode(), fixture.zkClient);
     PerReplicaStatesOps.flipState("r1", Replica.State.ACTIVE, prs)
         .persist(collection.getZNode(), fixture.zkClient);
     timeOut.waitFor(
         "Timeout on waiting for c1 updated to have PRS state r1 marked as DOWN",
-        () ->
-            reader.getCollection("c1").getPerReplicaStates().get("r1").state
-                == Replica.State.ACTIVE);
+        () -> reader.getCollection("c1").getReplica("r1").getState() == Replica.State.ACTIVE);
 
     ref = reader.getClusterState().getCollectionRef("c1");
     assertEquals(0, ref.get().getZNodeVersion()); // no change in Znode version
@@ -337,18 +345,14 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
 
     // re-add PRS
     collection = ref.get();
-    prs =
-        PerReplicaStatesFetcher.fetch(
-            collection.getZNode(), fixture.zkClient, collection.getPerReplicaStates());
+    prs = PerReplicaStatesFetcher.fetch(collection.getZNode(), fixture.zkClient);
     PerReplicaStatesOps.addReplica("r1", Replica.State.DOWN, false, prs)
         .persist(collection.getZNode(), fixture.zkClient);
     timeOut.waitFor(
         "Timeout on waiting for c1 updated to have PRS state r1",
         () -> {
           DocCollection c = reader.getCollection("c1");
-          return c.getPerReplicaStates() != null
-              && c.getPerReplicaStates().get("r1") != null
-              && c.getPerReplicaStates().get("r1").state == Replica.State.DOWN;
+          return c.getReplica("r1") != null && c.getReplica("r1").getState() == Replica.State.DOWN;
         });
 
     ref = reader.getClusterState().getCollectionRef("c1");

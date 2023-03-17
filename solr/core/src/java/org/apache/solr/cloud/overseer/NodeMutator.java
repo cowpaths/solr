@@ -120,11 +120,7 @@ public class NodeMutator {
 
     if (needToUpdateCollection) {
       if (docCollection.isPerReplicaState()) {
-        PerReplicaStates prs =
-            client == null
-                ? docCollection.getPerReplicaStates()
-                : PerReplicaStatesFetcher.fetch(
-                    docCollection.getZNode(), client, docCollection.getPerReplicaStates());
+        PerReplicaStates prs = PerReplicaStatesFetcher.fetch(docCollection.getZNode(), client);
 
         return Optional.of(
             new ZkWriteCommand(

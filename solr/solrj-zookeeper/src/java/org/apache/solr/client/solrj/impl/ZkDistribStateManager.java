@@ -216,6 +216,6 @@ public class ZkDistribStateManager implements DistribStateManager {
   @Override
   public PerReplicaStates getReplicaStates(String path)
       throws KeeperException, InterruptedException {
-    return PerReplicaStatesFetcher.fetch(path, zkClient, null);
+    return PerReplicaStatesFetcher.fetch(path, zkClient);
   }
 }

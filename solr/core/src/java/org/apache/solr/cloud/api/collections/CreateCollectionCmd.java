@@ -425,14 +425,11 @@ public class CreateCollectionCmd implements CollApiCmds.CollectionApiCommand {
                 TimeUnit.SECONDS,
                 ccc.getSolrCloudManager().getTimeSource()); // could be a big cluster
         PerReplicaStates prs =
-            PerReplicaStatesFetcher.fetch(
-                collectionPath, ccc.getZkStateReader().getZkClient(), null);
+            PerReplicaStatesFetcher.fetch(collectionPath, ccc.getZkStateReader().getZkClient());
         while (!timeout.hasTimedOut()) {
           if (prs.allActive()) break;
           Thread.sleep(100);
-          prs =
-              PerReplicaStatesFetcher.fetch(
-                  collectionPath, ccc.getZkStateReader().getZkClient(), null);
+          prs = PerReplicaStatesFetcher.fetch(collectionPath, ccc.getZkStateReader().getZkClient());
         }
         if (prs.allActive()) {
           // we have successfully found all replicas to be ACTIVE

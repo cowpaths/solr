@@ -1167,8 +1167,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
     assertEquals("This should be OK", 0, response.getStatus());
 
     DocCollection c = cluster.getZkStateReader().getCollection(testCollection);
-    PerReplicaStates prs =
-        PerReplicaStatesFetcher.fetch(collectionPath, cluster.getZkClient(), null);
+    PerReplicaStates prs = PerReplicaStatesFetcher.fetch(collectionPath, cluster.getZkClient());
     assertEquals(4, prs.states.size());
 
     JettySolrRunner jsr = null;
@@ -1178,7 +1177,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
       // Now let's do an add replica
       CollectionAdminRequest.addReplicaToShard(testCollection, "shard1")
           .process(cluster.getSolrClient());
-      prs = PerReplicaStatesFetcher.fetch(collectionPath, cluster.getZkClient(), null);
+      prs = PerReplicaStatesFetcher.fetch(collectionPath, cluster.getZkClient());
       assertEquals(5, prs.states.size());
 
       // create a collection with PRS and v2 API
@@ -1192,7 +1191,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
           .build()
           .process(cluster.getSolrClient());
       cluster.waitForActiveCollection(testCollection, 2, 4);
-      prs = PerReplicaStatesFetcher.fetch(collectionPath, cluster.getZkClient(), null);
+      prs = PerReplicaStatesFetcher.fetch(collectionPath, cluster.getZkClient());
       assertEquals(4, prs.states.size());
     } finally {
       if (jsr != null) {

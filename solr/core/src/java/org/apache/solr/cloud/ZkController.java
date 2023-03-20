@@ -2958,17 +2958,18 @@ public class ZkController implements Closeable {
           }
         }
 
-        // Only send downnode message to overseer if we have to. We are trying to avoid the overhead from PRS collections,
-        // as it takes awhile to process downnode message by loading the DocCollection even if it does no further processing.
-        // In the future, we should optimize the handling on Solr side to speed up PRS DocCollection read on operations that
-        // do not require actual replica information.
+        // Only send downnode message to overseer if we have to. We are trying to avoid the overhead
+        // from PRS collections, as it takes awhile to process downnode message by loading
+        // the DocCollection even if it does no further processing.
+        // In the future, we should optimize the handling on Solr side to speed up PRS DocCollection
+        // read on operations that do not require actual replica information.
         if (sendToOverseer) {
           overseer
-                  .getStateUpdateQueue()
-                  .offer(
-                          m ->
-                                  m.put(Overseer.QUEUE_OPERATION, OverseerAction.DOWNNODE.toLower())
-                                          .put(ZkStateReader.NODE_NAME_PROP, nodeName));
+              .getStateUpdateQueue()
+              .offer(
+                  m ->
+                      m.put(Overseer.QUEUE_OPERATION, OverseerAction.DOWNNODE.toLower())
+                          .put(ZkStateReader.NODE_NAME_PROP, nodeName));
         }
       } catch (AlreadyClosedException e) {
         log.info(

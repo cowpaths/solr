@@ -2975,12 +2975,12 @@ public class ZkController implements Closeable {
         // read on operations that do not require actual replica information.
         if (sendToOverseer) {
           ZkNodeProps m =
-            new ZkNodeProps(
-                Overseer.QUEUE_OPERATION,
-                OverseerAction.DOWNNODE.toLower(),
-                ZkStateReader.NODE_NAME_PROP,
-                nodeName);
-        overseer.getStateUpdateQueue().offer(Utils.toJSON(m));
+              new ZkNodeProps(
+                  Overseer.QUEUE_OPERATION,
+                  OverseerAction.DOWNNODE.toLower(),
+                  ZkStateReader.NODE_NAME_PROP,
+                  nodeName);
+          overseer.getStateUpdateQueue().offer(Utils.toJSON(m));
         }
       } catch (AlreadyClosedException e) {
         log.info(

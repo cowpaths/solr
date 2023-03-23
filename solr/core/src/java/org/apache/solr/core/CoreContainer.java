@@ -138,6 +138,7 @@ import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.pkg.SolrPackageLoader;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.request.SolrRequestInfo;
+import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.search.SolrFieldCacheBean;
 import org.apache.solr.security.AllowListUrlChecker;
 import org.apache.solr.security.AuditLoggerPlugin;
@@ -397,6 +398,7 @@ public class CoreContainer {
     if (null != this.cfg.getBooleanQueryMaxClauseCount()) {
       IndexSearcher.setMaxClauseCount(this.cfg.getBooleanQueryMaxClauseCount());
     }
+    IndexSchema.setUninvertibleSupport(this.cfg.getUninvertibleSupport());
     setWeakStringInterner();
     this.coresLocator = locator;
     this.containerProperties = new Properties(config.getSolrProperties());

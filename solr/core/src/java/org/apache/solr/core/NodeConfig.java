@@ -37,7 +37,9 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.logging.LogWatcherConfig;
+import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.servlet.SolrDispatchFilter;
+import org.apache.solr.uninverting.UninvertingReader;
 import org.apache.solr.update.UpdateShardHandlerConfig;
 import org.apache.solr.util.ModuleUtils;
 import org.slf4j.Logger;
@@ -55,6 +57,8 @@ public class NodeConfig {
   private final Path solrDataHome;
 
   private final Integer booleanQueryMaxClauseCount;
+
+  private final UninvertingReader.Support uninvertibleSupport;
 
   private final Path configSetBaseDirectory;
 
@@ -115,6 +119,7 @@ public class NodeConfig {
       Path coreRootDirectory,
       Path solrDataHome,
       Integer booleanQueryMaxClauseCount,
+      UninvertingReader.Support uninvertibleSupport,
       Path configSetBaseDirectory,
       String sharedLibDirectory,
       PluginInfo shardHandlerFactoryConfig,
@@ -149,6 +154,7 @@ public class NodeConfig {
     this.coreRootDirectory = coreRootDirectory;
     this.solrDataHome = solrDataHome;
     this.booleanQueryMaxClauseCount = booleanQueryMaxClauseCount;
+    this.uninvertibleSupport = uninvertibleSupport;
     this.configSetBaseDirectory = configSetBaseDirectory;
     this.sharedLibDirectory = sharedLibDirectory;
     this.shardHandlerFactoryConfig = shardHandlerFactoryConfig;
@@ -265,6 +271,10 @@ public class NodeConfig {
    */
   public Integer getBooleanQueryMaxClauseCount() {
     return booleanQueryMaxClauseCount;
+  }
+
+  public UninvertingReader.Support getUninvertibleSupport() {
+    return uninvertibleSupport;
   }
 
   public PluginInfo getShardHandlerFactoryPluginInfo() {
@@ -530,6 +540,8 @@ public class NodeConfig {
     private Path coreRootDirectory;
     private Path solrDataHome;
     private Integer booleanQueryMaxClauseCount;
+    private UninvertingReader.Support uninvertibleSupport =
+        IndexSchema.IMPLICIT_DEFAULT_UNINVERTIBLE;
     private Path configSetBaseDirectory;
     private String sharedLibDirectory;
     private String modules;
@@ -613,6 +625,11 @@ public class NodeConfig {
 
     public NodeConfigBuilder setBooleanQueryMaxClauseCount(Integer booleanQueryMaxClauseCount) {
       this.booleanQueryMaxClauseCount = booleanQueryMaxClauseCount;
+      return this;
+    }
+
+    public NodeConfigBuilder setUninvertibleSupport(UninvertingReader.Support uninvertibleSupport) {
+      this.uninvertibleSupport = uninvertibleSupport;
       return this;
     }
 
@@ -772,6 +789,7 @@ public class NodeConfig {
           coreRootDirectory,
           solrDataHome,
           booleanQueryMaxClauseCount,
+          uninvertibleSupport,
           configSetBaseDirectory,
           sharedLibDirectory,
           shardHandlerFactoryConfig,

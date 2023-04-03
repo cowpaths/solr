@@ -48,16 +48,20 @@ public class DocCollectionTest extends SolrTestCaseJ4 {
 
     assertTrue("collection'equal method should NOT be same", docCollection.equals(docCollection2));
     assertTrue(
-            "collection's hashcode method should NOT be same",
-            docCollection.hashCode() == docCollection2.hashCode());
+        "collection's hashcode method should NOT be same",
+        docCollection.hashCode() == docCollection2.hashCode());
 
     String prsState = "replicacore:1:A:L";
     List<String> prsStates = new ArrayList<>();
     prsStates.add(prsState);
     PerReplicaStates prs = new PerReplicaStates(collName, 1, prsStates);
     propMap.put(DocCollection.CollectionStateProps.PER_REPLICA_STATE, Boolean.TRUE);
-    docCollection = new DocCollection(collName, sliceMap, propMap, docRouter, 1, new DocCollection.PrsSupplier(prs));
-    docCollection2 = new DocCollection(collName, sliceMap, propMap, docRouter, 1, new DocCollection.PrsSupplier(prs));
+    docCollection =
+        new DocCollection(
+            collName, sliceMap, propMap, docRouter, 1, new DocCollection.PrsSupplier(prs));
+    docCollection2 =
+        new DocCollection(
+            collName, sliceMap, propMap, docRouter, 1, new DocCollection.PrsSupplier(prs));
     prsState = "replicacore:1:D:L";
     prsStates = new ArrayList<>();
     prsStates.add(prsState);

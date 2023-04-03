@@ -210,8 +210,10 @@ public abstract class FacetProcessor<T extends FacetRequest> {
   }
 
   protected List<Query> getContextQueries() {
-    Set<Query> excludeSet = Collections.emptySet();
-    if (freq.domain != null) {
+    Set<Query> excludeSet;
+    if (freq.domain == null) {
+      excludeSet = Collections.emptySet();
+    } else {
       excludeSet = QueryUtils.getTaggedQueries(fcontext.req, freq.domain.excludeTags);
     }
     return getContextQueriesWithExclusions(excludeSet);

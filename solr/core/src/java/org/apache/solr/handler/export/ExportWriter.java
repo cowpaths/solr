@@ -28,8 +28,10 @@ import java.io.PrintWriter;
 import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.lucene.index.FieldInfo;
@@ -82,6 +84,8 @@ import org.apache.solr.search.SortSpec;
 import org.apache.solr.search.SyntaxError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.xml.validation.Schema;
 
 /**
  * Prepares and writes the documents requested by /export requests
@@ -480,83 +484,72 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
   public FieldWriter[] getFieldWriters(String[] fields, SolrIndexSearcher searcher)
       throws IOException {
     IndexSchema schema = searcher.getSchema();
-    List<FieldWriter> writers = new ArrayList<>(fields.length);
-    for (int i = 0; i < fields.length; i++) {
-      String field = fields[i];
 
-      List<SchemaField> schemaFields = new ArrayList<>();
-      if (field.contains("*")) {
-        schemaFields.addAll(getGlobFields(field, searcher));
-      } else {
-        try {
-          schemaFields.add(schema.getField(field));
-        } catch (Exception e) {
-          throw new IOException(e);
-        }
+    List<SchemaField> expandedFields = expandFieldList(fields, searcher);
+
+    FieldWriter[] writers = new FieldWriter[expandedFields.size()];
+    for (int i = 0; i < expandedFields.size(); i++) {
+      SchemaField schemaField = expandedFields.get(i);
+      String field = schemaField.getName();
+      if (!schemaField.hasDocValues()) {
+        throw new IOException(schemaField + " must have DocValues to use this feature.");
+      }
+      boolean multiValued = schemaField.multiValued();
+      FieldType fieldType = schemaField.getType();
+
+      if (fieldType instanceof SortableTextField && schemaField.useDocValuesAsStored() == false) {
+        throw new IOException(
+            schemaField + " Must have useDocValuesAsStored='true' to be used with export writer");
       }
 
-      for (SchemaField schemaField : schemaFields) {
-        field = schemaField.getName();
-        if (!schemaField.hasDocValues()) {
-          throw new IOException(schemaField + " must have DocValues to use this feature.");
-        }
-        boolean multiValued = schemaField.multiValued();
-        FieldType fieldType = schemaField.getType();
-
-        if (fieldType instanceof SortableTextField && schemaField.useDocValuesAsStored() == false) {
-          throw new IOException(
-              schemaField + " Must have useDocValuesAsStored='true' to be used with export writer");
-        }
-
-        if (fieldType instanceof IntValueFieldType) {
-          if (multiValued) {
-            writers.add(new MultiFieldWriter(field, fieldType, schemaField, true));
-          } else {
-            writers.add(new IntFieldWriter(field));
-          }
-        } else if (fieldType instanceof LongValueFieldType) {
-          if (multiValued) {
-            writers.add(new MultiFieldWriter(field, fieldType, schemaField, true));
-          } else {
-            writers.add(new LongFieldWriter(field));
-          }
-        } else if (fieldType instanceof FloatValueFieldType) {
-          if (multiValued) {
-            writers.add(new MultiFieldWriter(field, fieldType, schemaField, true));
-          } else {
-            writers.add(new FloatFieldWriter(field));
-          }
-        } else if (fieldType instanceof DoubleValueFieldType) {
-          if (multiValued) {
-            writers.add(new MultiFieldWriter(field, fieldType, schemaField, true));
-          } else {
-            writers.add(new DoubleFieldWriter(field));
-          }
-        } else if (fieldType instanceof StrField || fieldType instanceof SortableTextField) {
-          if (multiValued) {
-            writers.add(new MultiFieldWriter(field, fieldType, schemaField, false));
-          } else {
-            writers.add(new StringFieldWriter(field, fieldType));
-          }
-        } else if (fieldType instanceof DateValueFieldType) {
-          if (multiValued) {
-            writers.add(new MultiFieldWriter(field, fieldType, schemaField, false));
-          } else {
-            writers.add(new DateFieldWriter(field));
-          }
-        } else if (fieldType instanceof BoolField) {
-          if (multiValued) {
-            writers.add(new MultiFieldWriter(field, fieldType, schemaField, true));
-          } else {
-            writers.add(new BoolFieldWriter(field, fieldType));
-          }
+      if (fieldType instanceof IntValueFieldType) {
+        if (multiValued) {
+          writers[i] = new MultiFieldWriter(field, fieldType, schemaField, true);
         } else {
-          throw new IOException(
-              "Export fields must be one of the following types: int,float,long,double,string,date,boolean,SortableText");
+          writers[i] = new IntFieldWriter(field);
         }
+      } else if (fieldType instanceof LongValueFieldType) {
+        if (multiValued) {
+          writers[i] = new MultiFieldWriter(field, fieldType, schemaField, true);
+        } else {
+          writers[i] = new LongFieldWriter(field);
+        }
+      } else if (fieldType instanceof FloatValueFieldType) {
+        if (multiValued) {
+          writers[i] = new MultiFieldWriter(field, fieldType, schemaField, true);
+        } else {
+          writers[i] = new FloatFieldWriter(field);
+        }
+      } else if (fieldType instanceof DoubleValueFieldType) {
+        if (multiValued) {
+          writers[i] = new MultiFieldWriter(field, fieldType, schemaField, true);
+        } else {
+          writers[i] = new DoubleFieldWriter(field);
+        }
+      } else if (fieldType instanceof StrField || fieldType instanceof SortableTextField) {
+        if (multiValued) {
+          writers[i] = new MultiFieldWriter(field, fieldType, schemaField, false);
+        } else {
+          writers[i] = new StringFieldWriter(field, fieldType);
+        }
+      } else if (fieldType instanceof DateValueFieldType) {
+        if (multiValued) {
+          writers[i] = new MultiFieldWriter(field, fieldType, schemaField, false);
+        } else {
+          writers[i] = new DateFieldWriter(field);
+        }
+      } else if (fieldType instanceof BoolField) {
+        if (multiValued) {
+          writers[i] = new MultiFieldWriter(field, fieldType, schemaField, true);
+        } else {
+          writers[i] = new BoolFieldWriter(field, fieldType);
+        }
+      } else {
+        throw new IOException(
+            "Export fields must be one of the following types: int,float,long,double,string,date,boolean,SortableText");
       }
     }
-    return writers.toArray(new FieldWriter[0]);
+    return writers;
   }
 
   SortDoc getSortDoc(SolrIndexSearcher searcher, SortField[] sortFields) throws IOException {
@@ -839,18 +832,47 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
     }
   }
 
-  private List<SchemaField> getGlobFields(String fieldPattern, SolrIndexSearcher searcher)
-      throws IOException {
+  /**
+   * Creates a complete field list using the provided field list by expanding any glob patterns into field names
+   * @param fields the original set of fields provided
+   * @param searcher an index searcher to access schema info
+   * @return a complete list of fields included any fields matching glob patterns
+   * @throws IOException if a provided field does not exist or cannot be retrieved from the schema info
+   */
+  private List<SchemaField> expandFieldList(String[] fields, SolrIndexSearcher searcher) throws IOException {
+    List<SchemaField> expandedFields = new ArrayList<>(fields.length);
+    Set<String> fieldsProcessed = new HashSet<>();
+    for (String field : fields) {
+      try {
+        if (field.contains("*")) {
+          expandedFields.addAll(getGlobFields(field, searcher, fieldsProcessed));
+        } else {
+          if (fieldsProcessed.add(field)) {
+            expandedFields.add(searcher.getSchema().getField(field));
+          }
+        }
+      } catch (Exception e) {
+        throw new IOException(e);
+      }
+    }
+
+    return new ArrayList<>(expandedFields);
+  }
+
+  /**
+   * Create a list of schema fields that match a given glob pattern
+   * @param fieldPattern the glob pattern to match
+   * @param searcher an index search to access schema info
+   * @param fieldsProcessed the set of field names already processed to avoid duplicating
+   * @return a list of fields that match a given glob pattern
+   */
+  private List<SchemaField> getGlobFields(String fieldPattern, SolrIndexSearcher searcher, Set<String> fieldsProcessed) {
     List<SchemaField> schemaFields = new ArrayList<>();
     for (FieldInfo fi : searcher.getFieldInfos()) {
       if (FilenameUtils.wildcardMatch(fi.getName(), fieldPattern)) {
-        try {
-          SchemaField schemaField = searcher.getSchema().getField(fi.getName());
-          if (schemaField.hasDocValues() && schemaField.useDocValuesAsStored()) {
-            schemaFields.add(schemaField);
-          }
-        } catch (Exception e) {
-          throw new IOException(e);
+        SchemaField schemaField = searcher.getSchema().getField(fi.getName());
+        if (fieldsProcessed.add(fi.getName()) && schemaField.hasDocValues() && schemaField.useDocValuesAsStored()) {
+          schemaFields.add(schemaField);
         }
       }
     }

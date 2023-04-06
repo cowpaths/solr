@@ -85,8 +85,6 @@ import org.apache.solr.search.SyntaxError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.xml.validation.Schema;
-
 /**
  * Prepares and writes the documents requested by /export requests
  *
@@ -833,13 +831,17 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
   }
 
   /**
-   * Creates a complete field list using the provided field list by expanding any glob patterns into field names
+   * Creates a complete field list using the provided field list by expanding any glob patterns into
+   * field names
+   *
    * @param fields the original set of fields provided
    * @param searcher an index searcher to access schema info
    * @return a complete list of fields included any fields matching glob patterns
-   * @throws IOException if a provided field does not exist or cannot be retrieved from the schema info
+   * @throws IOException if a provided field does not exist or cannot be retrieved from the schema
+   *     info
    */
-  private List<SchemaField> expandFieldList(String[] fields, SolrIndexSearcher searcher) throws IOException {
+  private List<SchemaField> expandFieldList(String[] fields, SolrIndexSearcher searcher)
+      throws IOException {
     List<SchemaField> expandedFields = new ArrayList<>(fields.length);
     Set<String> fieldsProcessed = new HashSet<>();
     for (String field : fields) {
@@ -861,17 +863,21 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
 
   /**
    * Create a list of schema fields that match a given glob pattern
+   *
    * @param fieldPattern the glob pattern to match
    * @param searcher an index search to access schema info
    * @param fieldsProcessed the set of field names already processed to avoid duplicating
    * @return a list of fields that match a given glob pattern
    */
-  private List<SchemaField> getGlobFields(String fieldPattern, SolrIndexSearcher searcher, Set<String> fieldsProcessed) {
+  private List<SchemaField> getGlobFields(
+      String fieldPattern, SolrIndexSearcher searcher, Set<String> fieldsProcessed) {
     List<SchemaField> schemaFields = new ArrayList<>();
     for (FieldInfo fi : searcher.getFieldInfos()) {
       if (FilenameUtils.wildcardMatch(fi.getName(), fieldPattern)) {
         SchemaField schemaField = searcher.getSchema().getField(fi.getName());
-        if (fieldsProcessed.add(fi.getName()) && schemaField.hasDocValues() && schemaField.useDocValuesAsStored()) {
+        if (fieldsProcessed.add(fi.getName())
+            && schemaField.hasDocValues()
+            && schemaField.useDocValuesAsStored()) {
           schemaFields.add(schemaField);
         }
       }

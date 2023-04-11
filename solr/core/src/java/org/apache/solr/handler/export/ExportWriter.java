@@ -867,7 +867,7 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
    * @param fieldPattern the glob pattern to match
    * @param searcher an index search to access schema info
    * @param fieldsProcessed the set of field names already processed to avoid duplicating
-   * @return a list of fields that match a given glob pattern
+   * @param expandedFields the list of fields to add expanded field names into
    */
   private void getGlobFields(
       String fieldPattern,

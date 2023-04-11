@@ -847,7 +847,7 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
     for (String field : fields) {
       try {
         if (field.contains("*")) {
-          expandedFields.addAll(getGlobFields(field, searcher, fieldsProcessed));
+          getGlobFields(field, searcher, fieldsProcessed, expandedFields);
         } else {
           if (fieldsProcessed.add(field)) {
             expandedFields.add(searcher.getSchema().getField(field));
@@ -858,7 +858,7 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
       }
     }
 
-    return new ArrayList<>(expandedFields);
+    return expandedFields;
   }
 
   /**
@@ -869,20 +869,20 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
    * @param fieldsProcessed the set of field names already processed to avoid duplicating
    * @return a list of fields that match a given glob pattern
    */
-  private List<SchemaField> getGlobFields(
-      String fieldPattern, SolrIndexSearcher searcher, Set<String> fieldsProcessed) {
-    List<SchemaField> schemaFields = new ArrayList<>();
+  private void getGlobFields(
+      String fieldPattern,
+      SolrIndexSearcher searcher,
+      Set<String> fieldsProcessed,
+      List<SchemaField> expandedFields) {
     for (FieldInfo fi : searcher.getFieldInfos()) {
       if (FilenameUtils.wildcardMatch(fi.getName(), fieldPattern)) {
         SchemaField schemaField = searcher.getSchema().getField(fi.getName());
         if (fieldsProcessed.add(fi.getName())
             && schemaField.hasDocValues()
             && schemaField.useDocValuesAsStored()) {
-          schemaFields.add(schemaField);
+          expandedFields.add(schemaField);
         }
       }
     }
-
-    return schemaFields;
   }
 }

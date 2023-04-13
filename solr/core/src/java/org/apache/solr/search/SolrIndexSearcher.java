@@ -104,6 +104,7 @@ import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.search.OrdMapRegenerator.OrdinalMapValue;
 import org.apache.solr.search.facet.UnInvertedField;
 import org.apache.solr.search.stats.StatsCache;
 import org.apache.solr.search.stats.StatsSource;
@@ -149,6 +150,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
   private final boolean cachingEnabled;
   private final SolrCache<Query, DocSet> filterCache;
+  private final SolrCache<String, OrdinalMapValue> ordMapCache;
   private final SolrCache<QueryResultKey, DocList> queryResultCache;
   private final SolrCache<String, UnInvertedField> fieldValueCache;
   private final LongAdder fullSortCount = new LongAdder();
@@ -332,7 +334,6 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     this.directoryFactory = directoryFactory;
     this.reader = (DirectoryReader) super.readerContext.reader();
     this.rawReader = r;
-    this.leafReader = SlowCompositeReaderWrapper.wrap(this.reader);
     this.core = core;
     this.statsCache = core.createStatsCache();
     this.schema = schema;
@@ -366,11 +367,16 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     this.queryResultMaxDocsCached = solrConfig.queryResultMaxDocsCached;
     this.useFilterForSortedQuery = solrConfig.useFilterForSortedQuery;
 
+    ordMapCache = solrConfig.ordMapCacheConfig.newInstance();
+    assert ordMapCache != null;
+    this.leafReader = SlowCompositeReaderWrapper.wrap(this.reader, ordMapCache);
+
     this.docFetcher = new SolrDocumentFetcher(this, solrConfig, enableCache);
 
     this.cachingEnabled = enableCache;
     if (cachingEnabled) {
       final ArrayList<SolrCache> clist = new ArrayList<>();
+      clist.add(ordMapCache);
       fieldValueCache =
           solrConfig.fieldValueCacheConfig == null
               ? null
@@ -617,6 +623,10 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   /** Returns a collection of all field names the index reader knows about. */
   public Iterable<String> getFieldNames() {
     return Iterables.transform(getFieldInfos(), fieldInfo -> fieldInfo.name);
+  }
+
+  public SolrCache<String, OrdinalMapValue> getOrdMapCache() {
+    return ordMapCache;
   }
 
   public SolrCache<Query, DocSet> getFilterCache() {

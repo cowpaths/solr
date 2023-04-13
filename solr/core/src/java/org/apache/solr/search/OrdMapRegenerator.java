@@ -163,6 +163,24 @@ public class OrdMapRegenerator implements CacheRegenerator {
     }
   }
 
+  public static CacheConfig getCacheConfig(SolrConfig solrConfig) {
+    String className = "mn.fs.solr.sharedcache.MemBoundedCache";
+    try {
+      solrConfig.getResourceLoader().getClassLoader().loadClass(className);
+    } catch (ClassNotFoundException ex) {
+      return null;
+    }
+    Map<String, String> args = new HashMap<>();
+    args.put(NAME, "ordMapCache");
+    args.put("class", className);
+    args.put("maxRamMB", "1024");
+    args.put("initialSize", "100");
+    args.put("autowarmCount", "100%");
+    CacheConfig c = CacheConfig.getConfig(solrConfig, "ordMapCache", args, null);
+    configureRegenerator(solrConfig, c);
+    return c;
+  }
+
   @Override
   public <K, V> boolean regenerateItem(
       SolrIndexSearcher newSearcher,

@@ -330,6 +330,8 @@ public class SolrConfig implements MapSerializable {
       if (conf != null) {
         OrdMapRegenerator.configureRegenerator(this, conf);
         ordMapCacheConfig = conf;
+      } else if ((conf = OrdMapRegenerator.getCacheConfig(this)) != null) {
+        ordMapCacheConfig = conf;
       } else {
         ordMapCacheConfig = OrdMapRegenerator.getDefaultCacheConfig(this);
       }

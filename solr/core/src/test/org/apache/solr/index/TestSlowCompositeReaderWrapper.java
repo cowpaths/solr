@@ -123,7 +123,7 @@ public class TestSlowCompositeReaderWrapper extends SolrTestCase {
     assertTrue(reader.leaves().size() > 1);
     @SuppressWarnings("unchecked")
     SolrCache<String, OrdinalMapValue> ordMapCache =
-        OrdMapRegenerator.getDefaultCacheConfig(null).newInstance();
+        OrdMapRegenerator.getDefaultCacheConfig(null).newInstance(null);
     SlowCompositeReaderWrapper slowWrapper =
         (SlowCompositeReaderWrapper) SlowCompositeReaderWrapper.wrap(reader, ordMapCache);
     assertEquals(0, slowWrapper.cachedOrdMaps.size());

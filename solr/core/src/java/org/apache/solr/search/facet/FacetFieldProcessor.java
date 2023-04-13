@@ -482,8 +482,15 @@ abstract class FacetFieldProcessor extends FacetProcessor<FacetField> {
     //
     assert collectCount <= maxTopVals;
     Slot[] sortedSlots = new Slot[collectCount];
+    long[] indexOrderedSlots = new long[collectCount];
     for (int i = collectCount - 1; i >= 0; i--) {
       Slot slot = sortedSlots[i] = queue.pop();
+      indexOrderedSlots[i] = i | (long) slot.slot << Integer.SIZE;
+    }
+    Arrays.sort(indexOrderedSlots);
+    for (int i = 0; i < collectCount; i++) {
+      Slot slot = sortedSlots[(int) indexOrderedSlots[i]];
+      assert slot.slot == indexOrderedSlots[i] >>> Integer.SIZE;
       // At this point we know we're either returning this Slot as a Bucket, or resorting it,
       // so definitely fill in the bucket value -- we'll need it either way
       slot.bucketVal = bucketValFromSlotNumFunc.apply(slot.slot);

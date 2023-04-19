@@ -24,8 +24,11 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandles;
+import java.lang.module.Configuration;
+import java.lang.module.ModuleFinder;
 import java.lang.reflect.Constructor;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.CharacterCodingException;
@@ -36,7 +39,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -117,7 +119,8 @@ public class SolrResourceLoader
   private final boolean allowUnsafeResourceloading;
 
   private String name = "";
-  protected URLClassLoader classLoader;
+  protected ClassLoader classLoader;
+  private final List<URL> extant = new ArrayList<>();
   private final Path instanceDir;
   private String coreName;
   private UUID coreId;
@@ -212,7 +215,7 @@ public class SolrResourceLoader
    * @param urls the URLs of files to add
    */
   synchronized void addToClassLoader(List<URL> urls) {
-    URLClassLoader newLoader = addURLsToClassLoader(classLoader, urls);
+    ClassLoader newLoader = addURLsToClassLoader(classLoader, extant, urls);
     if (newLoader == classLoader) {
       return; // short-circuit
     }
@@ -254,15 +257,13 @@ public class SolrResourceLoader
     TokenizerFactory.reloadTokenizers(this.classLoader);
   }
 
-  private static URLClassLoader addURLsToClassLoader(
-      final URLClassLoader oldLoader, List<URL> urls) {
+  private static ClassLoader addURLsToClassLoader(
+      final ClassLoader oldLoader, List<URL> extant, List<URL> urls) {
     if (urls.size() == 0) {
       return oldLoader;
     }
 
-    List<URL> allURLs = new ArrayList<>();
-    allURLs.addAll(Arrays.asList(oldLoader.getURLs()));
-    allURLs.addAll(urls);
+    extant.addAll(urls);
     for (URL url : urls) {
       if (log.isDebugEnabled()) {
         log.debug("Adding '{}' to classloader", url);
@@ -270,8 +271,40 @@ public class SolrResourceLoader
     }
 
     ClassLoader oldParent = oldLoader.getParent();
-    IOUtils.closeWhileHandlingException(oldLoader);
-    return URLClassLoader.newInstance(allURLs.toArray(new URL[allURLs.size()]), oldParent);
+    if (oldLoader instanceof Closeable) {
+      IOUtils.closeWhileHandlingException((Closeable) oldLoader);
+    }
+    ModuleFinder mf = ModuleFinder.of(extant.stream().map((u) -> {
+      try {
+        return u.toURI();
+      } catch (URISyntaxException e) {
+        throw new RuntimeException(e);
+      }
+    }).filter((u) -> u.getPath().endsWith(".jar")).map(Path::of).toArray(Path[]::new));
+    List<String> moduleNames = new ArrayList<>();
+    List<Path> modulePaths = new ArrayList<>();
+    List<URL> nonModulePaths = new ArrayList<>();
+    mf.findAll().forEach((mr) -> {
+      String name = mr.descriptor().name();
+      if ("fs.dvformat".equals(name)) {
+        moduleNames.add(name);
+        modulePaths.add(Path.of(mr.location().get()));
+      } else {
+        try {
+          nonModulePaths.add(mr.location().get().toURL());
+        } catch (MalformedURLException e) {
+          throw new RuntimeException(e);
+        }
+      }
+    });
+    if (moduleNames.isEmpty()) {
+      return URLClassLoader.newInstance(extant.toArray(new URL[0]), oldParent);
+    }
+    mf = ModuleFinder.of(modulePaths.toArray(Path[]::new));
+    Configuration conf = ModuleLayer.boot().configuration().resolve(mf, ModuleFinder.of(), moduleNames);
+    URLClassLoader plain = URLClassLoader.newInstance(nonModulePaths.toArray(new URL[0]), oldParent);
+    ModuleLayer m = ModuleLayer.defineModulesWithOneLoader(conf, Collections.singletonList(ModuleLayer.boot()), plain).layer();
+    return m.findLoader(moduleNames.get(0));
   }
 
   /**
@@ -879,7 +912,9 @@ public class SolrResourceLoader
 
   @Override
   public void close() throws IOException {
-    IOUtils.close(classLoader);
+    if (classLoader instanceof Closeable) {
+      IOUtils.close((Closeable) classLoader);
+    }
   }
 
   public List<SolrInfoBean> getInfoMBeans() {

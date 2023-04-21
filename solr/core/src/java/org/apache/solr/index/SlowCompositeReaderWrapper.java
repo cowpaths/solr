@@ -91,21 +91,14 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
 
   final SolrCache<String, OrdinalMapValue> cachedOrdMaps;
 
-  private final boolean[] termsDictBlockCacheDisable;
-
   /**
    * This method is sugar for getting an {@link LeafReader} from an {@link IndexReader} of any kind.
    * If the reader is already atomic, it is returned unchanged, otherwise wrapped by this class.
    */
   public static LeafReader wrap(IndexReader reader, SolrCache<String, OrdinalMapValue> ordMapCache)
       throws IOException {
-    return wrap(reader, ordMapCache, new boolean[1]);
-  }
-
-  public static LeafReader wrap(IndexReader reader, SolrCache<String, OrdinalMapValue> ordMapCache, boolean[] termsDictBlockCacheDisable)
-      throws IOException {
     if (reader instanceof CompositeReader) {
-      return new SlowCompositeReaderWrapper((CompositeReader) reader, ordMapCache, termsDictBlockCacheDisable);
+      return new SlowCompositeReaderWrapper((CompositeReader) reader, ordMapCache);
     } else {
       assert reader instanceof LeafReader;
       return (LeafReader) reader;
@@ -113,7 +106,7 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
   }
 
   SlowCompositeReaderWrapper(
-      CompositeReader reader, SolrCache<String, OrdinalMapValue> cachedOrdMaps, boolean[] termsDictBlockCacheDisable) throws IOException {
+      CompositeReader reader, SolrCache<String, OrdinalMapValue> cachedOrdMaps) throws IOException {
     in = reader;
     in.registerParentReader(this);
     if (reader.leaves().isEmpty()) {
@@ -135,7 +128,6 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
     }
     fieldInfos = FieldInfos.getMergedFieldInfos(in);
     this.cachedOrdMaps = cachedOrdMaps;
-    this.termsDictBlockCacheDisable = termsDictBlockCacheDisable;
   }
 
   @Override
@@ -248,15 +240,9 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
     OrdinalMap map;
     if (cacheHelper != null) {
       IOFunction<? super String, ? extends OrdinalMapValue> producer =
-          (notUsed) -> {
-            termsDictBlockCacheDisable[0] = true;
-            try {
-              return OrdMapRegenerator.wrapValue(
+          (notUsed) ->
+              OrdMapRegenerator.wrapValue(
                   OrdinalMap.build(cacheHelper.getKey(), values, PackedInts.DEFAULT));
-            } finally {
-              termsDictBlockCacheDisable[0] = false;
-            }
-          };
       map = cachedOrdMaps.computeIfAbsent(field, producer).get();
     } else {
       map = OrdinalMap.build(null, values, PackedInts.DEFAULT);
@@ -317,15 +303,9 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
     OrdinalMap map;
     if (cacheHelper != null) {
       IOFunction<? super String, ? extends OrdinalMapValue> producer =
-          (notUsed) -> {
-            termsDictBlockCacheDisable[0] = true;
-            try {
-              return OrdMapRegenerator.wrapValue(
+          (notUsed) ->
+              OrdMapRegenerator.wrapValue(
                   OrdinalMap.build(cacheHelper.getKey(), values, PackedInts.DEFAULT));
-            } finally {
-              termsDictBlockCacheDisable[0] = false;
-            }
-          };
       map = cachedOrdMaps.computeIfAbsent(field, producer).get();
     } else {
       map = OrdinalMap.build(null, values, PackedInts.DEFAULT);

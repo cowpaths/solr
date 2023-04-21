@@ -155,7 +155,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   private final SolrCache<Query, DocSet> filterCache;
   private final SolrCache<Object, Object> termsDictBlockCache;
   private final Map<String, Object> termsDictBlockCacheConfig;
-  private final boolean[] termsDictBlockCacheDisable = new boolean[1];
+  private boolean[] termsDictBlockCacheReadOnly = new boolean[1]; // placeholder
   private final SolrCache<String, OrdinalMapValue> ordMapCache;
   private final SolrCache<QueryResultKey, DocList> queryResultCache;
   private final SolrCache<String, UnInvertedField> fieldValueCache;
@@ -375,7 +375,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
     ordMapCache = solrConfig.ordMapCacheConfig.newInstance(core);
     assert ordMapCache != null;
-    this.leafReader = SlowCompositeReaderWrapper.wrap(this.reader, ordMapCache, termsDictBlockCacheDisable);
+    this.leafReader = SlowCompositeReaderWrapper.wrap(this.reader, ordMapCache);
 
     this.docFetcher = new SolrDocumentFetcher(this, solrConfig, enableCache);
 
@@ -445,7 +445,8 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     assert ObjectReleaseTracker.track(this);
   }
 
-  private static void initTermsDictBlockCache(boolean[] disable, Map<String, Object> config, SolrCache<Object, Object> termsDictBlockCache, DirectoryReader r) {
+  private static boolean[] initTermsDictBlockCache(Map<String, Object> config, SolrCache<Object, Object> termsDictBlockCache, DirectoryReader r) {
+    boolean[] readOnly = new boolean[]{false};
     Caching90DocValuesFormat.configure(r, config, (fields, minDecompressedLen) -> {
       return new Cache<Object, Object>() {
         @Override
@@ -455,14 +456,16 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
         @Override
         public Object computeIfAbsent(Object key, org.apache.lucene.util.IOFunction<? super Object, ?> mappingFunction) throws IOException {
-          if (disable[0]) {
-            return mappingFunction.apply(key);
+          if (readOnly[0]) {
+            Object ret = termsDictBlockCache.get(key);
+            return ret != null ? ret : mappingFunction.apply(key);
           } else {
             return termsDictBlockCache.computeIfAbsent(key, mappingFunction::apply);
           }
         }
       };
     });
+    return readOnly;
   }
 
   public SolrDocumentFetcher getDocFetcher() {
@@ -2464,7 +2467,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
   public void initialSearcher() {
     if (termsDictBlockCache != null) {
-      initTermsDictBlockCache(termsDictBlockCacheDisable, termsDictBlockCacheConfig, termsDictBlockCache, rawReader);
+      termsDictBlockCacheReadOnly = initTermsDictBlockCache(termsDictBlockCacheConfig, termsDictBlockCache, rawReader);
     }
   }
 
@@ -2476,7 +2479,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     // warm the caches in order...
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.add("warming", "true");
-    old.termsDictBlockCacheDisable[0] = true;
+    termsDictBlockCacheReadOnly[0] = true;
     for (int i = 0; i < cacheList.length; i++) {
       if (log.isDebugEnabled()) {
         log.debug("autowarming [{}] from [{}]\n\t{}", this, old, old.cacheList[i]);
@@ -2509,9 +2512,9 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
         log.debug("autowarming result for [{}]\n\t{}", this, cacheList[i]);
       }
     }
-    old.termsDictBlockCacheDisable[0] = false;
     if (termsDictBlockCache != null) {
-      initTermsDictBlockCache(termsDictBlockCacheDisable, termsDictBlockCacheConfig, termsDictBlockCache, rawReader);
+      termsDictBlockCacheReadOnly[0] = false;
+      termsDictBlockCacheReadOnly = initTermsDictBlockCache(termsDictBlockCacheConfig, termsDictBlockCache, rawReader);
     }
     warmupTime =
         TimeUnit.MILLISECONDS.convert(System.nanoTime() - warmingStartTime, TimeUnit.NANOSECONDS);

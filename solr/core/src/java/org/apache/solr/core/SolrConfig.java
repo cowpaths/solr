@@ -196,6 +196,22 @@ public class SolrConfig implements MapSerializable {
     }
   }
 
+  private static CacheConfig getTermsDictBlockCacheConfig(SolrConfig solrConfig) {
+    String className = "mn.fs.solr.sharedcache.MemBoundedCache";
+    try {
+      solrConfig.getResourceLoader().getClassLoader().loadClass(className);
+    } catch (ClassNotFoundException ex) {
+      className = "solr.CaffeineCache";
+    }
+    Map<String, String> args = new HashMap<>();
+    args.put(NAME, "termsDictBlockCache");
+    args.put("class", className);
+    args.put("maxRamMB", "1024");
+    args.put("initialSize", "100");
+    args.put("autowarmCount", "0");
+    return CacheConfig.getConfig(solrConfig, "termsDictBlockCache", args, null);
+  }
+
   /**
    * Creates a configuration instance from a resource loader, a configuration name and a stream. If
    * the stream is null, the resource loader will open the configuration stream. If the stream is
@@ -339,7 +355,7 @@ public class SolrConfig implements MapSerializable {
         // TODO: it's likely that NoopRegenerator could be used to good effect here.
         termsDictBlockCacheConfig = conf;
       } else {
-        termsDictBlockCacheConfig = null;
+        termsDictBlockCacheConfig = getTermsDictBlockCacheConfig(this);
       }
       conf = CacheConfig.getConfig(this, get("query").get("ordMapCache"), "query/ordMapCache");
       if (conf != null) {

@@ -2664,6 +2664,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
                       for (SolrEventListener listener : firstSearcherListeners) {
                         listener.newSearcher(newSearcher, null);
                       }
+                      newSearcher.initialSearcher();
                     } catch (Throwable e) {
                       SolrException.log(log, null, e);
                       if (e instanceof Error) {

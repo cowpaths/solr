@@ -95,6 +95,8 @@ import org.apache.solr.core.DirectoryFactory.DirContext;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.dvformat.Cache;
+import org.apache.solr.dvformat.Caching90DocValuesFormat;
 import org.apache.solr.index.SlowCompositeReaderWrapper;
 import org.apache.solr.metrics.MetricsMap;
 import org.apache.solr.metrics.SolrMetricManager;
@@ -151,6 +153,9 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
   private final boolean cachingEnabled;
   private final SolrCache<Query, DocSet> filterCache;
+  private final SolrCache<Object, Object> termsDictBlockCache;
+  private final Map<String, Object> termsDictBlockCacheConfig;
+  private final boolean[] termsDictBlockCacheDisable = new boolean[1];
   private final SolrCache<String, OrdinalMapValue> ordMapCache;
   private final SolrCache<QueryResultKey, DocList> queryResultCache;
   private final SolrCache<String, UnInvertedField> fieldValueCache;
@@ -370,13 +375,25 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
     ordMapCache = solrConfig.ordMapCacheConfig.newInstance(core);
     assert ordMapCache != null;
-    this.leafReader = SlowCompositeReaderWrapper.wrap(this.reader, ordMapCache);
+    this.leafReader = SlowCompositeReaderWrapper.wrap(this.reader, ordMapCache, termsDictBlockCacheDisable);
 
     this.docFetcher = new SolrDocumentFetcher(this, solrConfig, enableCache);
 
     this.cachingEnabled = enableCache;
     if (cachingEnabled) {
       final ArrayList<SolrCache> clist = new ArrayList<>();
+      // NOTE: the `termsDictBlockCache` is inherently susceptible to crosstalk, so we must place it
+      // first in the cacheList, and flip it to "read-only mode" before warming the new core, in order
+      // to avoid blowing it out and/or skewing its metrics.
+      termsDictBlockCache = solrConfig.termsDictBlockCacheConfig == null
+          ? null
+          : solrConfig.termsDictBlockCacheConfig.newInstance(core);
+      if (termsDictBlockCache == null) {
+        termsDictBlockCacheConfig = null;
+      } else {
+        termsDictBlockCacheConfig = Collections.unmodifiableMap(solrConfig.termsDictBlockCacheConfig.toMap(Collections.emptyMap()));
+        clist.add(termsDictBlockCache);
+      }
       clist.add(ordMapCache);
       fieldValueCache =
           solrConfig.fieldValueCacheConfig == null
@@ -411,6 +428,8 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
       cacheList = clist.toArray(new SolrCache[clist.size()]);
     } else {
+      this.termsDictBlockCache = null;
+      this.termsDictBlockCacheConfig = null;
       this.filterCache = null;
       this.queryResultCache = null;
       this.fieldValueCache = null;
@@ -424,6 +443,26 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     // do this at the end since an exception in the constructor means we won't close
     numOpens.incrementAndGet();
     assert ObjectReleaseTracker.track(this);
+  }
+
+  private static void initTermsDictBlockCache(boolean[] disable, Map<String, Object> config, SolrCache<Object, Object> termsDictBlockCache, DirectoryReader r) {
+    Caching90DocValuesFormat.configure(r, config, (fields, minDecompressedLen) -> {
+      return new Cache<Object, Object>() {
+        @Override
+        public boolean shouldCache(String field, int decompressedLen) {
+          return (fields == null || fields.contains(field)) && decompressedLen >= minDecompressedLen;
+        }
+
+        @Override
+        public Object computeIfAbsent(Object key, org.apache.lucene.util.IOFunction<? super Object, ?> mappingFunction) throws IOException {
+          if (disable[0]) {
+            return mappingFunction.apply(key);
+          } else {
+            return termsDictBlockCache.computeIfAbsent(key, mappingFunction::apply);
+          }
+        }
+      };
+    });
   }
 
   public SolrDocumentFetcher getDocFetcher() {
@@ -2423,6 +2462,12 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     return a.intersects(getDocSet(deState));
   }
 
+  public void initialSearcher() {
+    if (termsDictBlockCache != null) {
+      initTermsDictBlockCache(termsDictBlockCacheDisable, termsDictBlockCacheConfig, termsDictBlockCache, rawReader);
+    }
+  }
+
   /** Warm this searcher based on an old one (primarily for auto-cache warming). */
   @SuppressWarnings({"unchecked"})
   public void warm(SolrIndexSearcher old) {
@@ -2431,6 +2476,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     // warm the caches in order...
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.add("warming", "true");
+    old.termsDictBlockCacheDisable[0] = true;
     for (int i = 0; i < cacheList.length; i++) {
       if (log.isDebugEnabled()) {
         log.debug("autowarming [{}] from [{}]\n\t{}", this, old, old.cacheList[i]);
@@ -2462,6 +2508,10 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       if (log.isDebugEnabled()) {
         log.debug("autowarming result for [{}]\n\t{}", this, cacheList[i]);
       }
+    }
+    old.termsDictBlockCacheDisable[0] = false;
+    if (termsDictBlockCache != null) {
+      initTermsDictBlockCache(termsDictBlockCacheDisable, termsDictBlockCacheConfig, termsDictBlockCache, rawReader);
     }
     warmupTime =
         TimeUnit.MILLISECONDS.convert(System.nanoTime() - warmingStartTime, TimeUnit.NANOSECONDS);

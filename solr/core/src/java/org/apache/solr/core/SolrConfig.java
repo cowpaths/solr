@@ -334,6 +334,13 @@ public class SolrConfig implements MapSerializable {
         conf = new CacheConfig(CaffeineCache.class, args, null);
       }
       fieldValueCacheConfig = conf;
+      conf = CacheConfig.getConfig(this, get("query").get("termsDictBlockCache"), "query/termsDictBlockCache");
+      if (conf != null) {
+        // TODO: it's likely that NoopRegenerator could be used to good effect here.
+        termsDictBlockCacheConfig = conf;
+      } else {
+        termsDictBlockCacheConfig = null;
+      }
       conf = CacheConfig.getConfig(this, get("query").get("ordMapCache"), "query/ordMapCache");
       if (conf != null) {
         OrdMapRegenerator.configureRegenerator(this, conf);
@@ -723,6 +730,7 @@ public class SolrConfig implements MapSerializable {
   //  public final int filtOptCacheSize;
   //  public final float filtOptThreshold;
   // SolrIndexSearcher - caches configurations
+  public final CacheConfig termsDictBlockCacheConfig;
   public final CacheConfig ordMapCacheConfig;
   public final CacheConfig filterCacheConfig;
   public final CacheConfig queryResultCacheConfig;

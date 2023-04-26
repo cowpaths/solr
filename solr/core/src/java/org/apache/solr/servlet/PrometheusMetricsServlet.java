@@ -514,11 +514,9 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         mergeMinorDocs += getNumber(core, "INDEX.merge.minor.running.docs").longValue();
         distribGet += getNumber(core, "QUERY./get.requestTimes", property).longValue();
         localGet += getNumber(core, "QUERY./get[shard].requestTimes", property).longValue();
-        distribSelect +=
-            getNumber(core, "QUERY./select.requestTimes", property).longValue();
+        distribSelect += getNumber(core, "QUERY./select.requestTimes", property).longValue();
         localSelect += getNumber(core, "QUERY./select[shard].requestTimes", property).longValue();
-        distribUpdate +=
-            getNumber(core, "UPDATE./update.requestTimes", property).longValue();
+        distribUpdate += getNumber(core, "UPDATE./update.requestTimes", property).longValue();
         localUpdate += getNumber(core, "UPDATE./update[shard].requestTimes", property).longValue();
         hardAutoCommit += getNumber(core, "UPDATE.updateHandler.autoCommits").longValue();
         commit += getNumber(core, "UPDATE.updateHandler.commits", property).longValue();

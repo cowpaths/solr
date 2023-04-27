@@ -415,7 +415,7 @@ public class ZkController implements Closeable {
       this.nodeName =
           generateNodeName(
               this.hostName,
-              urlSchemeFromClusterProp == "https"
+              urlSchemeFromClusterProp.equals("https")
                   ? Integer.toString(this.secureLocalHostPort)
                   : Integer.toString(this.localHostPort),
               localHostContext);

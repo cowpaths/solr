@@ -499,7 +499,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       long localGet = 0;
       long distribSelect = 0;
       long localSelect = 0;
-      long distribUpdate = 0;
+      long update = 0;
       long hardAutoCommit = 0;
       long commit = 0;
       long deleteById = 0;
@@ -514,7 +514,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         localGet += getNumber(core, "QUERY./get[shard].requestTimes", property).longValue();
         distribSelect += getNumber(core, "QUERY./select.requestTimes", property).longValue();
         localSelect += getNumber(core, "QUERY./select[shard].requestTimes", property).longValue();
-        distribUpdate += getNumber(core, "UPDATE./update.requestTimes", property).longValue();
+        update += getNumber(core, "UPDATE./update.requestTimes", property).longValue();
         hardAutoCommit += getNumber(core, "UPDATE.updateHandler.autoCommits").longValue();
         commit += getNumber(core, "UPDATE.updateHandler.commits", property).longValue();
         deleteById +=
@@ -573,10 +573,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               localSelect));
       results.add(
           new PrometheusMetric(
-              "distributed_requests_update",
+              "local_requests_update", //we use the "local" label for backward compatibility
               PrometheusMetricType.COUNTER,
-              "cumulative number of distributed updates across cores",
-              distribUpdate));
+              "cumulative number of updates across cores",
+              update));
       results.add(
           new PrometheusMetric(
               "auto_commits_hard",

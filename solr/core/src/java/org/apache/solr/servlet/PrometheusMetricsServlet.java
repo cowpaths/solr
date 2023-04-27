@@ -461,7 +461,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     CoresMetricsApiCaller() {
       super(
           "core",
-          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits",
+          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[local].requestTimes,QUERY./select.requestTimes,QUERY./select[local].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits",
           "count");
     }
 
@@ -478,10 +478,11 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "INDEX.merge.minor.running.docs":0,
         "INDEX.merge.minor.running.segments":0,
         "QUERY./get.requestTimes":{"count":0},
-        "QUERY./get[shard].requestTimes":{"count":0},
+        "QUERY./get[local].requestTimes":{"count":0},
         "QUERY./select.requestTimes":{"count":2},
-        "QUERY./select[shard].requestTimes":{"count":0},
+        "QUERY./select[local].requestTimes":{"count":0},
         "UPDATE./update.requestTimes":{"count":0},
+        "UPDATE./update[local].requestTimes":{"count":0},
         "UPDATE.updateHandler.autoCommits":0,
         "UPDATE.updateHandler.commits":{"count":14877},
         "UPDATE.updateHandler.cumulativeDeletesById":{"count":0},
@@ -499,7 +500,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       long localGet = 0;
       long distribSelect = 0;
       long localSelect = 0;
-      long update = 0;
+      long distribUpdate = 0;
+      long localUpdate = 0;
       long hardAutoCommit = 0;
       long commit = 0;
       long deleteById = 0;
@@ -511,10 +513,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         mergeMinor += getNumber(core, "INDEX.merge.minor", property).longValue();
         mergeMinorDocs += getNumber(core, "INDEX.merge.minor.running.docs").longValue();
         distribGet += getNumber(core, "QUERY./get.requestTimes", property).longValue();
-        localGet += getNumber(core, "QUERY./get[shard].requestTimes", property).longValue();
-        distribSelect += getNumber(core, "QUERY./select.requestTimes", property).longValue();
-        localSelect += getNumber(core, "QUERY./select[shard].requestTimes", property).longValue();
-        update += getNumber(core, "UPDATE./update.requestTimes", property).longValue();
+        localGet += getNumber(core, "QUERY./get[local].requestTimes", property).longValue();
+        distribSelect +=
+            getNumber(core, "QUERY./select.requestTimes", property).longValue();
+        localSelect += getNumber(core, "QUERY./select[local].requestTimes", property).longValue();
+        distribUpdate +=
+            getNumber(core, "UPDATE./update.requestTimes", property).longValue();
+        localUpdate += getNumber(core, "UPDATE./update[local].requestTimes", property).longValue();
         hardAutoCommit += getNumber(core, "UPDATE.updateHandler.autoCommits").longValue();
         commit += getNumber(core, "UPDATE.updateHandler.commits", property).longValue();
         deleteById +=
@@ -573,10 +578,16 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               localSelect));
       results.add(
           new PrometheusMetric(
-              "local_requests_update", //we use the "local" label for backward compatibility
+              "distributed_requests_update",
               PrometheusMetricType.COUNTER,
-              "cumulative number of updates across cores",
-              update));
+              "cumulative number of distributed updates across cores",
+              distribUpdate));
+      results.add(
+          new PrometheusMetric(
+              "local_requests_update",
+              PrometheusMetricType.COUNTER,
+              "cumulative number of local updates across cores",
+              localUpdate));
       results.add(
           new PrometheusMetric(
               "auto_commits_hard",

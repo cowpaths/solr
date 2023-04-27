@@ -86,15 +86,14 @@ public class SearchHandler extends RequestHandlerBase
   static final String INIT_LAST_COMPONENTS = "last-components";
 
   protected static final String SHARD_HANDLER_SUFFIX = "[shard]";
-  protected static final String CORE_HANDLER_SUFFIX = "[core]";
+  protected static final String LOCAL_HANDLER_SUFFIX = "[local]";
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   /** A counter to ensure that no RID is equal, even if they fall in the same millisecond */
   private static final AtomicLong ridCounter = new AtomicLong();
 
-  private HandlerMetrics metricsShard = HandlerMetrics.NO_OP;
-  private HandlerMetrics metricsCore = HandlerMetrics.NO_OP;
+  private HandlerMetrics metricsLocal = HandlerMetrics.NO_OP;
   private final Map<String, Counter> shardPurposes = new ConcurrentHashMap<>();
 
   protected volatile List<SearchComponent> components;
@@ -131,10 +130,9 @@ public class SearchHandler extends RequestHandlerBase
   @Override
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     super.initializeMetrics(parentContext, scope);
-    metricsShard =
+    metricsLocal =
         new HandlerMetrics( // will register various metrics in the context
-            solrMetricsContext, getCategory().toString(), scope + SHARD_HANDLER_SUFFIX);
-    metricsCore = new HandlerMetrics(solrMetricsContext, getCategory().toString(), scope + CORE_HANDLER_SUFFIX);
+            solrMetricsContext, getCategory().toString(), scope + LOCAL_HANDLER_SUFFIX);
     solrMetricsContext.gauge(
         new MetricsMap(map -> shardPurposes.forEach((k, v) -> map.putNoEx(k, v.getCount()))),
         true,
@@ -145,10 +143,8 @@ public class SearchHandler extends RequestHandlerBase
 
   @Override
   public HandlerMetrics getMetricsForThisRequest(SolrQueryRequest req) {
-    if (req.getParams().getBool(ShardParams.IS_SHARD, false)) {
-      return this.metricsShard;
-    } else if (req.getCore() != null) {
-      return this.metricsCore;
+    if (!isDistrib(req)) {
+      return this.metricsLocal;
     } else {
       return this.metrics;
     }
@@ -286,8 +282,7 @@ public class SearchHandler extends RequestHandlerBase
   }
 
   private boolean isDistrib(SolrQueryRequest req) {
-    boolean isZkAware = req.getCoreContainer().isZooKeeperAware();
-    boolean isDistrib = req.getParams().getBool(DISTRIB, isZkAware);
+    boolean isDistrib = req.getParams().getBool(DISTRIB, req.getCoreContainer().isZooKeeperAware());
     if (!isDistrib) {
       // for back compat, a shards param with URLs like localhost:8983/solr will mean that this
       // search is distributed.

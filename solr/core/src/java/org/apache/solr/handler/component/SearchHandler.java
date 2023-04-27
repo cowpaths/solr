@@ -86,6 +86,7 @@ public class SearchHandler extends RequestHandlerBase
   static final String INIT_LAST_COMPONENTS = "last-components";
 
   protected static final String SHARD_HANDLER_SUFFIX = "[shard]";
+  protected static final String CORE_HANDLER_SUFFIX = "[core]";
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -93,6 +94,7 @@ public class SearchHandler extends RequestHandlerBase
   private static final AtomicLong ridCounter = new AtomicLong();
 
   private HandlerMetrics metricsShard = HandlerMetrics.NO_OP;
+  private HandlerMetrics metricsCore = HandlerMetrics.NO_OP;
   private final Map<String, Counter> shardPurposes = new ConcurrentHashMap<>();
 
   protected volatile List<SearchComponent> components;
@@ -132,6 +134,7 @@ public class SearchHandler extends RequestHandlerBase
     metricsShard =
         new HandlerMetrics( // will register various metrics in the context
             solrMetricsContext, getCategory().toString(), scope + SHARD_HANDLER_SUFFIX);
+    metricsCore = new HandlerMetrics(solrMetricsContext, getCategory().toString(), scope + CORE_HANDLER_SUFFIX);
     solrMetricsContext.gauge(
         new MetricsMap(map -> shardPurposes.forEach((k, v) -> map.putNoEx(k, v.getCount()))),
         true,
@@ -142,7 +145,13 @@ public class SearchHandler extends RequestHandlerBase
 
   @Override
   public HandlerMetrics getMetricsForThisRequest(SolrQueryRequest req) {
-    return req.getParams().getBool(ShardParams.IS_SHARD, false) ? this.metricsShard : this.metrics;
+    if (req.getParams().getBool(ShardParams.IS_SHARD, false)) {
+      return this.metricsShard;
+    } else if (req.getCore() != null) {
+      return this.metricsCore;
+    } else {
+      return this.metrics;
+    }
   }
 
   @Override

@@ -564,6 +564,8 @@ public class SolrXmlConfig {
         case "stateCompressor":
           builder.setStateCompressorClass(value);
           break;
+        case "secureHostPort":
+          builder.setSecureHostPort(parseInt(name, value));
         default:
           throw new SolrException(
               SolrException.ErrorCode.SERVER_ERROR,

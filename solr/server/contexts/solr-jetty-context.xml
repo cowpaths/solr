@@ -38,28 +38,4 @@
       </New>
     </Arg>
   </Call>
-
-  <!-- Configure security constraint -->
-  <New class="org.eclipse.jetty.util.security.Constraint">
-    <Set name="name">Redirect Constraint</Set>
-    <Set name="authenticate">false</Set>
-    <Set name="dataConstraint"><Get name="DC_CONFIDENTIAL"/></Set>
-    <Set name="path">/*</Set>
-  </New>
-
-  <!-- Add security to WebAppContext -->
-  <Call name="addSecurityConstraint">
-    <Arg><New class="org.eclipse.jetty.webapp.SecurityConstraint">
-      <Set name="mapping">/</Set>
-      <Call name="addMapping">
-        <Arg><New class="org.eclipse.jetty.webapp.ConstraintMapping">
-          <Set name="constraint">
-            <Ref refid="Redirect Constraint"/>
-          </Set>
-          <Set name="pathSpec">^/(?!solr/api/node/health|solr/metrics)(.*)</Set>
-          <Set name="disableClientResolution">true</Set>
-        </New></Arg>
-      </Call>
-    </New></Arg>
-  </Call>
 </Configure>

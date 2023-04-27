@@ -566,6 +566,7 @@ public class SolrXmlConfig {
           break;
         case "secureHostPort":
           builder.setSecureHostPort(parseInt(name, value));
+          break;
         default:
           throw new SolrException(
               SolrException.ErrorCode.SERVER_ERROR,

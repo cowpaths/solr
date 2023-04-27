@@ -461,7 +461,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     CoresMetricsApiCaller() {
       super(
           "core",
-          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[shard].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits",
+          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits",
           "count");
     }
 
@@ -482,7 +482,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "QUERY./select.requestTimes":{"count":2},
         "QUERY./select[shard].requestTimes":{"count":0},
         "UPDATE./update.requestTimes":{"count":0},
-        "UPDATE./update[shard].requestTimes":{"count":0},
         "UPDATE.updateHandler.autoCommits":0,
         "UPDATE.updateHandler.commits":{"count":14877},
         "UPDATE.updateHandler.cumulativeDeletesById":{"count":0},
@@ -501,7 +500,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       long distribSelect = 0;
       long localSelect = 0;
       long distribUpdate = 0;
-      long localUpdate = 0;
       long hardAutoCommit = 0;
       long commit = 0;
       long deleteById = 0;
@@ -517,7 +515,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         distribSelect += getNumber(core, "QUERY./select.requestTimes", property).longValue();
         localSelect += getNumber(core, "QUERY./select[shard].requestTimes", property).longValue();
         distribUpdate += getNumber(core, "UPDATE./update.requestTimes", property).longValue();
-        localUpdate += getNumber(core, "UPDATE./update[shard].requestTimes", property).longValue();
         hardAutoCommit += getNumber(core, "UPDATE.updateHandler.autoCommits").longValue();
         commit += getNumber(core, "UPDATE.updateHandler.commits", property).longValue();
         deleteById +=
@@ -580,12 +577,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               PrometheusMetricType.COUNTER,
               "cumulative number of distributed updates across cores",
               distribUpdate));
-      results.add(
-          new PrometheusMetric(
-              "local_requests_update",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of local updates across cores",
-              localUpdate));
       results.add(
           new PrometheusMetric(
               "auto_commits_hard",

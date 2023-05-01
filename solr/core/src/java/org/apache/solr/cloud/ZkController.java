@@ -74,6 +74,7 @@ import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.StringUtils;
+import org.apache.solr.common.Timer;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DefaultConnectionStrategy;
 import org.apache.solr.common.cloud.DefaultZkACLProvider;
@@ -1316,12 +1317,14 @@ public class ZkController implements Closeable {
 
       // check replica's existence in clusterstate first
       try {
+        Timer.TLInst.start("ZKC.register.waitForState()");
         zkStateReader.waitForState(
             collection,
             100,
             TimeUnit.MILLISECONDS,
             (collectionState) ->
                 getReplicaOrNull(collectionState, shardId, coreZkNodeName) != null);
+        Timer.TLInst.end("ZKC.register.waitForState()");
       } catch (TimeoutException e) {
         throw new SolrException(
             ErrorCode.SERVER_ERROR,
@@ -1342,7 +1345,9 @@ public class ZkController implements Closeable {
         getCollectionTerms(collection).register(cloudDesc.getShardId(), coreZkNodeName);
       }
 
+      Timer.TLInst.start("ZKC.register.getShardTerms()");
       ZkShardTerms shardTerms = getShardTerms(collection, cloudDesc.getShardId());
+      Timer.TLInst.end("ZKC.register.getShardTerms()");
 
       log.debug(
           "Register replica - core:{} address:{} collection:{} shard:{}",
@@ -1355,7 +1360,9 @@ public class ZkController implements Closeable {
         // If we're a preferred leader, insert ourselves at the head of the queue
         boolean joinAtHead = replica.getBool(SliceMutator.PREFERRED_LEADER_PROP, false);
         if (replica.getType() != Type.PULL) {
+          Timer.TLInst.start("ZKC.register.joinElection()");
           joinElection(desc, afterExpiration, joinAtHead);
+          Timer.TLInst.end("ZKC.register.joinElection()");
         } else if (replica.getType() == Type.PULL) {
           if (joinAtHead) {
             log.warn(
@@ -2001,7 +2008,9 @@ public class ZkController implements Closeable {
     // before becoming available, make sure we are not live and active
     // this also gets us our assigned shard id if it was not specified
     try {
+      Timer.TLInst.start("ZKC.preRegister().checkStateInZk()");
       checkStateInZk(cd);
+      Timer.TLInst.end("ZKC.preRegister().checkStateInZk()");
 
       CloudDescriptor cloudDesc = cd.getCloudDescriptor();
 
@@ -2012,7 +2021,9 @@ public class ZkController implements Closeable {
 
       // publishState == false on startup
       if (publishState || isPublishAsDownOnStartup(cloudDesc)) {
+        Timer.TLInst.start("ZKC.preRegister().publish()");
         publish(cd, Replica.State.DOWN, false, true);
+        Timer.TLInst.end("ZKC.preRegister().publish()");
       }
       String collectionName = cd.getCloudDescriptor().getCollectionName();
       DocCollection collection =
@@ -2039,7 +2050,9 @@ public class ZkController implements Closeable {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "", e);
     }
 
+    Timer.TLInst.start("ZKC.doGetShardIdAndNodeNameProcess(cd)");
     doGetShardIdAndNodeNameProcess(cd);
+    Timer.TLInst.end("ZKC.doGetShardIdAndNodeNameProcess(cd)");
   }
 
   /**

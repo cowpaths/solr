@@ -23,6 +23,7 @@ import java.util.Map;
 import org.apache.commons.io.IOUtils;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.common.Timer;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.Utils;
 import org.slf4j.Logger;
@@ -51,6 +52,7 @@ public class ConfigSetProperties {
    */
   public static NamedList<Object> readFromResourceLoader(SolrResourceLoader loader, String name) {
     InputStreamReader reader;
+    Timer.TLInst.start("ConfigSetProperties.readFromResourceLoader()");
     try {
       reader = new InputStreamReader(loader.openResource(name), StandardCharsets.UTF_8);
     } catch (SolrResourceNotFoundException ex) {
@@ -61,6 +63,8 @@ public class ConfigSetProperties {
     } catch (Exception ex) {
       throw new SolrException(
           ErrorCode.SERVER_ERROR, "Unable to load reader for ConfigSet properties: " + name, ex);
+    } finally {
+      Timer.TLInst.end("ConfigSetProperties.readFromResourceLoader()");
     }
 
     try {

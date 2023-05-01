@@ -32,6 +32,7 @@ import org.apache.solr.cloud.ZkSolrResourceLoader;
 import org.apache.solr.common.ConfigNode;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.common.Timer;
 import org.apache.solr.common.util.ObjectCache;
 import org.apache.solr.common.util.Pair;
 import org.apache.solr.core.ConfigSetService;
@@ -136,6 +137,7 @@ public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
 
   private static VersionedConfig loadConfig(
       InputStream schemaInputStream, SolrResourceLoader loader, String name) {
+    Timer.TLInst.start("ISF.loadConfig()");
     try (InputStream is =
         (schemaInputStream == null ? loader.openResource(name) : schemaInputStream)) {
       ConfigNode node = getParsedSchema(is, loader, name);
@@ -146,6 +148,8 @@ public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
       return new VersionedConfig(version, node);
     } catch (Exception e) {
       throw new SolrException(ErrorCode.SERVER_ERROR, "Error fetching schema", e);
+    } finally {
+      Timer.TLInst.end("ISF.loadConfig()");
     }
   }
 

@@ -875,7 +875,7 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
       Set<String> fieldsProcessed,
       List<SchemaField> expandedFields) {
     for (FieldInfo fi : searcher.getFieldInfos()) {
-      if ("_version_".equals(fi.getName())) {
+      if (CommonParams.VERSION_FIELD.equals(fi.getName())) {
         // Ignore _version_ unless specified
         continue;
       }

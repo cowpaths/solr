@@ -376,7 +376,12 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
    * for an existing log whenever the core or update handler changes.
    */
   public void init(UpdateHandler uhandler, SolrCore core) {
-    dataDir = core.getUlogDir();
+    if (dataDir != null) {
+      //append the "dataDir" to the instance ie  <str name="dir">abc</str> -> <solr.data.home>/<core>/abc
+      dataDir = core.getCoreDescriptor().getInstanceDir().resolve(dataDir).toString();
+    } else {
+      dataDir = core.getUlogDir();
+    }
 
     this.uhandler = uhandler;
 

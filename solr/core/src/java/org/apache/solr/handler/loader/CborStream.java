@@ -130,6 +130,8 @@ public class CborStream {
           throws IOException {
         int commitWithin = req.getParams().getInt(UpdateParams.COMMIT_WITHIN, -1);
         boolean overwrite = req.getParams().getBool(UpdateParams.OVERWRITE, true);
+        long start = System.currentTimeMillis();
+        InputStream is = stream.getStream();
         new CborStream(
                 factory,
                 doc -> {
@@ -143,7 +145,9 @@ public class CborStream {
                     throw new RuntimeException(e);
                   }
                 })
-            .stream(stream.getStream());
+            .stream(is);
+        is.close();
+        System.out.println("CBOR_time_taken :"+ (System.currentTimeMillis() - start));
       }
     }.init(p);
   }

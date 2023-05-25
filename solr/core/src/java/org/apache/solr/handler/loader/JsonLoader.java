@@ -148,7 +148,9 @@ public class JsonLoader extends ContentStreamLoader {
         UpdateRequestProcessor processor)
         throws Exception {
       try (Reader reader = getReader(stream)) {
+        long start =  System.currentTimeMillis();
         this.processUpdate(reader);
+        System.out.println("JSON_time_taken :"+ (System.currentTimeMillis() - start));
       } catch (ParseException e) {
         throw new SolrException(
             SolrException.ErrorCode.BAD_REQUEST, "Cannot parse provided JSON: " + e.getMessage());

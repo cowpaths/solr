@@ -129,6 +129,7 @@ public class JavaBinUpdateRequestCodec {
     // NOTE: if the update request contains only delete commands the params
     // must be loaded now
     if (updateRequest.getParams() == null) {
+      if(namedList[0] == null) namedList[0] =  new NamedList<>();
       NamedList<?> params = (NamedList<?>) namedList[0].get("params");
       if (params != null) {
         updateRequest.setParams(new ModifiableSolrParams(params.toSolrParams()));

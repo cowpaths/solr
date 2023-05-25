@@ -31,22 +31,29 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.LongAdder;
+
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.InputStreamResponseParser;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.GenericSolrRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.request.RequestWriter;
+import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
 import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.util.JavaBinCodec;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.handler.loader.CborStream;
+import org.apache.solr.response.JSONResponseWriter;
 import org.apache.solr.response.XMLResponseWriter;
+
 
 public class TestCborDataFormat extends SolrCloudTestCase {
 
@@ -61,55 +68,99 @@ public class TestCborDataFormat extends SolrCloudTestCase {
             .configure();
     try {
       System.setProperty("managed.schema.mutable", "true");
+      CloudSolrClient client = cluster
+              .getSolrClient();
       CollectionAdminRequest.createCollection(testCollection, "conf", 1, 1)
-          .process(cluster.getSolrClient());
-      GenericSolrRequest req =
-          new GenericSolrRequest(SolrRequest.METHOD.POST, "/schema")
-              .setContentWriter(
-                  new RequestWriter.StringPayloadContentWriter(
-                      "{\n"
-                          + "\"add-field-type\" : {"
-                          + "\"name\":\"knn_vector_10\",\"class\":\"solr.DenseVectorField\",\"vectorDimension\":10,\"similarityFunction\":\"cosine\",\"knnAlgorithm\":\"hnsw\"  },\n"
-                          + "\"add-field\" : ["
-                          + "{\"name\":\"name\",\"type\":\"sortabletext\",\"multiValued\":false,\"stored\":true},\n"
-                          + "{\"name\":\"initial_release_date\",\"type\":\"string\",\"stored\":true},\n"
-                          + "{\"name\":\"directed_by\",\"type\":\"string\",\"multiValued\":true,\"stored\":true    },\n"
-                          + "{\"name\":\"genre\",\"type\":\"string\",\"multiValued\":true,\"stored\":true},\n"
-                          + "{\"name\":\"film_vector\",\"type\":\"knn_vector_10\",\"indexed\":true,\"stored\":true}]}",
-                      XMLResponseWriter.CONTENT_TYPE_XML_UTF8));
-      cluster.getSolrClient().request(req, testCollection);
-      Path filmsJson = new File(ExternalPaths.SOURCE_HOME, "example/films/films.json").toPath();
-      byte[] b = Files.readAllBytes(filmsJson);
+          .process(client);
+      modifySchema(testCollection, client);
 
-      cluster
-          .getSolrClient()
-          .request(
-              new GenericSolrRequest(
-                      SolrRequest.METHOD.POST,
-                      "/update/cbor",
-                      new MapSolrParams(Map.of("commit", "true")))
-                  .withContent(readAsCbor(new ByteArrayInputStream(b)), "application/cbor"),
-              testCollection);
+      byte[] b = Files.readAllBytes(new File(ExternalPaths.SOURCE_HOME, "example/films/films.json").toPath());
+//      GenericSolrRequest r = createJsonReq(b);
+//      GenericSolrRequest r = createJavabinReq(b);
+      GenericSolrRequest r = createCborReq(b);
+      long start = System.currentTimeMillis();
+      client.request(r, testCollection);
+      System.out.println("INDEX_TIME: "+ r.contentWriter.getContentType() +
+              " : "+ (System.currentTimeMillis() - start));
+
+      start =  System.currentTimeMillis();
+      QueryRequest request = new QueryRequest(new SolrQuery("*:*").setRows(1111));
+      request.setResponseParser(new InputStreamResponseParser("javabin"));
 
       NamedList<Object> result =
-          cluster
-              .getSolrClient()
-              .request(new QueryRequest(new SolrQuery("*:*").setRows(1111)), testCollection);
-      SolrDocumentList sdl = (SolrDocumentList) result.get("response");
-      assertEquals(1100, sdl.size());
+          client
+              .request(request, testCollection);
+      System.out.println("time_javabin: "+ (System.currentTimeMillis()-start));
 
+
+      start =  System.currentTimeMillis();
+      QueryRequest qr1 = new QueryRequest(new SolrQuery("*:*").setRows(1111));
+      qr1.setResponseParser(new InputStreamResponseParser("json"));
+      client.request(qr1, testCollection);
+      System.out.println("time_JSON "+ (System.currentTimeMillis()-start));
+
+      start =  System.currentTimeMillis();
       QueryRequest qr = new QueryRequest(new SolrQuery("*:*").setRows(1111));
       qr.setResponseParser(new InputStreamResponseParser("cbor"));
-      result = cluster.getSolrClient().request(qr, testCollection);
+      result = client.request(qr, testCollection);
+      System.out.println("time_CBOR: "+ (System.currentTimeMillis()-start));
       InputStream is = (InputStream) result.get("stream");
       ObjectMapper objectMapper = new ObjectMapper(new CBORFactory());
       Object o = objectMapper.readValue(is, Object.class);
       List<Object> l = (List<Object>) Utils.getObjectByPath(o, false, "response/docs");
       assertEquals(1100, l.size());
     } finally {
-      cluster.shutdown();
       System.clearProperty("managed.schema.mutable");
+      cluster.shutdown();
     }
+  }
+
+  private void modifySchema(String testCollection, CloudSolrClient client) throws SolrServerException, IOException {
+    GenericSolrRequest req =
+        new GenericSolrRequest(SolrRequest.METHOD.POST, "/schema")
+            .setContentWriter(
+                new RequestWriter.StringPayloadContentWriter(
+                    "{\n"
+                        + "\"add-field-type\" : {"
+                        + "\"name\":\"knn_vector_10\",\"class\":\"solr.DenseVectorField\",\"vectorDimension\":10,\"similarityFunction\":\"cosine\",\"knnAlgorithm\":\"hnsw\"},\n"
+                        + "\"add-field\" : ["
+                        + "{\"name\":\"name\",\"type\":\"sortabletext\",\"multiValued\":false,\"stored\":true},\n"
+                        + "{\"name\":\"initial_release_date\",\"type\":\"string\",\"stored\":true},\n"
+                        + "{\"name\":\"directed_by\",\"type\":\"string\",\"multiValued\":true,\"stored\":true},\n"
+                        + "{\"name\":\"genre\",\"type\":\"string\",\"multiValued\":true,\"stored\":true},\n"
+                        + "{\"name\":\"film_vector\",\"type\":\"knn_vector_10\",\"indexed\":true,\"stored\":true}]}",
+                    XMLResponseWriter.CONTENT_TYPE_XML_UTF8));
+
+    client.request(req, testCollection);
+  }
+
+  private GenericSolrRequest createJsonReq(byte[] b) {
+    return new GenericSolrRequest(
+            SolrRequest.METHOD.POST,
+            "/update/json/docs",
+            new MapSolrParams(Map.of("commit", "true")))
+            .withContent(b, "application/json");
+  }
+
+ @SuppressWarnings("rawtypes")
+  private GenericSolrRequest createJavabinReq(byte[] b) throws IOException {
+    List l  = (List) Utils.fromJSON(b);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    new JavaBinCodec().marshal(l.iterator(), baos);
+
+    return new GenericSolrRequest(
+            SolrRequest.METHOD.POST,
+            "/update",
+            new MapSolrParams(Map.of("commit", "true")))
+            .withContent(baos.toByteArray(), "application/javabin");
+  }
+
+  private GenericSolrRequest createCborReq(byte[] b) throws IOException {
+    return new GenericSolrRequest(
+            SolrRequest.METHOD.POST,
+            "/update/cbor",
+            new MapSolrParams(Map.of("commit", "true")))
+            .withContent(serializeToCbor(b), "application/cbor");
   }
 
   @SuppressWarnings("unchecked")
@@ -128,17 +179,16 @@ public class TestCborDataFormat extends SolrCloudTestCase {
     new JavaBinCodec().marshal(Map.of("films", films), baos);
     assertEquals(234520, baos.toByteArray().length);
 
-    try (InputStream is = Files.newInputStream(filmsJson)) {
-      byte[] bytes = readAsCbor(is);
+    byte[] b = Files.readAllBytes(filmsJson);
+      byte[] bytes = serializeToCbor(b);
       assertEquals(290672, bytes.length);
       LongAdder docsSz = new LongAdder();
       new CborStream(null, (document) -> docsSz.increment())
           .stream(new ByteArrayInputStream(bytes));
       assertEquals(films.size(), docsSz.intValue());
-    }
   }
 
-  private byte[] readAsCbor(InputStream is) throws IOException {
+  private byte[] serializeToCbor(byte[] is) throws IOException {
     ByteArrayOutputStream baos;
     ObjectMapper jsonMapper = new ObjectMapper(new JsonFactory());
 

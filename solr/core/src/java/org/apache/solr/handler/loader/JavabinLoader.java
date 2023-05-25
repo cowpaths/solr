@@ -132,7 +132,9 @@ public class JavabinLoader extends ContentStreamLoader {
     for (; ; ) {
       if (in.peek() == -1) return;
       try {
+        long start = System.currentTimeMillis();
         update = new JavaBinUpdateRequestCodec().unmarshal(in, handler);
+        System.out.println("javabin_time_taken :"+ (System.currentTimeMillis() - start));
       } catch (EOFException e) {
         break; // this is expected
       }

@@ -52,11 +52,11 @@ public class PerReplicaStates implements ReflectMapWriter {
   // no:of times to retry in case of a CAS failure
   public static final int MAX_RETRIES = 5;
 
-  // znode path where thisis loaded from
+  // znode path where this is loaded from
   @JsonProperty public final String path;
 
-  // the child version of that znode
-  @JsonProperty public final int cversion;
+  @JsonProperty("cversion")
+  public final long pzxid;
 
   // states of individual replicas
   @JsonProperty public final SimpleMap<State> states;
@@ -67,12 +67,12 @@ public class PerReplicaStates implements ReflectMapWriter {
    * Construct with data read from ZK
    *
    * @param path path from where this is loaded
-   * @param cversion the current child version of the znode
+   * @param pzxid the current pzxid of the znode
    * @param states the per-replica states (the list of all child nodes)
    */
-  public PerReplicaStates(String path, int cversion, List<String> states) {
+  public PerReplicaStates(String path, long pzxid, List<String> states) {
     this.path = path;
-    this.cversion = cversion;
+    this.pzxid = pzxid;
     Map<String, State> tmp = new LinkedHashMap<>();
 
     for (String state : states) {
@@ -86,6 +86,16 @@ public class PerReplicaStates implements ReflectMapWriter {
       }
     }
     this.states = new WrappedSimpleMap<>(tmp);
+  }
+
+  public PerReplicaStates(String path, SimpleMap<State> states, long pzxid) {
+    this.states = states;
+    this.pzxid = pzxid;
+    this.path = path;
+  }
+
+  public static PerReplicaStates empty(String collectionName) {
+    return new PerReplicaStates(DocCollection.getCollectionPath(collectionName), 0, List.of());
   }
 
   /** Check and return if all replicas are ACTIVE */
@@ -130,6 +140,26 @@ public class PerReplicaStates implements ReflectMapWriter {
     return states.get(replica);
   }
 
+  /**
+   * A new child node got created. construct a new Object with this
+   *
+   * @param newState the newly inserted state
+   * @param czxid create tx id of the child node
+   */
+  public PerReplicaStates insert(State newState, long czxid) {
+    State existing = states.get(newState.replica);
+    if (existing == null || existing.version < newState.version) {
+      LinkedHashMap<String, State> copy = new LinkedHashMap<>(states.size());
+      states.forEachEntry(copy::put);
+      copy.put(newState.replica, newState);
+      return new PerReplicaStates(
+          path,
+          new WrappedSimpleMap<>(copy),
+          czxid); // child node's czxid is same as state.json pzxid
+    }
+    return null;
+  }
+
   public static class Operation {
     public final Type typ;
     public final State state;
@@ -155,7 +185,7 @@ public class PerReplicaStates implements ReflectMapWriter {
   @Override
   public String toString() {
     StringBuilder sb =
-        new StringBuilder("{").append(path).append("/[").append(cversion).append("]: [");
+        new StringBuilder("{").append(path).append("/[").append(pzxid).append("]: [");
     appendStates(sb);
     return sb.append("]}").toString();
   }
@@ -198,7 +228,7 @@ public class PerReplicaStates implements ReflectMapWriter {
      *
      * <p>These are unlikely, but possible
      */
-    final State duplicate;
+    State duplicate;
 
     private State(String serialized, List<String> pieces) {
       this.asString = serialized;
@@ -254,6 +284,19 @@ public class PerReplicaStates implements ReflectMapWriter {
         return new State(this.replica, this.state, this.isLeader, this.version, duplicate);
       } else {
         return duplicate.insert(this);
+      }
+    }
+
+    public void removeDuplicate(State state) {
+      State parent = this;
+      for (; ; ) {
+        State child = parent.duplicate;
+        if (child == null) break;
+        if (child.version == state.version) {
+          parent.duplicate = null;
+          return;
+        }
+        parent = child;
       }
     }
 

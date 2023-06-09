@@ -30,7 +30,8 @@ public class StreamExpressionParser {
 
   static char[] wordChars = {'_', '.', '-'};
 
-  // Regex pattern to find `:\"<somequery>\"` in expression and replace with `:"<somequery>"` to work with query parsing
+  // Regex pattern to find `:\"<somequery>\"` in expression and replace with `:"<somequery>"` to
+  // work with query parsing
   static Pattern quotedFieldPattern = Pattern.compile("(?<!\\\\\\\\):\\\\\\\".*?\\\\\\\"");
 
   static {

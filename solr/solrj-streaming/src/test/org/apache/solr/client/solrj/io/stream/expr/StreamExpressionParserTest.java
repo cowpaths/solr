@@ -127,38 +127,58 @@ public class StreamExpressionParserTest extends SolrTestCase {
     assertEquals(expected, actual);
 
     actual =
-            StreamExpressionParser.parse("search(collection1, fl=\"id,first\", sort=\"first asc\", q=\"presentTitles:\\\"chief executive officer\\\" AND age:[36 TO *]\")");
-    expected = new StreamExpression("search")
+        StreamExpressionParser.parse(
+            "search(collection1, fl=\"id,first\", sort=\"first asc\", q=\"presentTitles:\\\"chief executive officer\\\" AND age:[36 TO *]\")");
+    expected =
+        new StreamExpression("search")
             .withParameter(new StreamExpressionValue("collection1"))
             .withParameter(new StreamExpressionNamedParameter("fl").withParameter("id,first"))
             .withParameter(new StreamExpressionNamedParameter("sort").withParameter("first asc"))
-            .withParameter(new StreamExpressionNamedParameter("q").withParameter("presentTitles:\"chief executive officer\" AND age:[36 TO *]"));
+            .withParameter(
+                new StreamExpressionNamedParameter("q")
+                    .withParameter("presentTitles:\"chief executive officer\" AND age:[36 TO *]"));
     assertEquals(expected, actual);
 
     actual =
-            StreamExpressionParser.parse("search(collection1, q=*:*, fq=fieldA:\"string\\\"withquote\", sort=\"fieldA desc, fieldB asc, fieldC asc\")");
-    expected = new StreamExpression("search")
+        StreamExpressionParser.parse(
+            "search(collection1, q=*:*, fq=fieldA:\"string\\\"withquote\", sort=\"fieldA desc, fieldB asc, fieldC asc\")");
+    expected =
+        new StreamExpression("search")
             .withParameter(new StreamExpressionValue("collection1"))
             .withParameter(new StreamExpressionNamedParameter("q").withParameter("*:*"))
-            .withParameter(new StreamExpressionNamedParameter("fq").withParameter("fieldA:\"string\\\"withquote\""))
             .withParameter(
-                    new StreamExpressionNamedParameter("sort")
-                            .withParameter("fieldA desc, fieldB asc, fieldC asc"));
+                new StreamExpressionNamedParameter("fq")
+                    .withParameter("fieldA:\"string\\\"withquote\""))
+            .withParameter(
+                new StreamExpressionNamedParameter("sort")
+                    .withParameter("fieldA desc, fieldB asc, fieldC asc"));
     assertEquals(expected, actual);
 
-    actual = StreamExpressionParser.parse("search(collection1, q=\"*:*\", sort=\"fieldA desc, fieldB asc, fieldC asc\")");
-    expected = new StreamExpression("search")
+    actual =
+        StreamExpressionParser.parse(
+            "search(collection1, q=\"*:*\", sort=\"fieldA desc, fieldB asc, fieldC asc\")");
+    expected =
+        new StreamExpression("search")
             .withParameter(new StreamExpressionValue("collection1"))
             .withParameter(new StreamExpressionNamedParameter("q").withParameter("*:*"))
-            .withParameter(new StreamExpressionNamedParameter("sort").withParameter("fieldA desc, fieldB asc, fieldC asc"));
-    assertEquals(expected,actual);
+            .withParameter(
+                new StreamExpressionNamedParameter("sort")
+                    .withParameter("fieldA desc, fieldB asc, fieldC asc"));
+    assertEquals(expected, actual);
 
-    //SOLR-10894 seems to be fixed, at least at this level
-    actual = StreamExpressionParser.parse("search(collection1, q=summary:\"\\\"This is a summary\\\"\\+\", sort=\"fieldA desc, fieldB asc, fieldC asc\")");
-    expected = new StreamExpression("search")
+    // SOLR-10894 seems to be fixed, at least at this level
+    actual =
+        StreamExpressionParser.parse(
+            "search(collection1, q=summary:\"\\\"This is a summary\\\"\\+\", sort=\"fieldA desc, fieldB asc, fieldC asc\")");
+    expected =
+        new StreamExpression("search")
             .withParameter(new StreamExpressionValue("collection1"))
-            .withParameter(new StreamExpressionNamedParameter("q").withParameter("summary:\"\\\"This is a summary\\\"\\+\""))
-            .withParameter(new StreamExpressionNamedParameter("sort").withParameter("fieldA desc, fieldB asc, fieldC asc"));
-    assertEquals(expected,actual);
+            .withParameter(
+                new StreamExpressionNamedParameter("q")
+                    .withParameter("summary:\"\\\"This is a summary\\\"\\+\""))
+            .withParameter(
+                new StreamExpressionNamedParameter("sort")
+                    .withParameter("fieldA desc, fieldB asc, fieldC asc"));
+    assertEquals(expected, actual);
   }
 }

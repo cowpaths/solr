@@ -22,11 +22,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Takes a prefix notation expression and returns a tokenized expression */
 public class StreamExpressionParser {
 
   static char[] wordChars = {'_', '.', '-'};
+
+  // Regex pattern to find `:\"<somequery>\"` in expression and replace with `:"<somequery>"` to work with query parsing
+  static Pattern quotedFieldPattern = Pattern.compile("(?<!\\\\\\\\):\\\\\\\".*?\\\\\\\"");
 
   static {
     Arrays.sort(wordChars);
@@ -123,9 +128,11 @@ public class StreamExpressionParser {
         }
       }
 
-      // if contain \" replace with "
-      if (parameter.contains("\\\"")) {
-        parameter = parameter.replace("\\\"", "\"");
+      // if contain \" wrapping replace with "
+      Matcher matcher = quotedFieldPattern.matcher(parameter);
+      while (matcher.find()) {
+        String matchResult = matcher.group();
+        parameter = parameter.replace(matchResult, matchResult.replace("\\\"", "\""));
         if (0 == parameter.length()) {
           throw new IllegalArgumentException(
               String.format(Locale.ROOT, "'%s' is not a proper named parameter clause", working));

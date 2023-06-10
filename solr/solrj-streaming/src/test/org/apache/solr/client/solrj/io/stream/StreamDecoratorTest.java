@@ -3713,7 +3713,7 @@ public class StreamDecoratorTest extends SolrCloudTestCase {
     assertEquals(tuples.get(0).getString("b"), "2");
     assertEquals(tuples.get(0).getString("c"), "3");
 
-    assertEquals(tuples.get(1).getString("a"), "hello, world");
+    assertEquals(tuples.get(1).getString("a"), "\\\"hello, world\\\"");
     assertEquals(tuples.get(1).getString("b"), "9000");
     assertEquals(tuples.get(1).getString("c"), "20");
 

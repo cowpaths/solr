@@ -171,12 +171,10 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
     DocCollection.PrsSupplier prsSupplier = null;
     if (m.containsKey("PRS")) {
       Map prs = (Map) m.remove("PRS");
-      prsSupplier =
-          () ->
-              new PerReplicaStates(
-                  (String) prs.get("path"),
-                  ((Number) prs.get("cversion")).longValue(),
-                  (List<String>) prs.get("states"));
+      prsSupplier = new DocCollection.PrsSupplier(() -> new PerReplicaStates(
+              (String) prs.get("path"),
+              ((Number) prs.get("cversion")).longValue(),
+              (List<String>) prs.get("states")));
     }
     return ClusterState.collectionFromObjects(e.getKey(), m, znodeVersion, prsSupplier);
   }

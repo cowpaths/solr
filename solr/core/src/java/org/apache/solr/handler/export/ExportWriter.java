@@ -524,7 +524,7 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
         } else {
           writers[i] = new DoubleFieldWriter(field);
         }
-      } else if (fieldType instanceof StrField || fieldType instanceof SortableTextField) {
+      } else if (fieldType.isUtf8Field() && schemaField.hasDocValues()) {
         if (multiValued) {
           writers[i] = new MultiFieldWriter(field, fieldType, schemaField, false);
         } else {

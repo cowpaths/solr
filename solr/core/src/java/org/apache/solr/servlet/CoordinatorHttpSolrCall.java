@@ -80,6 +80,7 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       ZkStateReader zkStateReader = solrCall.cores.getZkController().getZkStateReader();
       ClusterState clusterState = zkStateReader.getClusterState();
       DocCollection coll = clusterState.getCollectionOrNull(collectionName, true);
+      SolrCore core = null;
       if (coll != null) {
         String confName = coll.getConfigName();
         String syntheticCollectionName = SYNTHETIC_COLL_PREFIX + confName;
@@ -92,8 +93,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
                 "synthetic collection: {} does not exist, creating.. ", syntheticCollectionName);
           }
           createColl(syntheticCollectionName, solrCall.cores, confName);
+          // Try to get core again now that we have created the synthetic core
+          core = solrCall.getCoreByCollection(collectionName, isPreferLeader);
         }
-        SolrCore core = solrCall.getCoreByCollection(syntheticCollectionName, isPreferLeader);
         if (core != null) {
           factory.collectionVsCoreNameMapping.put(collectionName, core.getName());
           solrCall.cores.getZkController().getZkStateReader().registerCore(collectionName);
@@ -120,15 +122,13 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
   private static void addReplica(String syntheticCollectionName, CoreContainer cores) {
     SolrQueryResponse rsp = new SolrQueryResponse();
     try {
+      CollectionAdminRequest.AddReplica addReplicaRequest =
+          CollectionAdminRequest.addReplicaToShard(syntheticCollectionName, "shard1")
+              .setCreateNodeSet(cores.getZkController().getNodeName());
+      addReplicaRequest.setWaitForFinalState(true);
       cores
           .getCollectionsHandler()
-          .handleRequestBody(
-              new LocalSolrQueryRequest(
-                  null,
-                  CollectionAdminRequest.addReplicaToShard(syntheticCollectionName, "shard1")
-                      .setCreateNodeSet(cores.getZkController().getNodeName())
-                      .getParams()),
-              rsp);
+          .handleRequestBody(new LocalSolrQueryRequest(null, addReplicaRequest.getParams()), rsp);
       if (rsp.getValues().get("success") == null) {
         throw new SolrException(
             SolrException.ErrorCode.SERVER_ERROR,
@@ -146,10 +146,11 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       String syntheticCollectionName, CoreContainer cores, String confName) {
     SolrQueryResponse rsp = new SolrQueryResponse();
     try {
-      SolrParams params =
+      CollectionAdminRequest.Create collCreationRequest =
           CollectionAdminRequest.createCollection(syntheticCollectionName, confName, 1, 1)
-              .setCreateNodeSet(cores.getZkController().getNodeName())
-              .getParams();
+              .setCreateNodeSet(cores.getZkController().getNodeName());
+      collCreationRequest.setWaitForFinalState(true);
+      SolrParams params = collCreationRequest.getParams();
       if (log.isInfoEnabled()) {
         log.info("sending collection admin command : {}", Utils.toJSONString(params));
       }
@@ -215,6 +216,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         boolean retry) {
       if ((path.startsWith("/____v2/") || path.equals("/____v2"))) {
         return new CoordinatorV2HttpSolrCall(this, filter, cores, request, response, retry);
+      } else if (path.startsWith("/.sys.COORDINATOR-COLL")) {
+        return SolrDispatchFilter.HttpSolrCallFactory.super.createInstance(
+            filter, path, cores, request, response, retry);
       } else {
         return new CoordinatorHttpSolrCall(this, filter, cores, request, response, retry);
       }

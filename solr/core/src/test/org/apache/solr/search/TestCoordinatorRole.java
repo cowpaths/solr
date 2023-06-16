@@ -82,15 +82,17 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       assertEquals(10, rsp.getResults().getNumFound());
 
       System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
-      final JettySolrRunner coordinatorJetty;
+      final JettySolrRunner coordinatorJetty1;
+      final JettySolrRunner coordinatorJetty2;
       try {
-        coordinatorJetty = cluster.startJettySolrRunner();
+        coordinatorJetty1 = cluster.startJettySolrRunner();
+        coordinatorJetty2 = cluster.startJettySolrRunner();
       } finally {
         System.clearProperty(NodeRoles.NODE_ROLES_PROP);
       }
       QueryResponse rslt =
           new QueryRequest(new SolrQuery("*:*"))
-              .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+              .setPreferredNodes(List.of(coordinatorJetty1.getNodeName()))
               .process(client, COLLECTION_NAME);
 
       assertEquals(10, rslt.getResults().size());
@@ -100,9 +102,31 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       assertNotNull(collection);
 
       Set<String> expectedNodes = new HashSet<>();
-      expectedNodes.add(coordinatorJetty.getNodeName());
+      expectedNodes.add(coordinatorJetty1.getNodeName());
       collection.forEachReplica((s, replica) -> expectedNodes.remove(replica.getNodeName()));
       assertTrue(expectedNodes.isEmpty());
+
+      rslt =
+          new QueryRequest(new SolrQuery("*:*"))
+              .setPreferredNodes(List.of(coordinatorJetty2.getNodeName()))
+              .process(client, COLLECTION_NAME);
+
+      assertEquals(10, rslt.getResults().size());
+
+      collection =
+          cluster.getSolrClient().getClusterStateProvider().getCollection(SYNTHETIC_COLLECTION);
+      assertNotNull(collection);
+
+      Set<String> expectedNodes2 = new HashSet<>();
+      expectedNodes2.add(coordinatorJetty2.getNodeName());
+      collection.forEachReplica((s, replica) -> expectedNodes2.remove(replica.getNodeName()));
+      assertTrue(expectedNodes2.isEmpty());
+      log.warn(
+          "Coordinators: "
+              + coordinatorJetty1.getNodeName()
+              + ","
+              + coordinatorJetty2.getNodeName());
+      log.warn("Final collection state: " + collection.getReplicas());
     } finally {
       cluster.shutdown();
     }

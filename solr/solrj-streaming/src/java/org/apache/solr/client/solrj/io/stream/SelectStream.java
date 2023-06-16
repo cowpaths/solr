@@ -76,6 +76,7 @@ public class SelectStream extends TupleStream implements Expressible {
   public SelectStream(TupleStream stream, Map<String, String> selectedFields) throws IOException {
     this.stream = stream;
     this.selectedFields = selectedFields;
+    selectedFieldGlobPatterns = new ArrayList<>();
     operations = new ArrayList<>();
     selectedEvaluators = new LinkedHashMap<>();
   }

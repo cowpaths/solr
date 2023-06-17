@@ -18,6 +18,7 @@
 package org.apache.solr.servlet;
 
 import java.lang.invoke.MethodHandles;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -73,9 +74,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
 
   public static SolrCore getCore(
       Factory factory, HttpSolrCall solrCall, String collectionName, boolean isPreferLeader) {
-    String sytheticCoreName = factory.collectionVsCoreNameMapping.get(collectionName);
-    if (sytheticCoreName != null) {
-      return solrCall.cores.getCore(sytheticCoreName);
+    String syntheticCoreName = factory.collectionVsCoreNameMapping.get(collectionName);
+    if (syntheticCoreName != null) {
+      return solrCall.cores.getCore(syntheticCoreName);
     } else {
       ZkStateReader zkStateReader = solrCall.cores.getZkController().getZkStateReader();
       ClusterState clusterState = zkStateReader.getClusterState();
@@ -87,22 +88,18 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
 
         DocCollection syntheticColl = clusterState.getCollectionOrNull(syntheticCollectionName);
         if (syntheticColl == null) {
-          // no such collection. let's create one
+          // no synthetic collection for this config, let's create one
           if (log.isInfoEnabled()) {
             log.info(
                 "synthetic collection: {} does not exist, creating.. ", syntheticCollectionName);
           }
           createColl(syntheticCollectionName, solrCall.cores, confName);
-          // Try to get core again now that we have created the synthetic core
-          core = solrCall.getCoreByCollection(collectionName, isPreferLeader);
+          syntheticColl =
+              zkStateReader.getClusterState().getCollectionOrNull(syntheticCollectionName);
         }
-        if (core != null) {
-          factory.collectionVsCoreNameMapping.put(collectionName, core.getName());
-          solrCall.cores.getZkController().getZkStateReader().registerCore(collectionName);
-          if (log.isDebugEnabled()) {
-            log.debug("coordinator node, returns synthetic core: {}", core.getName());
-          }
-        } else {
+        List<Replica> nodeNameSyntheticReplicas =
+            syntheticColl.getReplicas(solrCall.cores.getZkController().getNodeName());
+        if (nodeNameSyntheticReplicas == null || nodeNameSyntheticReplicas.isEmpty()) {
           // this node does not have a replica. add one
           if (log.isInfoEnabled()) {
             log.info(
@@ -111,7 +108,14 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
           }
 
           addReplica(syntheticCollectionName, solrCall.cores);
-          core = solrCall.getCoreByCollection(syntheticCollectionName, isPreferLeader);
+        }
+        core = solrCall.getCoreByCollection(syntheticCollectionName, isPreferLeader);
+        if (core != null) {
+          factory.collectionVsCoreNameMapping.put(collectionName, core.getName());
+          solrCall.cores.getZkController().getZkStateReader().registerCore(collectionName);
+          if (log.isDebugEnabled()) {
+            log.debug("coordinator node, returns synthetic core: {}", core.getName());
+          }
         }
         return core;
       }

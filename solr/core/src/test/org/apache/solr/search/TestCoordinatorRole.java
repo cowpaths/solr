@@ -82,17 +82,15 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       assertEquals(10, rsp.getResults().getNumFound());
 
       System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
-      final JettySolrRunner coordinatorJetty1;
-      final JettySolrRunner coordinatorJetty2;
+      final JettySolrRunner coordinatorJetty;
       try {
-        coordinatorJetty1 = cluster.startJettySolrRunner();
-        coordinatorJetty2 = cluster.startJettySolrRunner();
+        coordinatorJetty = cluster.startJettySolrRunner();
       } finally {
         System.clearProperty(NodeRoles.NODE_ROLES_PROP);
       }
       QueryResponse rslt =
           new QueryRequest(new SolrQuery("*:*"))
-              .setPreferredNodes(List.of(coordinatorJetty1.getNodeName()))
+              .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
               .process(client, COLLECTION_NAME);
 
       assertEquals(10, rslt.getResults().size());
@@ -102,31 +100,75 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       assertNotNull(collection);
 
       Set<String> expectedNodes = new HashSet<>();
-      expectedNodes.add(coordinatorJetty1.getNodeName());
+      expectedNodes.add(coordinatorJetty.getNodeName());
       collection.forEachReplica((s, replica) -> expectedNodes.remove(replica.getNodeName()));
       assertTrue(expectedNodes.isEmpty());
+    } finally {
+      cluster.shutdown();
+    }
+  }
 
-      rslt =
-          new QueryRequest(new SolrQuery("*:*"))
-              .setPreferredNodes(List.of(coordinatorJetty2.getNodeName()))
-              .process(client, COLLECTION_NAME);
+  public void testMultiCollectionMultiNode() throws Exception {
+    MiniSolrCloudCluster cluster =
+        configureCluster(4).addConfig("conf", configset("cloud-minimal")).configure();
+    try {
+      CloudSolrClient client = cluster.getSolrClient();
+      String COLLECTION_NAME = "test_coll";
+      String SYNTHETIC_COLLECTION = CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX + "conf";
+      for (int j = 1; j <= 10; j++) {
+        String collname = COLLECTION_NAME + "_" + j;
+        CollectionAdminRequest.createCollection(collname, "conf", 2, 2)
+            .process(cluster.getSolrClient());
+        cluster.waitForActiveCollection(collname, 2, 4);
+        UpdateRequest ur = new UpdateRequest();
+        for (int i = 0; i < 10; i++) {
+          SolrInputDocument doc2 = new SolrInputDocument();
+          doc2.addField("id", "" + i);
+          ur.add(doc2);
+        }
 
-      assertEquals(10, rslt.getResults().size());
+        ur.commit(client, collname);
+        QueryResponse rsp = client.query(collname, new SolrQuery("*:*"));
+        assertEquals(10, rsp.getResults().getNumFound());
+      }
 
-      collection =
+      System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
+      final JettySolrRunner coordinatorJetty1;
+      final JettySolrRunner coordinatorJetty2;
+      try {
+        coordinatorJetty1 = cluster.startJettySolrRunner();
+        coordinatorJetty2 = cluster.startJettySolrRunner();
+      } finally {
+        System.clearProperty(NodeRoles.NODE_ROLES_PROP);
+      }
+      for (int j = 1; j <= 10; j++) {
+        String collname = COLLECTION_NAME + "_" + j;
+        QueryResponse rslt =
+            new QueryRequest(new SolrQuery("*:*"))
+                .setPreferredNodes(List.of(coordinatorJetty1.getNodeName()))
+                .process(client, collname);
+
+        assertEquals(10, rslt.getResults().size());
+      }
+
+      for (int j = 1; j <= 10; j++) {
+        String collname = COLLECTION_NAME + "_" + j;
+        QueryResponse rslt =
+            new QueryRequest(new SolrQuery("*:*"))
+                .setPreferredNodes(List.of(coordinatorJetty2.getNodeName()))
+                .process(client, collname);
+
+        assertEquals(10, rslt.getResults().size());
+      }
+
+      DocCollection collection =
           cluster.getSolrClient().getClusterStateProvider().getCollection(SYNTHETIC_COLLECTION);
       assertNotNull(collection);
 
-      Set<String> expectedNodes2 = new HashSet<>();
-      expectedNodes2.add(coordinatorJetty2.getNodeName());
-      collection.forEachReplica((s, replica) -> expectedNodes2.remove(replica.getNodeName()));
-      assertTrue(expectedNodes2.isEmpty());
-      log.warn(
-          "Coordinators: "
-              + coordinatorJetty1.getNodeName()
-              + ","
-              + coordinatorJetty2.getNodeName());
-      log.warn("Final collection state: " + collection.getReplicas());
+      int coordNode1NumCores = coordinatorJetty1.getCoreContainer().getNumAllCores();
+      assertEquals("Unexpected number of cores found for coordinator node", 1, coordNode1NumCores);
+      int coordNode2NumCores = coordinatorJetty2.getCoreContainer().getNumAllCores();
+      assertEquals("Unexpected number of cores found for coordinator node", 1, coordNode2NumCores);
     } finally {
       cluster.shutdown();
     }

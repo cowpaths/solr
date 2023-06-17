@@ -220,7 +220,7 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         boolean retry) {
       if ((path.startsWith("/____v2/") || path.equals("/____v2"))) {
         return new CoordinatorV2HttpSolrCall(this, filter, cores, request, response, retry);
-      } else if (path.startsWith("/.sys.COORDINATOR-COLL")) {
+      } else if (path.startsWith("/" + SYNTHETIC_COLL_PREFIX)) {
         return SolrDispatchFilter.HttpSolrCallFactory.super.createInstance(
             filter, path, cores, request, response, retry);
       } else {

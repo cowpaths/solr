@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Function;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,10 +31,6 @@ import java.util.regex.Pattern;
 public class StreamExpressionParser {
 
   static char[] wordChars = {'_', '.', '-'};
-
-  // Regex pattern to find `:\"<somequery>\"` in expression and replace with `:"<somequery>"` to
-  // work with query parsing
-  static Pattern quotedFieldPattern = Pattern.compile("(?<!\\\\\\\\):\\\\\\\".*?\\\\\\\"");
 
   static {
     Arrays.sort(wordChars);
@@ -101,6 +99,23 @@ public class StreamExpressionParser {
     return expression;
   }
 
+  /**
+   * simple escaped doublequote `\"`, possibly escaped at the Solr syntax level by a preceding
+   * literal backslash `\\\"`.
+   */
+  private static final Pattern ESCAPED_QUOTE = Pattern.compile("(\\\\\\\\)?\\\\\"");
+
+  private static final Function<MatchResult, String> REPLACEMENT_FUNCTION = (m) -> {
+    if (m.start(1) == -1) {
+      // the quote was simply escaped, so replace it with a simple unescaped quote
+      return "\"";
+    } else {
+      // the quote was nested-escaped, so we strip escaping at the _Solr syntax_ level,
+      // leaving a simply-escaped quote -- `\\\"` => `\"`
+      return "\\\\\"";
+    }
+  };
+
   private static StreamExpressionNamedParameter generateNamedParameterExpression(String clause) {
     String working = clause.trim();
 
@@ -127,16 +142,22 @@ public class StreamExpressionParser {
           throw new IllegalArgumentException(
               String.format(Locale.ROOT, "'%s' is not a proper named parameter clause", working));
         }
-      }
 
-      // if contain \" wrapping replace with "
-      Matcher matcher = quotedFieldPattern.matcher(parameter);
-      while (matcher.find()) {
-        String matchResult = matcher.group();
-        parameter = parameter.replace(matchResult, matchResult.replace("\\\"", "\""));
-        if (0 == parameter.length()) {
-          throw new IllegalArgumentException(
-              String.format(Locale.ROOT, "'%s' is not a proper named parameter clause", working));
+        // if contain \" unwrap one level of escaping
+        if (parameter.contains("\\\"")) {
+          Matcher m = ESCAPED_QUOTE.matcher(parameter);
+          StringBuilder sb = new StringBuilder(parameter.length());
+          boolean hasMatch = m.find(); // position the matcher
+          assert hasMatch;
+          do {
+            m.appendReplacement(sb, REPLACEMENT_FUNCTION.apply(m));
+          } while (m.find());
+          m.appendTail(sb);
+          parameter = sb.toString();
+          if (0 == parameter.length()) {
+            throw new IllegalArgumentException(
+                String.format(Locale.ROOT, "'%s' is not a proper named parameter clause", working));
+          }
         }
       }
 

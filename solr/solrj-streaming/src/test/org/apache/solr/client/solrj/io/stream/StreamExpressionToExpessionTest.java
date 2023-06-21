@@ -580,11 +580,11 @@ public class StreamExpressionToExpessionTest extends SolrTestCase {
     String originalExpressionString =
         "search(collection1,fl=\"id,first\",sort=\"first asc\",q={!bool filter=\"presentTitles:\\\"chief, executive officer\\\"\" filter=\"age:[36 TO *]\")";
     try (CloudSolrStream firstStream =
-             new CloudSolrStream(StreamExpressionParser.parse(originalExpressionString), factory)) {
+        new CloudSolrStream(StreamExpressionParser.parse(originalExpressionString), factory)) {
       String firstExpressionString = firstStream.toExpression(factory).toString();
 
       try (CloudSolrStream secondStream =
-               new CloudSolrStream(StreamExpressionParser.parse(firstExpressionString), factory)) {
+          new CloudSolrStream(StreamExpressionParser.parse(firstExpressionString), factory)) {
         String secondExpressionString = secondStream.toExpression(factory).toString();
 
         assertTrue(

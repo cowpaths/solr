@@ -102,19 +102,20 @@ public class StreamExpressionNamedParameter implements StreamExpressionParameter
    */
   private static final Pattern ESCAPE_QUOTES = Pattern.compile("(\\\\)?\"");
 
-  private static final Function<MatchResult, String> REPLACEMENT_FUNCTION = (m) -> {
-    if (m.start(1) == -1) {
-      // the quote was _not_ already escaped, so replace it with a simple escaped quote
-      // (single literal doublequote preceded by a single literal backslash), for a
-      // final result: `\"`.
-      return "\\\\\"";
-    } else {
-      // the quote was already escaped, so escape it at the _Solr syntax_ level by
-      // preceding the existing `\"` with an extra literal backslash `\\`, for final
-      // result: `\\\"`.
-      return "\\\\\\\\\\\\\"";
-    }
-  };
+  private static final Function<MatchResult, String> REPLACEMENT_FUNCTION =
+      (m) -> {
+        if (m.start(1) == -1) {
+          // the quote was _not_ already escaped, so replace it with a simple escaped quote
+          // (single literal doublequote preceded by a single literal backslash), for a
+          // final result: `\"`.
+          return "\\\\\"";
+        } else {
+          // the quote was already escaped, so escape it at the _Solr syntax_ level by
+          // preceding the existing `\"` with an extra literal backslash `\\`, for final
+          // result: `\\\"`.
+          return "\\\\\\\\\\\\\"";
+        }
+      };
 
   @Override
   public boolean equals(Object other) {

@@ -105,16 +105,17 @@ public class StreamExpressionParser {
    */
   private static final Pattern ESCAPED_QUOTE = Pattern.compile("(\\\\\\\\)?\\\\\"");
 
-  private static final Function<MatchResult, String> REPLACEMENT_FUNCTION = (m) -> {
-    if (m.start(1) == -1) {
-      // the quote was simply escaped, so replace it with a simple unescaped quote
-      return "\"";
-    } else {
-      // the quote was nested-escaped, so we strip escaping at the _Solr syntax_ level,
-      // leaving a simply-escaped quote -- `\\\"` => `\"`
-      return "\\\\\"";
-    }
-  };
+  private static final Function<MatchResult, String> REPLACEMENT_FUNCTION =
+      (m) -> {
+        if (m.start(1) == -1) {
+          // the quote was simply escaped, so replace it with a simple unescaped quote
+          return "\"";
+        } else {
+          // the quote was nested-escaped, so we strip escaping at the _Solr syntax_ level,
+          // leaving a simply-escaped quote -- `\\\"` => `\"`
+          return "\\\\\"";
+        }
+      };
 
   private static StreamExpressionNamedParameter generateNamedParameterExpression(String clause) {
     String working = clause.trim();

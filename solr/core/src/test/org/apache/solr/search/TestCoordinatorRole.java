@@ -476,4 +476,55 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
     assertTrue(found);
     return (String) docs.get(0).getFieldValue("_core_");
   }
+
+
+  public void testConcurrency() throws Exception {
+    MiniSolrCloudCluster cluster =
+            configureCluster(2).addConfig("conf", configset("cloud-minimal")).configure();
+    try {
+      CloudSolrClient client = cluster.getSolrClient();
+      String COLLECTION_NAME = "test_coll";
+      String SYNTHETIC_COLLECTION = CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX + "conf";
+      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 2, 2).withProperty(ABC)
+              .process(cluster.getSolrClient());
+      cluster.waitForActiveCollection(COLLECTION_NAME, 2, 4);
+      UpdateRequest ur = new UpdateRequest();
+      for (int i = 0 ; i < 2; i++) {
+        for (int j = 0; j < 1000; j++) {
+          SolrInputDocument doc2 = new SolrInputDocument();
+          doc2.addField("id", "data"+i+"-"+j);
+          ur.add(doc2);
+        }
+      }
+
+      ur.commit(client, COLLECTION_NAME);
+      QueryResponse rsp = client.query(COLLECTION_NAME, new SolrQuery("*:*"));
+      assertEquals(10, rsp.getResults().getNumFound());
+
+      System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
+      final JettySolrRunner coordinatorJetty;
+      try {
+        coordinatorJetty = cluster.startJettySolrRunner();
+      } finally {
+        System.clearProperty(NodeRoles.NODE_ROLES_PROP);
+      }
+      QueryResponse rslt =
+              new QueryRequest(new SolrQuery("*:*"))
+                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+                      .process(client, COLLECTION_NAME);
+
+      assertEquals(10, rslt.getResults().size());
+
+      DocCollection collection =
+              cluster.getSolrClient().getClusterStateProvider().getCollection(SYNTHETIC_COLLECTION);
+      assertNotNull(collection);
+
+      Set<String> expectedNodes = new HashSet<>();
+      expectedNodes.add(coordinatorJetty.getNodeName());
+      collection.forEachReplica((s, replica) -> expectedNodes.remove(replica.getNodeName()));
+      assertTrue(expectedNodes.isEmpty());
+    } finally {
+      cluster.shutdown();
+    }
+  }
 }

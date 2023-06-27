@@ -21,6 +21,7 @@ import static org.apache.solr.common.params.CommonParams.OMIT_HEADER;
 import static org.apache.solr.common.params.CommonParams.TRUE;
 
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -28,10 +29,13 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
@@ -42,6 +46,7 @@ import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
@@ -478,51 +483,84 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
   }
 
 
-  public void testConcurrency() throws Exception {
+  public void testConcurrentAccess() throws Exception {
+    final int DATA_NODE_COUNT = 2;
+    final int COORDINATOR_NODE_COUNT = 2;
     MiniSolrCloudCluster cluster =
-            configureCluster(2).addConfig("conf", configset("cloud-minimal")).configure();
+            configureCluster(DATA_NODE_COUNT).addConfig("conf", configset("cloud-minimal")).configure();
+
+    List<String> dataNodes = cluster.getJettySolrRunners().stream().map(JettySolrRunner::getNodeName).collect(Collectors.toUnmodifiableList());
+
     try {
       CloudSolrClient client = cluster.getSolrClient();
-      String COLLECTION_NAME = "test_coll";
-      String SYNTHETIC_COLLECTION = CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX + "conf";
-      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 2, 2).withProperty(ABC)
-              .process(cluster.getSolrClient());
-      cluster.waitForActiveCollection(COLLECTION_NAME, 2, 4);
-      UpdateRequest ur = new UpdateRequest();
-      for (int i = 0 ; i < 2; i++) {
-        for (int j = 0; j < 1000; j++) {
-          SolrInputDocument doc2 = new SolrInputDocument();
-          doc2.addField("id", "data"+i+"-"+j);
-          ur.add(doc2);
-        }
+      String COLLECTION_PREFIX = "test_coll_";
+
+      final int COLLECTION_COUNT = 10;
+      final int DOC_PER_COLLECTION_COUNT = 1000;
+
+      List<String> collectionNames = new ArrayList<>();
+      for (int i = 0; i < COLLECTION_COUNT; i ++) {
+        String collectionName = COLLECTION_PREFIX + i;
+        CollectionAdminRequest.createCollection(collectionName, "conf", 2, 1).setCreateNodeSet(String.join(",", dataNodes)) //only put data onto the 2 data nodes
+                .process(cluster.getSolrClient());
+        cluster.waitForActiveCollection(collectionName, 2, 2);
+        collectionNames.add(collectionName);
       }
 
-      ur.commit(client, COLLECTION_NAME);
-      QueryResponse rsp = client.query(COLLECTION_NAME, new SolrQuery("*:*"));
-      assertEquals(10, rsp.getResults().getNumFound());
+      for (String collectionName : collectionNames) {
+        UpdateRequest ur = new UpdateRequest();
+        for (int i = 0; i < DOC_PER_COLLECTION_COUNT; i++) {
+          SolrInputDocument doc2 = new SolrInputDocument();
+          doc2.addField("id", collectionName+"-"+i);
+          ur.add(doc2);
+        }
+        ur.commit(client, collectionName);
+        QueryResponse rsp = client.query(collectionName, new SolrQuery("*:*"));
+        assertEquals(DOC_PER_COLLECTION_COUNT, rsp.getResults().getNumFound());
+      }
 
       System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
-      final JettySolrRunner coordinatorJetty;
+      List<String> coordinatorNodes = new ArrayList<>();
       try {
-        coordinatorJetty = cluster.startJettySolrRunner();
+        for (int i = 0 ; i < COORDINATOR_NODE_COUNT; i ++) {
+          JettySolrRunner coordinatorJetty = cluster.startJettySolrRunner();
+          coordinatorNodes.add(coordinatorJetty.getNodeName());
+        }
       } finally {
         System.clearProperty(NodeRoles.NODE_ROLES_PROP);
       }
-      QueryResponse rslt =
-              new QueryRequest(new SolrQuery("*:*"))
-                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
-                      .process(client, COLLECTION_NAME);
 
-      assertEquals(10, rslt.getResults().size());
+      int THREAD_COUNT = 10;
+      int RUN_COUNT = 20;
+      //final AtomicInteger runCounter = new AtomicInteger();
+      //10 threads to concurrently access random collection and ensure data is not mixed up
+      //final Random random = new Random();
+      ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
+      List<Future<?>> testFutures = new ArrayList<>();
 
-      DocCollection collection =
-              cluster.getSolrClient().getClusterStateProvider().getCollection(SYNTHETIC_COLLECTION);
-      assertNotNull(collection);
+      for (int i = 0; i < RUN_COUNT; i ++) {
+          final int currentRun = i;
+          testFutures.add(executorService.submit(() -> {
+              final String collectionName = collectionNames.get(currentRun % collectionNames.size());
+              final String coordinatorNode = coordinatorNodes.get(currentRun % coordinatorNodes.size());
+              QueryResponse response =
+                      new QueryRequest(new SolrQuery("*:*"))
+                              .setPreferredNodes(List.of(coordinatorNode))
+                              .process(client, collectionName);
+              assertEquals(DOC_PER_COLLECTION_COUNT, response.getResults().getNumFound());
+              //ensure docs have the correct id (ie not mixing up with other collections)
+              for (SolrDocument doc : response.getResults()) {
+                assertTrue(((String) doc.getFieldValue("id")).startsWith(collectionName));
+              }
+            return null;
+          }));
+    }
+      for (Future<?> testFuture : testFutures) {
+        testFuture.get(); //check for any exceptions/failures
+      }
 
-      Set<String> expectedNodes = new HashSet<>();
-      expectedNodes.add(coordinatorJetty.getNodeName());
-      collection.forEachReplica((s, replica) -> expectedNodes.remove(replica.getNodeName()));
-      assertTrue(expectedNodes.isEmpty());
+      executorService.shutdown();
+      executorService.awaitTermination(10, TimeUnit.SECONDS);
     } finally {
       cluster.shutdown();
     }

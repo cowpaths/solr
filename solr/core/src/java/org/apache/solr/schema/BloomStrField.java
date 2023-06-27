@@ -60,13 +60,16 @@ public final class BloomStrField extends StrField implements SchemaAware {
 
   public static final String BLOOM_FIELD_BASE_SUFFIX_MULTI = "0NgramM"; // multiValued
 
-  public static final boolean DEFAULT_DISABLE_NGRAMS = "true".equals(System.getProperty("disableNgrams"));
-  private static final ThreadLocal<Boolean> DISABLE_NGRAMS = new ThreadLocal<>() {
-    @Override
-    protected Boolean initialValue() {
-      return DEFAULT_DISABLE_NGRAMS;
-    }
-  };
+  private static final boolean DEFAULT_DISABLE_NGRAMS =
+      "true".equals(System.getProperty("disableNgrams"));
+
+  private static final ThreadLocal<Boolean> DISABLE_NGRAMS =
+      new ThreadLocal<>() {
+        @Override
+        protected Boolean initialValue() {
+          return DEFAULT_DISABLE_NGRAMS;
+        }
+      };
 
   public static void init(SolrQueryRequest req) {
     boolean disableNgrams = req.getParams().getBool("disableNgrams", DEFAULT_DISABLE_NGRAMS);

@@ -60,24 +60,24 @@ public final class BloomStrField extends StrField implements SchemaAware {
 
   public static final String BLOOM_FIELD_BASE_SUFFIX_MULTI = "0NgramM"; // multiValued
 
-  private static final boolean DEFAULT_DISABLE_NGRAMS =
-      "true".equals(System.getProperty("disableNgrams"));
+  private static final boolean DEFAULT_ENABLE_NGRAMS =
+      !"false".equals(System.getProperty("enableNgrams"));
 
-  private static final ThreadLocal<Boolean> DISABLE_NGRAMS =
+  private static final ThreadLocal<Boolean> ENABLE_NGRAMS =
       new ThreadLocal<>() {
         @Override
         protected Boolean initialValue() {
-          return DEFAULT_DISABLE_NGRAMS;
+          return DEFAULT_ENABLE_NGRAMS;
         }
       };
 
   public static void init(SolrQueryRequest req) {
-    boolean disableNgrams = req.getParams().getBool("disableNgrams", DEFAULT_DISABLE_NGRAMS);
-    DISABLE_NGRAMS.set(disableNgrams);
+    boolean enableNgrams = req.getParams().getBool("enableNgrams", DEFAULT_ENABLE_NGRAMS);
+    ENABLE_NGRAMS.set(enableNgrams);
   }
 
-  public static boolean disableNgrams() {
-    return DISABLE_NGRAMS.get();
+  public static boolean enableNgrams() {
+    return ENABLE_NGRAMS.get();
   }
 
   private IndexSchema schema;

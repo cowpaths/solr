@@ -128,16 +128,13 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
           addReplica(syntheticCollectionName, solrCall.cores);
         } else {
           try {
-            zkStateReader.waitForState(syntheticCollectionName, 10, TimeUnit.SECONDS, new Predicate<DocCollection>(){
-              @Override
-              public boolean test(DocCollection docCollection) {
-                for (Replica nodeNameSyntheticReplica : docCollection.getReplicas(solrCall.cores.getZkController().getNodeName())) {
-                  if (nodeNameSyntheticReplica.getState() == Replica.State.ACTIVE) {
-                    return true;
-                  }
+            zkStateReader.waitForState(syntheticCollectionName, 10, TimeUnit.SECONDS, docCollection -> {
+              for (Replica nodeNameSyntheticReplica : docCollection.getReplicas(solrCall.cores.getZkController().getNodeName())) {
+                if (nodeNameSyntheticReplica.getState() == Replica.State.ACTIVE) {
+                  return true;
                 }
-                return false;
               }
+              return false;
             });
           } catch (Exception e) {
             throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Failed to wait for active replica for synthetic collection [" + syntheticCollectionName + "]", e);

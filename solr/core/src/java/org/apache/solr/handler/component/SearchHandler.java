@@ -356,8 +356,8 @@ public class SearchHandler extends RequestHandlerBase
       log.info("Start Forwarded Search Query");
       SolrParams filteredParams = removeVerboseParams(req.getParams());
       rsp.getToLog()
-              .asShallowMap(false)
-              .put("params", "{" + filteredParams + "}"); // replace "params" with the filtered version
+          .asShallowMap(false)
+          .put("params", "{" + filteredParams + "}"); // replace "params" with the filtered version
     } else {
       // Then it is the first time this req hitting Solr - not a req distributed by another higher
       // level req.

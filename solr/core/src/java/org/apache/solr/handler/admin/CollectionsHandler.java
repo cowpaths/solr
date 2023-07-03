@@ -47,6 +47,7 @@ import static org.apache.solr.common.params.CollectionAdminParams.ALIAS;
 import static org.apache.solr.common.params.CollectionAdminParams.COLLECTION;
 import static org.apache.solr.common.params.CollectionAdminParams.COLL_CONF;
 import static org.apache.solr.common.params.CollectionAdminParams.COUNT_PROP;
+import static org.apache.solr.common.params.CollectionAdminParams.CREATE_NODE_SET_PARAM;
 import static org.apache.solr.common.params.CollectionAdminParams.FOLLOW_ALIASES;
 import static org.apache.solr.common.params.CollectionAdminParams.PER_REPLICA_STATE;
 import static org.apache.solr.common.params.CollectionAdminParams.PROPERTY_NAME;
@@ -97,6 +98,8 @@ import static org.apache.solr.common.params.CollectionParams.CollectionAction.RE
 import static org.apache.solr.common.params.CollectionParams.CollectionAction.RESTORE;
 import static org.apache.solr.common.params.CollectionParams.CollectionAction.SPLITSHARD;
 import static org.apache.solr.common.params.CollectionParams.CollectionAction.SYNCSHARD;
+import static org.apache.solr.common.params.CollectionParams.SOURCE_NODE;
+import static org.apache.solr.common.params.CollectionParams.TARGET_NODE;
 import static org.apache.solr.common.params.CommonAdminParams.ASYNC;
 import static org.apache.solr.common.params.CommonAdminParams.IN_PLACE_MOVE;
 import static org.apache.solr.common.params.CommonAdminParams.NUM_SUB_SHARDS;
@@ -166,7 +169,6 @@ import org.apache.solr.cloud.api.collections.RoutedAlias;
 import org.apache.solr.cloud.overseer.SliceMutator;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
-import org.apache.solr.common.cloud.Aliases;
 import org.apache.solr.common.cloud.ClusterProperties;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.CollectionProperties;
@@ -210,15 +212,19 @@ import org.apache.solr.handler.admin.api.BalanceShardUniqueAPI;
 import org.apache.solr.handler.admin.api.CollectionStatusAPI;
 import org.apache.solr.handler.admin.api.CreateShardAPI;
 import org.apache.solr.handler.admin.api.DeleteCollectionAPI;
+import org.apache.solr.handler.admin.api.DeleteNodeAPI;
 import org.apache.solr.handler.admin.api.DeleteReplicaAPI;
 import org.apache.solr.handler.admin.api.DeleteReplicaPropertyAPI;
 import org.apache.solr.handler.admin.api.DeleteShardAPI;
 import org.apache.solr.handler.admin.api.ForceLeaderAPI;
+import org.apache.solr.handler.admin.api.ListAliasesAPI;
 import org.apache.solr.handler.admin.api.MigrateDocsAPI;
 import org.apache.solr.handler.admin.api.ModifyCollectionAPI;
 import org.apache.solr.handler.admin.api.MoveReplicaAPI;
 import org.apache.solr.handler.admin.api.RebalanceLeadersAPI;
 import org.apache.solr.handler.admin.api.ReloadCollectionAPI;
+import org.apache.solr.handler.admin.api.RenameCollectionAPI;
+import org.apache.solr.handler.admin.api.ReplaceNodeAPI;
 import org.apache.solr.handler.admin.api.SetCollectionPropertyAPI;
 import org.apache.solr.handler.admin.api.SplitShardAPI;
 import org.apache.solr.handler.admin.api.SyncShardAPI;
@@ -857,24 +863,9 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     LISTALIASES_OP(
         LISTALIASES,
         (req, rsp, h) -> {
-          ZkStateReader zkStateReader = h.coreContainer.getZkController().getZkStateReader();
-          // if someone calls listAliases, lets ensure we return an up to date response
-          zkStateReader.aliasesManager.update();
-          Aliases aliases = zkStateReader.getAliases();
-          if (aliases != null) {
-            // the aliases themselves...
-            rsp.getValues().add("aliases", aliases.getCollectionAliasMap());
-            // Any properties for the above aliases.
-            Map<String, Map<String, String>> meta = new LinkedHashMap<>();
-            for (String alias : aliases.getCollectionAliasListMap().keySet()) {
-              Map<String, String> collectionAliasProperties =
-                  aliases.getCollectionAliasProperties(alias);
-              if (!collectionAliasProperties.isEmpty()) {
-                meta.put(alias, collectionAliasProperties);
-              }
-            }
-            rsp.getValues().add("properties", meta);
-          }
+          final ListAliasesAPI getAliasesAPI = new ListAliasesAPI(h.coreContainer, req, rsp);
+          final SolrJerseyResponse getAliasesResponse = getAliasesAPI.getAliases();
+          V2ApiUtils.squashIntoSolrResponseWithoutHeader(rsp, getAliasesResponse);
           return null;
         }),
     SPLITSHARD_OP(
@@ -926,7 +917,8 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
                   NUM_SUB_SHARDS,
                   SPLIT_FUZZ,
                   SPLIT_BY_PREFIX,
-                  FOLLOW_ALIASES);
+                  FOLLOW_ALIASES,
+                  CREATE_NODE_SET_PARAM);
           return copyPropertiesWithPrefix(req.getParams(), map, PROPERTY_PREFIX);
         }),
     DELETESHARD_OP(
@@ -1263,7 +1255,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
         CLUSTERSTATUS,
         (req, rsp, h) -> {
           Map<String, Object> all =
-              copy(req.getParams(), null, COLLECTION_PROP, SHARD_ID_PROP, _ROUTE_);
+              copy(req.getParams(), null, COLLECTION_PROP, SHARD_ID_PROP, _ROUTE_, "prs");
           new ClusterStatus(
                   h.coreContainer.getZkController().getZkStateReader(), new ZkNodeProps(all))
               .getClusterStatus(rsp.getValues());
@@ -1295,19 +1287,14 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
           V2ApiUtils.squashIntoSolrResponseWithoutHeader(rsp, addReplicaPropResponse);
           return null;
         }),
-    // XXX should this command support followAliases?
     DELETEREPLICAPROP_OP(
         DELETEREPLICAPROP,
         (req, rsp, h) -> {
-          Map<String, Object> map =
-              copy(
-                  req.getParams().required(),
-                  null,
-                  COLLECTION_PROP,
-                  PROPERTY_PROP,
-                  SHARD_ID_PROP,
-                  REPLICA_PROP);
-          return copy(req.getParams(), map, PROPERTY_PROP);
+          final var api = new DeleteReplicaPropertyAPI(h.coreContainer, req, rsp);
+          final var deleteReplicaPropResponse =
+              DeleteReplicaPropertyAPI.invokeUsingV1Inputs(api, req.getParams());
+          V2ApiUtils.squashIntoSolrResponseWithoutHeader(rsp, deleteReplicaPropResponse);
+          return null;
         }),
     // XXX should this command support followAliases?
     BALANCESHARDUNIQUE_OP(
@@ -1792,14 +1779,18 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     REPLACENODE_OP(
         REPLACENODE,
         (req, rsp, h) -> {
-          return copy(
-              req.getParams(),
-              null,
-              "source", // legacy
-              "target", // legacy
-              WAIT_FOR_FINAL_STATE,
-              CollectionParams.SOURCE_NODE,
-              CollectionParams.TARGET_NODE);
+          final SolrParams params = req.getParams();
+          final RequiredSolrParams requiredParams = req.getParams().required();
+          final ReplaceNodeAPI.ReplaceNodeRequestBody requestBody =
+              new ReplaceNodeAPI.ReplaceNodeRequestBody();
+          requestBody.targetNodeName = params.get(TARGET_NODE);
+          requestBody.waitForFinalState = params.getBool(WAIT_FOR_FINAL_STATE);
+          requestBody.async = params.get(ASYNC);
+          final ReplaceNodeAPI replaceNodeAPI = new ReplaceNodeAPI(h.coreContainer, req, rsp);
+          final SolrJerseyResponse replaceNodeResponse =
+              replaceNodeAPI.replaceNode(requiredParams.get(SOURCE_NODE), requestBody);
+          V2ApiUtils.squashIntoSolrResponseWithoutHeader(rsp, replaceNodeResponse);
+          return null;
         }),
     MOVEREPLICA_OP(
         MOVEREPLICA,
@@ -1811,14 +1802,22 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
               map,
               CollectionParams.FROM_NODE,
               CollectionParams.SOURCE_NODE,
-              CollectionParams.TARGET_NODE,
+              TARGET_NODE,
               WAIT_FOR_FINAL_STATE,
               IN_PLACE_MOVE,
               "replica",
               "shard",
               FOLLOW_ALIASES);
         }),
-    DELETENODE_OP(DELETENODE, (req, rsp, h) -> copy(req.getParams().required(), null, "node")),
+    DELETENODE_OP(
+        DELETENODE,
+        (req, rsp, h) -> {
+          final DeleteNodeAPI deleteNodeAPI = new DeleteNodeAPI(h.coreContainer, req, rsp);
+          final SolrJerseyResponse deleteNodeResponse =
+              DeleteNodeAPI.invokeUsingV1Inputs(deleteNodeAPI, req.getParams());
+          V2ApiUtils.squashIntoSolrResponseWithoutHeader(rsp, deleteNodeResponse);
+          return null;
+        }),
     MOCK_COLL_TASK_OP(
         MOCK_COLL_TASK,
         (req, rsp, h) -> {
@@ -2025,7 +2024,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
                       replicas.add(shard.getLeader());
                     }
                     for (Replica replica : replicas) {
-                      String state = replica.getStr(ZkStateReader.STATE_PROP);
+                      State state = replica.getState();
                       if (log.isDebugEnabled()) {
                         log.debug(
                             "Checking replica status, collection={} replica={} state={}",
@@ -2034,7 +2033,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
                             state);
                       }
                       if (!n.contains(replica.getNodeName())
-                          || !state.equals(Replica.State.ACTIVE.toString())) {
+                          || !state.equals(Replica.State.ACTIVE)) {
                         replicaNotAliveCnt++;
                         return false;
                       }
@@ -2071,7 +2070,12 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
 
   @Override
   public Collection<Class<? extends JerseyResource>> getJerseyResources() {
-    return List.of(AddReplicaPropertyAPI.class);
+    return List.of(
+        AddReplicaPropertyAPI.class,
+        DeleteReplicaPropertyAPI.class,
+        ReplaceNodeAPI.class,
+        DeleteNodeAPI.class,
+        ListAliasesAPI.class);
   }
 
   @Override
@@ -2086,7 +2090,6 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     apis.addAll(AnnotatedApi.getApis(new DeleteReplicaAPI(this)));
     apis.addAll(AnnotatedApi.getApis(new BalanceShardUniqueAPI(this)));
     apis.addAll(AnnotatedApi.getApis(new DeleteCollectionAPI(this)));
-    apis.addAll(AnnotatedApi.getApis(new DeleteReplicaPropertyAPI(this)));
     apis.addAll(AnnotatedApi.getApis(new MigrateDocsAPI(this)));
     apis.addAll(AnnotatedApi.getApis(new ModifyCollectionAPI(this)));
     apis.addAll(AnnotatedApi.getApis(new MoveReplicaAPI(this)));
@@ -2094,6 +2097,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     apis.addAll(AnnotatedApi.getApis(new ReloadCollectionAPI(this)));
     apis.addAll(AnnotatedApi.getApis(new SetCollectionPropertyAPI(this)));
     apis.addAll(AnnotatedApi.getApis(new CollectionStatusAPI(this)));
+    apis.addAll(AnnotatedApi.getApis(new RenameCollectionAPI(this)));
     return apis;
   }
 

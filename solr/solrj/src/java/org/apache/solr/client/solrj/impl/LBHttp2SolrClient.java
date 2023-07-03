@@ -19,11 +19,15 @@ package org.apache.solr.client.solrj.impl;
 import static org.apache.solr.common.params.CommonParams.ADMIN_PATHS;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.solr.client.solrj.ResponseParser;
@@ -35,6 +39,8 @@ import org.apache.solr.client.solrj.util.AsyncListener;
 import org.apache.solr.client.solrj.util.Cancellable;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 /**
@@ -49,8 +55,8 @@ import org.slf4j.MDC;
  * but this class may be used for updates because the server will forward them to the appropriate
  * leader.
  *
- * <p>It offers automatic failover when a server goes down and it detects when the server comes back
- * up.
+ * <p>It offers automatic failover when a server goes down, and it detects when the server comes
+ * back up.
  *
  * <p>Load balancing is done using a simple round-robin on the list of servers.
  *
@@ -68,11 +74,11 @@ import org.slf4j.MDC;
  * </blockquote>
  *
  * This detects if a dead server comes alive automatically. The check is done in fixed intervals in
- * a dedicated thread. This interval can be set using {@link #setAliveCheckInterval} , the default
- * is set to one minute.
+ * a dedicated thread. This interval can be set using {@link
+ * LBHttp2SolrClient.Builder#setAliveCheckInterval(int)} , the default is set to one minute.
  *
  * <p><b>When to use this?</b><br>
- * This can be used as a software load balancer when you do not wish to setup an external load
+ * This can be used as a software load balancer when you do not wish to set up an external load
  * balancer. Alternatives to this code are to use a dedicated hardware load balancer or using Apache
  * httpd with mod_proxy_balancer as a load balancer. See <a
  * href="http://en.wikipedia.org/wiki/Load_balancing_(computing)">Load balancing on Wikipedia</a>
@@ -81,40 +87,92 @@ import org.slf4j.MDC;
  * @since solr 8.0
  */
 public class LBHttp2SolrClient extends LBSolrClient {
-  private final Http2SolrClient httpClient;
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private final Http2SolrClient solrClient;
 
-  public LBHttp2SolrClient(Http2SolrClient httpClient, String... baseSolrUrls) {
+  /**
+   * @deprecated Use {@link LBHttp2SolrClient.Builder} instead
+   */
+  @Deprecated
+  public LBHttp2SolrClient(Http2SolrClient solrClient, String... baseSolrUrls) {
     super(Arrays.asList(baseSolrUrls));
-    this.httpClient = httpClient;
+    this.solrClient = solrClient;
+  }
+
+  private LBHttp2SolrClient(Http2SolrClient solrClient, List<String> baseSolrUrls) {
+    super(baseSolrUrls);
+    this.solrClient = solrClient;
   }
 
   @Override
   protected SolrClient getClient(String baseUrl) {
-    return httpClient;
+    return solrClient;
   }
 
+  /**
+   * Note: This setter method is <b>not thread-safe</b>.
+   *
+   * @param parser Default Response Parser chosen to parse the response if the parser were not
+   *     specified as part of the request.
+   * @see org.apache.solr.client.solrj.SolrRequest#getResponseParser()
+   * @deprecated Pass in a configured {@link Http2SolrClient} instead
+   */
+  @Deprecated
   @Override
   public void setParser(ResponseParser parser) {
     super.setParser(parser);
-    this.httpClient.setParser(parser);
+    this.solrClient.setParser(parser);
   }
 
+  @Override
+  public ResponseParser getParser() {
+    return solrClient.getParser();
+  }
+
+  /**
+   * Choose the {@link RequestWriter} to use.
+   *
+   * <p>By default, {@link BinaryRequestWriter} is used.
+   *
+   * <p>Note: This setter method is <b>not thread-safe</b>.
+   *
+   * @deprecated Pass in a configured {@link Http2SolrClient} instead
+   */
+  @Deprecated
   @Override
   public void setRequestWriter(RequestWriter writer) {
     super.setRequestWriter(writer);
-    this.httpClient.setRequestWriter(writer);
+    this.solrClient.setRequestWriter(writer);
   }
 
   @Override
+  public RequestWriter getRequestWriter() {
+    return solrClient.getRequestWriter();
+  }
+
+  public Set<String> getUrlParamNames() {
+    return solrClient.getUrlParamNames();
+  }
+
+  /**
+   * @deprecated You should instead set this on the passed in Http2SolrClient used by the Builder.
+   */
+  @Deprecated
   public void setQueryParams(Set<String> queryParams) {
-    super.setQueryParams(queryParams);
-    this.httpClient.setQueryParams(queryParams);
+    this.solrClient.setUrlParamNames(queryParams);
   }
 
-  @Override
+  /**
+   * This method should be removed as being able to add a query parameter isn't compatible with the
+   * idea that query params are an immutable property of a solr client.
+   *
+   * @deprecated you should instead set this on the passed in Http2SolrClient used by the Builder.
+   */
+  @Deprecated
   public void addQueryParams(String queryOnlyParam) {
-    super.addQueryParams(queryOnlyParam);
-    this.httpClient.setQueryParams(getQueryParams());
+    Set<String> urlParamNames = new HashSet<>(this.solrClient.getUrlParamNames());
+    urlParamNames.add(queryOnlyParam);
+    this.solrClient.setUrlParamNames(urlParamNames);
   }
 
   public Cancellable asyncReq(Req req, AsyncListener<Rsp> asyncListener) {
@@ -190,6 +248,9 @@ public class LBHttp2SolrClient extends LBSolrClient {
     void onFailure(Exception e, boolean retryReq);
   }
 
+  private static final long DELAY_WARN_THRESHOLD =
+      TimeUnit.NANOSECONDS.convert(2000, TimeUnit.MILLISECONDS);
+
   private Cancellable doRequest(
       String baseUrl,
       Req req,
@@ -204,6 +265,24 @@ public class LBHttp2SolrClient extends LBSolrClient {
             req.getRequest(),
             null,
             new AsyncListener<>() {
+              private final long requestSubmitTimeNanos = System.nanoTime();
+
+              @Override
+              public void onStart() {
+                // There should be negligible delay between request submission and actually sending
+                // the request. Here we add extra logging to notify us if this assumption is
+                // violated. See: SOLR-16099, SOLR-16129,
+                // https://github.com/fullstorydev/lucene-solr/commit/445508adb4a
+                long delayed = System.nanoTime() - requestSubmitTimeNanos;
+                if (delayed > DELAY_WARN_THRESHOLD) {
+                  log.info(
+                      "Remote shard request to {} delayed by {} milliseconds",
+                      req.servers,
+                      TimeUnit.MILLISECONDS.convert(delayed, TimeUnit.NANOSECONDS));
+                }
+                AsyncListener.super.onStart();
+              }
+
               @Override
               public void onSuccess(NamedList<Object> result) {
                 rsp.rsp = result;
@@ -257,5 +336,40 @@ public class LBHttp2SolrClient extends LBSolrClient {
                 }
               }
             });
+  }
+
+  public static class Builder {
+
+    private final Http2SolrClient http2SolrClient;
+    private final String[] baseSolrUrls;
+    private long aliveCheckIntervalMillis =
+        TimeUnit.MILLISECONDS.convert(60, TimeUnit.SECONDS); // 1 minute between checks
+
+    public Builder(Http2SolrClient http2Client, String... baseSolrUrls) {
+      this.http2SolrClient = http2Client;
+      this.baseSolrUrls = baseSolrUrls;
+    }
+
+    /**
+     * LBHttpSolrServer keeps pinging the dead servers at fixed interval to find if it is alive. Use
+     * this to set that interval
+     *
+     * @param aliveCheckInterval how often to ping for aliveness
+     */
+    public LBHttp2SolrClient.Builder setAliveCheckInterval(int aliveCheckInterval, TimeUnit unit) {
+      if (aliveCheckInterval <= 0) {
+        throw new IllegalArgumentException(
+            "Alive check interval must be " + "positive, specified value = " + aliveCheckInterval);
+      }
+      this.aliveCheckIntervalMillis = TimeUnit.MILLISECONDS.convert(aliveCheckInterval, unit);
+      return this;
+    }
+
+    public LBHttp2SolrClient build() {
+      LBHttp2SolrClient solrClient =
+          new LBHttp2SolrClient(this.http2SolrClient, Arrays.asList(this.baseSolrUrls));
+      solrClient.aliveCheckIntervalMillis = this.aliveCheckIntervalMillis;
+      return solrClient;
+    }
   }
 }

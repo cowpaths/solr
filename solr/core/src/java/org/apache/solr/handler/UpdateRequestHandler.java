@@ -36,6 +36,7 @@ import org.apache.solr.handler.loader.ContentStreamLoader;
 import org.apache.solr.handler.loader.JavabinLoader;
 import org.apache.solr.handler.loader.JsonLoader;
 import org.apache.solr.handler.loader.XMLLoader;
+import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.security.AuthorizationContext;
@@ -62,7 +63,11 @@ public class UpdateRequestHandler extends ContentStreamHandlerBase
   // NOTE: This constant is for use with the <add> XML tag, not the HTTP param with same name
   public static final String COMMIT_WITHIN = "commitWithin";
 
+  protected static final String LOCAL_HANDLER_SUFFIX = "[local]";
+
   protected Map<String, ContentStreamLoader> loaders = null;
+
+  private HandlerMetrics metricsLocal = HandlerMetrics.NO_OP;
 
   ContentStreamLoader instance =
       new ContentStreamLoader() {
@@ -121,6 +126,27 @@ public class UpdateRequestHandler extends ContentStreamHandlerBase
 
     // Since backed by a non-thread safe Map, it should not be modifiable
     loaders = Collections.unmodifiableMap(createDefaultLoaders(args));
+  }
+
+  @Override
+  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
+    super.initializeMetrics(parentContext, scope);
+    metricsLocal =
+        new HandlerMetrics(
+            solrMetricsContext, getCategory().toString(), scope + LOCAL_HANDLER_SUFFIX);
+  }
+
+  @Override
+  public HandlerMetrics getMetricsForThisRequest(SolrQueryRequest req) {
+    // this is specific to FS client, we always set DISTRIB flag for all requests going straight to
+    // the core
+    Boolean distrib = req.getParams().getBool(CommonParams.DISTRIB);
+    if (distrib != null && !distrib) {
+      return this.metricsLocal;
+    } else { // all updates not from our client (ie distrib should be null, whether it's
+      // re-distributed or not) should use this metrics
+      return this.metrics;
+    }
   }
 
   protected void setAssumeContentType(String ct) {

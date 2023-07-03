@@ -62,6 +62,7 @@ import org.apache.solr.pkg.PackageListeners;
 import org.apache.solr.pkg.SolrPackageLoader;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.schema.BloomStrField;
 import org.apache.solr.search.CursorMark;
 import org.apache.solr.search.SolrQueryTimeoutImpl;
 import org.apache.solr.search.SortSpec;
@@ -276,18 +277,23 @@ public class SearchHandler extends RequestHandlerBase
     return result;
   }
 
+  private boolean isDistrib(SolrQueryRequest req) {
+    boolean isZkAware = req.getCoreContainer().isZooKeeperAware();
+    boolean isDistrib = req.getParams().getBool(DISTRIB, isZkAware);
+    if (!isDistrib) {
+      // for back compat, a shards param with URLs like localhost:8983/solr will mean that this
+      // search is distributed.
+      final String shards = req.getParams().get(ShardParams.SHARDS);
+      isDistrib = ((shards != null) && (shards.indexOf('/') > 0));
+    }
+    return isDistrib;
+  }
+
   public ShardHandler getAndPrepShardHandler(SolrQueryRequest req, ResponseBuilder rb) {
     ShardHandler shardHandler = null;
 
     CoreContainer cc = req.getCoreContainer();
     boolean isZkAware = cc.isZooKeeperAware();
-    rb.isDistrib = req.getParams().getBool(DISTRIB, isZkAware);
-    if (!rb.isDistrib) {
-      // for back compat, a shards param with URLs like localhost:8983/solr will mean that this
-      // search is distributed.
-      final String shards = req.getParams().get(ShardParams.SHARDS);
-      rb.isDistrib = ((shards != null) && (shards.indexOf('/') > 0));
-    }
 
     if (rb.isDistrib) {
       shardHandler = shardHandlerFactory.getShardHandler();
@@ -330,16 +336,29 @@ public class SearchHandler extends RequestHandlerBase
 
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
-    if (req.getParams().getBool(ShardParams.IS_SHARD, false)) {
+    boolean isShard = req.getParams().getBool(ShardParams.IS_SHARD, false);
+    if (isShard) {
+      int purpose = req.getParams().getInt(ShardParams.SHARDS_PURPOSE, 0);
+      SolrPluginUtils.forEachRequestPurpose(
+          purpose, n -> shardPurposes.computeIfAbsent(n, name -> new Counter()).inc());
+    }
+
+    List<SearchComponent> components = getComponents();
+    ResponseBuilder rb = newResponseBuilder(req, rsp, components);
+    if (rb.requestInfo != null) {
+      rb.requestInfo.setResponseBuilder(rb);
+    }
+
+    rb.isDistrib = isDistrib(req);
+    tagRequestWithRequestId(rb);
+
+    if (isShard) {
       // log a simple message on start
       log.info("Start Forwarded Search Query");
       SolrParams filteredParams = removeVerboseParams(req.getParams());
       rsp.getToLog()
           .asShallowMap(false)
           .put("params", "{" + filteredParams + "}"); // replace "params" with the filtered version
-      int purpose = req.getParams().getInt(ShardParams.SHARDS_PURPOSE, 0);
-      SolrPluginUtils.forEachRequestPurpose(
-          purpose, n -> shardPurposes.computeIfAbsent(n, name -> new Counter()).inc());
     } else {
       // Then it is the first time this req hitting Solr - not a req distributed by another higher
       // level req.
@@ -352,14 +371,6 @@ public class SearchHandler extends RequestHandlerBase
         log.info("Start External Search Query: {}", req.getParamString());
       }
     }
-
-    List<SearchComponent> components = getComponents();
-    ResponseBuilder rb = newResponseBuilder(req, rsp, components);
-    if (rb.requestInfo != null) {
-      rb.requestInfo.setResponseBuilder(rb);
-    }
-
-    tagRequestWithRequestId(rb);
 
     boolean dbg = req.getParams().getBool(CommonParams.DEBUG_QUERY, false);
     rb.setDebug(dbg);
@@ -431,6 +442,7 @@ public class SearchHandler extends RequestHandlerBase
       // a normal non-distributed request
 
       SolrQueryTimeoutImpl.set(req);
+      BloomStrField.init(req);
       try {
         // The semantics of debugging vs not debugging are different enough that
         // it makes sense to have two control loops

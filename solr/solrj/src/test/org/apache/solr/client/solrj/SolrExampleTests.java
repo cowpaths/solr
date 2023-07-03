@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -571,6 +572,79 @@ public abstract class SolrExampleTests extends SolrExampleTestsBase {
     assertEquals(0, out.get(1).size());
   }
 
+  @Test
+  public void testMatchAllPaging() throws Exception {
+    SolrClient client = getSolrClient();
+
+    // Empty the database...
+    client.deleteByQuery("*:*"); // delete everything!
+    if (random().nextBoolean()) {
+      client.commit();
+    }
+    // Add eleven docs
+    List<SolrInputDocument> docs = new ArrayList<>();
+    final int docsTotal = CommonParams.ROWS_DEFAULT + 1;
+    for (int i = 0; i < docsTotal; i++) {
+      SolrInputDocument doc = new SolrInputDocument();
+      doc.addField("id", "id" + i);
+      doc.addField("name", "doc" + i);
+      doc.addField("price", "" + i);
+      docs.add(doc);
+      if (rarely()) {
+        client.add(docs);
+        client.commit();
+        docs.clear();
+      }
+    }
+    client.add(docs);
+    if (random().nextBoolean()) {
+      client.commit();
+    } else {
+      client.optimize();
+    }
+    final List<String> sorts = Arrays.asList("_docid_", "id", "name", "price", null);
+    Collections.shuffle(sorts, random());
+    final List<Integer> starts =
+        Arrays.asList(0, 1, 2, CommonParams.ROWS_DEFAULT, docsTotal, CommonParams.ROWS_DEFAULT + 2);
+    Collections.shuffle(starts, random());
+    final List<String> queries = Arrays.asList("*:*", "id:[* TO *]", "{!prefix f=name}doc");
+    Collections.shuffle(queries, random());
+    for (String queryVal : queries) {
+      for (String sort : sorts) {
+        if (rarely()) {
+          continue; // shortcut to run faster
+        }
+        for (int start : starts) {
+          final SolrQuery query = new SolrQuery(queryVal);
+          if (sort != null) {
+            query.setSort(
+                sort, random().nextBoolean() ? SolrQuery.ORDER.asc : SolrQuery.ORDER.desc);
+          }
+          if (start > 0 || random().nextBoolean()) {
+            query.setStart(start);
+          }
+          if (usually()) {
+            query.setRows(CommonParams.ROWS_DEFAULT);
+          }
+          SolrDocumentList results = client.query(query).getResults();
+          assertEquals(docsTotal, results.getNumFound());
+          assertEquals(
+              "page from " + start,
+              Math.max(Math.min(CommonParams.ROWS_DEFAULT, docsTotal - start), 0),
+              results.size());
+          for (SolrDocument doc : results) {
+            assertTrue(doc.containsKey("id"));
+            assertTrue(doc.containsKey("name"));
+            assertTrue(doc.containsKey("price"));
+          }
+          if (rarely()) {
+            break; // shortcut to run faster
+          }
+        }
+      }
+    }
+  }
+
   private String randomTestString(int maxLength) {
     // we can't just use _TestUtil.randomUnicodeString() or we might get 0xfffe etc
     // (considered invalid by XML)
@@ -599,25 +673,9 @@ public abstract class SolrExampleTests extends SolrExampleTestsBase {
     Random random = random();
     int numIterations = atLeast(3);
 
-    SolrClient client = getSolrClient();
+    try (SolrClient client = getSolrClient()) {
 
-    // save the old parser, so we can set it back.
-    ResponseParser oldParser = null;
-    if (client instanceof HttpSolrClient) {
-      HttpSolrClient httpSolrClient = (HttpSolrClient) client;
-      oldParser = httpSolrClient.getParser();
-    }
-
-    try {
       for (int iteration = 0; iteration < numIterations; iteration++) {
-        // choose format
-        if (client instanceof HttpSolrClient) {
-          if (random.nextBoolean()) {
-            ((HttpSolrClient) client).setParser(new BinaryResponseParser());
-          } else {
-            ((HttpSolrClient) client).setParser(new XMLResponseParser());
-          }
-        }
 
         int numDocs = TestUtil.nextInt(random(), 1, 10 * RANDOM_MULTIPLIER);
 
@@ -647,11 +705,6 @@ public abstract class SolrExampleTests extends SolrExampleTestsBase {
           String actual = (String) rsp.getResults().get(i).getFieldValue("unicode_s");
           assertEquals(expected, actual);
         }
-      }
-    } finally {
-      if (oldParser != null) {
-        // set the old parser back
-        ((HttpSolrClient) client).setParser(oldParser);
       }
     }
   }

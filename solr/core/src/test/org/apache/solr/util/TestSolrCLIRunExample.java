@@ -40,12 +40,12 @@ import org.apache.lucene.tests.util.LuceneTestCase;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.embedded.JettyConfig;
-import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.embedded.JettyConfig;
+import org.apache.solr.embedded.JettySolrRunner;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -322,6 +322,12 @@ public class TestSolrCLIRunExample extends SolrTestCaseJ4 {
   @LuceneTestCase.Nightly
   public void testSchemalessExample() throws Exception {
     testExample("schemaless");
+  }
+
+  @Test
+  @LuceneTestCase.Nightly
+  public void testFilmsExample() throws Exception {
+    testExample("films");
   }
 
   protected void testExample(String exampleName) throws Exception {

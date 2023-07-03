@@ -546,7 +546,7 @@ public class IndexFetcher {
       }
 
       if (latestVersion == 0L) {
-        if (commit.getGeneration() != 0) {
+        if (IndexDeletionPolicyWrapper.getCommitTimestamp(commit) != 0L) {
           // since we won't get the files for an empty index,
           // we just clear ours and commit
           log.info("New index in Leader. Deleting mine...");
@@ -843,7 +843,7 @@ public class IndexFetcher {
       markReplicationStop();
       dirFileFetcher = null;
       localFileFetcher = null;
-      if (fsyncService != null && !fsyncService.isShutdown()) fsyncService.shutdown();
+      if (fsyncService != null && !ExecutorUtil.isShutdown(fsyncService)) fsyncService.shutdown();
       fsyncService = null;
       stop = false;
       fsyncException = null;
@@ -900,7 +900,7 @@ public class IndexFetcher {
    * terminate the fsync service and wait for all the tasks to complete. If it is already terminated
    */
   private void terminateAndWaitFsyncService() throws Exception {
-    if (fsyncService.isTerminated()) return;
+    if (ExecutorUtil.isTerminated(fsyncService)) return;
     fsyncService.shutdown();
     // give a long wait say 1 hr
     fsyncService.awaitTermination(3600, TimeUnit.SECONDS);

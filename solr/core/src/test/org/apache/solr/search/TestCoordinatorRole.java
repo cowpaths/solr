@@ -21,11 +21,20 @@ import static org.apache.solr.common.params.CommonParams.OMIT_HEADER;
 import static org.apache.solr.common.params.CommonParams.TRUE;
 
 import java.lang.invoke.MethodHandles;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -43,6 +52,7 @@ import org.apache.solr.client.solrj.impl.Http2SolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.client.solrj.response.CollectionAdminResponse;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
@@ -561,6 +571,72 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
 
       executorService.shutdown();
       executorService.awaitTermination(10, TimeUnit.SECONDS);
+    } finally {
+      cluster.shutdown();
+    }
+  }
+
+
+  public void testConfigset() throws Exception {
+    final int DATA_NODE_COUNT = 1;
+    MiniSolrCloudCluster cluster =
+            configureCluster(DATA_NODE_COUNT)
+                    .addConfig("conf1", configset("cloud-minimal"))
+                    .addConfig("conf2", configset("cache-control")).configure();
+
+
+    List<String> dataNodes = cluster.getJettySolrRunners().stream().map(JettySolrRunner::getNodeName).collect(Collectors.toUnmodifiableList());
+
+    try {
+      CloudSolrClient client = cluster.getSolrClient();
+
+      CollectionAdminRequest.createCollection("c1", "conf1", 2, 1)
+              .process(cluster.getSolrClient());
+      cluster.waitForActiveCollection("c1", 2, 2);
+      CollectionAdminRequest.createCollection("c2", "conf2", 2, 1).setCreateNodeSet(String.join(",", dataNodes)) //only put data onto the 2 data nodes
+              .process(cluster.getSolrClient());
+      cluster.waitForActiveCollection("c2", 2, 2);
+
+      System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
+      JettySolrRunner coordinatorJetty;
+      try {
+        coordinatorJetty = cluster.startJettySolrRunner();
+      } finally {
+        System.clearProperty(NodeRoles.NODE_ROLES_PROP);
+      }
+
+
+//      CollectionAdminResponse response =
+//                CollectionAdminRequest.collectionStatus("c1")
+//                        .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+//                        .process(client, "c1");
+//      assertEquals("conf1", ((Map) response.getResponse().findRecursive("c1", "properties")).get("configName"));
+//      response =
+//              CollectionAdminRequest.collectionStatus("c2")
+//                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+//                      .process(client, "c2");
+//      assertEquals("conf2", ((Map) response.getResponse().findRecursive("c2", "properties")).get("configName"));
+      QueryResponse r =
+              new QueryRequest(new SolrQuery("*:*"))
+                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+                      .process(client, "c1");
+
+      //Tricky to test configset, since operation such as collection status would direct it to the OS node.
+      //So we use query and check the cache response header which is determined by the solr-config.xml in the configset
+      //However using solr client would drop cache respons header hence we need to use plain java HttpURLConnection
+      URL url = new URL(coordinatorJetty.getBaseUrl() + "/c1/select?q=*:*");
+      HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+      urlConnection.connect();
+
+      //conf1 has no cache-control
+      assertNull(urlConnection.getHeaderField("cache-control"));
+
+      url = new URL(coordinatorJetty.getBaseUrl() + "/c2/select?q=*:*");
+      urlConnection = (HttpURLConnection) url.openConnection();
+      urlConnection.connect();
+
+      //conf2 has cache-control defined
+      assertTrue(urlConnection.getHeaderField("cache-control").contains("max-age=30"));
     } finally {
       cluster.shutdown();
     }

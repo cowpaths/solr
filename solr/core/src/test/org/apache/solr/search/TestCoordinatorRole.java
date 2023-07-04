@@ -661,6 +661,7 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
 
       CollectionAdminRequest.deleteCollection(TEST_COLLECTION).process(client);
       zkStateReader.waitForState(TEST_COLLECTION, 30, TimeUnit.SECONDS, Objects::isNull);
+      assertNull(zkStateReader.getCollection(TEST_COLLECTION)); //double-check the state
 
       //watch should be removed after collection deletion
       assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));

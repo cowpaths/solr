@@ -33,7 +33,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
@@ -44,7 +43,6 @@ import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
-import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
@@ -485,14 +483,14 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
   public void testWatch() throws Exception {
     final int DATA_NODE_COUNT = 2;
     MiniSolrCloudCluster cluster =
-            configureCluster(DATA_NODE_COUNT)
-                    .addConfig("conf1", configset("cloud-minimal")).configure();
+        configureCluster(DATA_NODE_COUNT)
+            .addConfig("conf1", configset("cloud-minimal"))
+            .configure();
     final String TEST_COLLECTION = "c1";
 
     try {
       CloudSolrClient client = cluster.getSolrClient();
-      CollectionAdminRequest.createCollection(TEST_COLLECTION, "conf1", 1, 2)
-              .process(client);
+      CollectionAdminRequest.createCollection(TEST_COLLECTION, "conf1", 1, 2).process(client);
       cluster.waitForActiveCollection(TEST_COLLECTION, 1, 2);
       System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
       JettySolrRunner coordinatorJetty;
@@ -502,28 +500,29 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
         System.clearProperty(NodeRoles.NODE_ROLES_PROP);
       }
 
-      ZkStateReader zkStateReader = coordinatorJetty.getCoreContainer().getZkController().getZkStateReader();
+      ZkStateReader zkStateReader =
+          coordinatorJetty.getCoreContainer().getZkController().getZkStateReader();
       ZkStateReaderAccessor zkWatchAccessor = new ZkStateReaderAccessor(zkStateReader);
 
-      //no watch at first
+      // no watch at first
       assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));
       new QueryRequest(new SolrQuery("*:*"))
-              .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
-              .process(client, TEST_COLLECTION);
+          .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+          .process(client, TEST_COLLECTION);
 
-      //now it should be watching it after the query
+      // now it should be watching it after the query
       assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));
 
       CollectionAdminRequest.deleteReplica(TEST_COLLECTION, "shard1", 1).process(client);
       cluster.waitForActiveCollection(TEST_COLLECTION, 1, 1);
 
-      //still one replica left, should not remove the watch
+      // still one replica left, should not remove the watch
       assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));
 
       CollectionAdminRequest.deleteCollection(TEST_COLLECTION).process(client);
       zkStateReader.waitForState(TEST_COLLECTION, 30, TimeUnit.SECONDS, Objects::isNull);
 
-      //watch should be removed after collection deletion
+      // watch should be removed after collection deletion
       assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));
     } finally {
       cluster.shutdown();

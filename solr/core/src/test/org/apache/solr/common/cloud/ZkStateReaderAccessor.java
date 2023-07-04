@@ -34,5 +34,4 @@ public class ZkStateReaderAccessor {
   public Set<String> getWatchedCollections() {
     return Collections.unmodifiableSet(zkStateReader.getCollectionWatches().keySet());
   }
-
 }

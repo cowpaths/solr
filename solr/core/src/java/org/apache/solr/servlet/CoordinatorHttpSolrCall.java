@@ -112,7 +112,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         core = solrCall.getCoreByCollection(syntheticCollectionName, isPreferLeader);
         if (core != null) {
           factory.collectionVsCoreNameMapping.put(collectionName, core.getName());
-          solrCall.cores.getZkController().getZkStateReader().registerCore(collectionName);
+
+          //only remove on collection deletion, since watch from coordinator is collection specific
+          solrCall.cores.getZkController().getZkStateReader().registerDocCollectionWatcher(collectionName, collection -> collection == null);
           if (log.isDebugEnabled()) {
             log.debug("coordinator node, returns synthetic core: {}", core.getName());
           }

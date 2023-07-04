@@ -605,22 +605,6 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
         System.clearProperty(NodeRoles.NODE_ROLES_PROP);
       }
 
-
-//      CollectionAdminResponse response =
-//                CollectionAdminRequest.collectionStatus("c1")
-//                        .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
-//                        .process(client, "c1");
-//      assertEquals("conf1", ((Map) response.getResponse().findRecursive("c1", "properties")).get("configName"));
-//      response =
-//              CollectionAdminRequest.collectionStatus("c2")
-//                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
-//                      .process(client, "c2");
-//      assertEquals("conf2", ((Map) response.getResponse().findRecursive("c2", "properties")).get("configName"));
-      QueryResponse r =
-              new QueryRequest(new SolrQuery("*:*"))
-                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
-                      .process(client, "c1");
-
       //Tricky to test configset, since operation such as collection status would direct it to the OS node.
       //So we use query and check the cache response header which is determined by the solr-config.xml in the configset
       //However using solr client would drop cache respons header hence we need to use plain java HttpURLConnection

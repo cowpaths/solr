@@ -118,7 +118,16 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
               .cores
               .getZkController()
               .getZkStateReader()
-              .registerDocCollectionWatcher(collectionName, collection -> collection == null);
+              .registerDocCollectionWatcher(
+                  collectionName,
+                  collection -> {
+                    if (collection == null) {
+                      factory.collectionVsCoreNameMapping.remove(collectionName);
+                      return true; // return true so watch will be removed
+                    } else {
+                      return false;
+                    }
+                  });
           if (log.isDebugEnabled()) {
             log.debug("coordinator node, returns synthetic core: {}", core.getName());
           }

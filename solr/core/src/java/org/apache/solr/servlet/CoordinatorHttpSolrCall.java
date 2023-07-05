@@ -77,7 +77,7 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       Factory factory, HttpSolrCall solrCall, String collectionName, boolean isPreferLeader) {
     String syntheticCoreName = factory.collectionVsCoreNameMapping.get(collectionName);
     if (syntheticCoreName != null) {
-      SolrCore syntheticCore =  solrCall.cores.getCore(syntheticCoreName);
+      SolrCore syntheticCore = solrCall.cores.getCore(syntheticCoreName);
       setMDCLoggingContext(collectionName);
       return syntheticCore;
     } else {
@@ -128,13 +128,13 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
   }
 
   /**
-   * Overrides the MDC context as the core set was synthetic core, which does not reflect the collection
-   * being operated on
+   * Overrides the MDC context as the core set was synthetic core, which does not reflect the
+   * collection being operated on
    */
   private static void setMDCLoggingContext(String collectionName) {
     MDCLoggingContext.setCollection(collectionName);
 
-    //below is irrelevant for call to coordinator
+    // below is irrelevant for call to coordinator
     MDCLoggingContext.setCoreName(null);
     MDCLoggingContext.setShard(null);
     MDCLoggingContext.setCoreName(null);

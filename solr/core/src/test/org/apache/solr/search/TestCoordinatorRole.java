@@ -632,13 +632,14 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
     MiniSolrCloudCluster cluster =
             configureCluster(DATA_NODE_COUNT)
                     .addConfig("conf1", configset("cloud-minimal")).configure();
-    final String TEST_COLLECTION = "c1";
+    final String TEST_COLLECTION_1 = "c1";
+    final String TEST_COLLECTION_2 = "c2";
 
     try {
       CloudSolrClient client = cluster.getSolrClient();
-      CollectionAdminRequest.createCollection(TEST_COLLECTION, "conf1", 2, 1)
+      CollectionAdminRequest.createCollection(TEST_COLLECTION_1, "conf1", 2, 1)
               .process(client);
-      cluster.waitForActiveCollection(TEST_COLLECTION, 2, 2);
+      cluster.waitForActiveCollection(TEST_COLLECTION_1, 2, 2);
       System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
       JettySolrRunner coordinatorJetty;
       try {
@@ -651,20 +652,43 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       ZkStateReaderAccessor zkWatchAccessor = new ZkStateReaderAccessor(zkStateReader);
 
       //no watch at first
-      assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));
+      assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_1));
       new QueryRequest(new SolrQuery("*:*"))
               .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
-              .process(client, TEST_COLLECTION);
+              .process(client, TEST_COLLECTION_1);
 
       //now it should be watching it after the query
-      assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));
+      assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_1));
 
-      CollectionAdminRequest.deleteCollection(TEST_COLLECTION).process(client);
-      zkStateReader.waitForState(TEST_COLLECTION, 30, TimeUnit.SECONDS, Objects::isNull);
-      assertNull(zkStateReader.getCollection(TEST_COLLECTION)); //double-check the state
+      //add another collection
+      CollectionAdminRequest.createCollection(TEST_COLLECTION_2, "conf1", 2, 1)
+              .process(client);
+      cluster.waitForActiveCollection(TEST_COLLECTION_2, 2, 2);
+      new QueryRequest(new SolrQuery("*:*"))
+              .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+              .process(client, TEST_COLLECTION_2);
+      //watch both collections
+      assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_1));
+      assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_2));
 
-      //watch should be removed after collection deletion
-      assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION));
+      //now delete c1 and ensure it's cleared from various logic
+      CollectionAdminRequest.deleteCollection(TEST_COLLECTION_1).process(client);
+      zkStateReader.waitForState(TEST_COLLECTION_1, 30, TimeUnit.SECONDS, Objects::isNull);
+      assertNull(zkStateReader.getCollection(TEST_COLLECTION_1)); // check the cluster state
+
+      // ensure querying throws exception
+      assertExceptionThrownWithMessageContaining(
+              SolrException.class,
+              List.of("Collection not found"),
+              () ->
+                      new QueryRequest(new SolrQuery("*:*"))
+                              .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+                              .process(client, TEST_COLLECTION_1));
+
+      //watch should be removed after c1 deletion
+      assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_1));
+      //still watching c2
+      assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_2));
     } finally {
       cluster.shutdown();
     }

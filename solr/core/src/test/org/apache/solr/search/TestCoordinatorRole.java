@@ -63,6 +63,7 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.cloud.ZkStateReaderAccessor;
 import org.apache.solr.common.params.CommonParams;
@@ -689,6 +690,141 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       assertTrue(!zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_1));
       //still watching c2
       assertTrue(zkWatchAccessor.getWatchedCollections().contains(TEST_COLLECTION_2));
+    } finally {
+      cluster.shutdown();
+    }
+  }
+
+  public void testSplitShard() throws Exception {
+    final int DATA_NODE_COUNT = 1;
+    MiniSolrCloudCluster cluster =
+            configureCluster(DATA_NODE_COUNT)
+                    .addConfig("conf1", configset("cloud-minimal")).configure();
+
+    try {
+
+      final String COLLECTION_NAME = "c1";
+      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf1", 1, 1)
+              .process(cluster.getSolrClient());
+      cluster.waitForActiveCollection(COLLECTION_NAME, 1, 1);
+
+      int DOC_PER_COLLECTION_COUNT = 1000;
+      UpdateRequest ur = new UpdateRequest();
+      for (int i = 0; i < DOC_PER_COLLECTION_COUNT; i++) {
+        SolrInputDocument doc = new SolrInputDocument();
+        doc.addField("id", COLLECTION_NAME+"-"+i);
+        ur.add(doc);
+      }
+      CloudSolrClient client = cluster.getSolrClient();
+      ur.commit(client, COLLECTION_NAME);
+
+      System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
+      JettySolrRunner coordinatorJetty;
+      try {
+        coordinatorJetty = cluster.startJettySolrRunner();
+      } finally {
+        System.clearProperty(NodeRoles.NODE_ROLES_PROP);
+      }
+
+      QueryResponse response =
+              new QueryRequest(new SolrQuery("*:*"))
+                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+                      .process(client, COLLECTION_NAME);
+
+      assertEquals(DOC_PER_COLLECTION_COUNT, response.getResults().getNumFound());
+
+      //now split the shard
+      CollectionAdminRequest.splitShard(COLLECTION_NAME).setShardName("shard1").process(client);
+      waitForState("Failed to wait for child shards after split", COLLECTION_NAME, (liveNodes, collectionState) ->
+        collectionState.getSlice("shard1_0") != null
+        && collectionState.getSlice("shard1_0").getState() == Slice.State.ACTIVE
+        && collectionState.getSlice("shard1_1") != null
+        && collectionState.getSlice("shard1_1").getState() == Slice.State.ACTIVE
+      );
+
+      //delete the parent shard
+      CollectionAdminRequest.deleteShard(COLLECTION_NAME, "shard1").process(client);
+      waitForState("Parent shard is not yet deleted after split", COLLECTION_NAME, (liveNodes, collectionState) -> collectionState.getSlice("shard1") == null);
+
+      response =
+              new QueryRequest(new SolrQuery("*:*"))
+                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+                      .process(client, COLLECTION_NAME);
+
+      assertEquals(DOC_PER_COLLECTION_COUNT, response.getResults().getNumFound());
+    } finally {
+      cluster.shutdown();
+    }
+  }
+
+
+  public void testMoveReplica() throws Exception {
+    final int DATA_NODE_COUNT = 2;
+    MiniSolrCloudCluster cluster =
+            configureCluster(DATA_NODE_COUNT)
+                    .addConfig("conf1", configset("cloud-minimal")).configure();
+
+    List<String> dataNodes = cluster.getJettySolrRunners().stream().map(JettySolrRunner::getNodeName).collect(Collectors.toUnmodifiableList());
+    try {
+
+      final String COLLECTION_NAME = "c1";
+      String fromNode = dataNodes.get(0); //put the shard on first data node
+      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf1", 1, 1).setCreateNodeSet(fromNode)
+              .process(cluster.getSolrClient());
+      //ensure replica is placed on the expected node
+      waitForState("Cannot find replica on first node yet", COLLECTION_NAME, (liveNodes, collectionState) -> {
+                if (collectionState.getReplicas().size() == 1) {
+                  Replica replica = collectionState.getReplicas().get(0);
+                  return fromNode.equals(replica.getNodeName()) && replica.getState() == Replica.State.ACTIVE;
+                }
+                return false;
+              }
+      );
+
+      int DOC_PER_COLLECTION_COUNT = 1000;
+      UpdateRequest ur = new UpdateRequest();
+      for (int i = 0; i < DOC_PER_COLLECTION_COUNT; i++) {
+        SolrInputDocument doc = new SolrInputDocument();
+        doc.addField("id", COLLECTION_NAME+"-"+i);
+        ur.add(doc);
+      }
+      CloudSolrClient client = cluster.getSolrClient();
+      ur.commit(client, COLLECTION_NAME);
+
+      System.setProperty(NodeRoles.NODE_ROLES_PROP, "coordinator:on");
+      JettySolrRunner coordinatorJetty;
+      try {
+        coordinatorJetty = cluster.startJettySolrRunner();
+      } finally {
+        System.clearProperty(NodeRoles.NODE_ROLES_PROP);
+      }
+
+      QueryResponse response =
+              new QueryRequest(new SolrQuery("*:*"))
+                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+                      .process(client, COLLECTION_NAME);
+
+      assertEquals(DOC_PER_COLLECTION_COUNT, response.getResults().getNumFound());
+
+      //now move the shard/replica
+      String replicaName = getCollectionState(COLLECTION_NAME).getReplicas().get(0).getName();
+      String toNodeName = dataNodes.get(1);
+      CollectionAdminRequest.moveReplica(COLLECTION_NAME, replicaName, toNodeName).process(client);
+      waitForState("Cannot find replica on second node yet after repliac move", COLLECTION_NAME, (liveNodes, collectionState) -> {
+                if (collectionState.getReplicas().size() == 1) {
+                  Replica replica = collectionState.getReplicas().get(0);
+                  return toNodeName.equals(replica.getNodeName()) && replica.getState() == Replica.State.ACTIVE;
+                }
+                return false;
+              }
+      );
+
+      response =
+              new QueryRequest(new SolrQuery("*:*"))
+                      .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))
+                      .process(client, COLLECTION_NAME);
+
+      assertEquals(DOC_PER_COLLECTION_COUNT, response.getResults().getNumFound());
     } finally {
       cluster.shutdown();
     }

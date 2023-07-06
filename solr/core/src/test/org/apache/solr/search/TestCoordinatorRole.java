@@ -819,6 +819,11 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
               }
       );
 
+      //We must stop the first node to ensure that query directs to the correct node from coordinator.
+      //In case if coordinator node has the wrong info (replica on first node), it might still return valid result if
+      //we do not stop the first node as first node might forward the query to second node.
+      cluster.getJettySolrRunners().get(0).stop();
+
       response =
               new QueryRequest(new SolrQuery("*:*"))
                       .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))

@@ -500,7 +500,7 @@ public class ZkStateReader implements SolrCloseable {
             }
             prs = PerReplicaStatesFetcher.fetch(collectionPath, zkClient, null);
           }
-          collectionState = collectionState.setPerReplicaStates(prs);
+          collectionState = collectionState.copyWith(prs);
           collectionWatches.updateDocCollection(coll, collectionState);
           synchronized (getUpdateLock()) {
             constructState(Collections.singleton(coll));

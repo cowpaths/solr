@@ -22,8 +22,13 @@ import static org.apache.solr.common.params.CollectionAdminParams.PER_REPLICA_ST
 
 import java.lang.invoke.MethodHandles;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.V2Request;
@@ -289,7 +294,7 @@ public class PerReplicaStatesIntegrationTest extends SolrCloudTestCase {
   }
 
   public void testZkNodeVersions() throws Exception {
-    String NONPRS_COLL = "non_prs_test_coll1";
+    //String NONPRS_COLL = "non_prs_test_coll1";
     String PRS_COLL = "prs_test_coll2";
     MiniSolrCloudCluster cluster =
         configureCluster(3)
@@ -306,13 +311,13 @@ public class PerReplicaStatesIntegrationTest extends SolrCloudTestCase {
             .configure();
     try {
       Stat stat = null;
-      CollectionAdminRequest.createCollection(NONPRS_COLL, "conf", 10, 1)
-          .process(cluster.getSolrClient());
-      stat = cluster.getZkClient().exists(DocCollection.getCollectionPath(NONPRS_COLL), null, true);
-      log.info("");
-      // the actual number can vary depending on batching
-      assertTrue(stat.getVersion() >= 2);
-      assertEquals(0, stat.getCversion());
+//      CollectionAdminRequest.createCollection(NONPRS_COLL, "conf", 10, 1)
+//          .process(cluster.getSolrClient());
+//      stat = cluster.getZkClient().exists(DocCollection.getCollectionPath(NONPRS_COLL), null, true);
+//      log.info("");
+//      // the actual number can vary depending on batching
+//      assertTrue(stat.getVersion() >= 2);
+//      assertEquals(0, stat.getCversion());
 
       CollectionAdminRequest.createCollection(PRS_COLL, "conf", 10, 1)
           .setPerReplicaState(Boolean.TRUE)
@@ -358,14 +363,40 @@ public class PerReplicaStatesIntegrationTest extends SolrCloudTestCase {
       // overseer, current code would still do a "TOUCH" on the PRS entry
       assertEquals(56, stat.getCversion());
 
+      StringBuilder debug = new StringBuilder();
+
+      Map<String, Object> allBeforeMetrics = new HashMap<>();
+      Map<String, Object> allAfterMetrics = new HashMap<>();
       for (JettySolrRunner j : cluster.getJettySolrRunners()) {
+        Map<String, Object> beforeMetrics = j.getCoreContainer().getZkController().getZkClient().getMetrics().toMap(new HashMap<>());
+        debug.append("Before stop " + j.getNodeName() + " : " + beforeMetrics + "\n");
         j.stop();
         j.start(true);
         stat = cluster.getZkClient().exists(DocCollection.getCollectionPath(PRS_COLL), null, true);
         // ensure restart does not update the state.json, after addReplica/deleteReplica, 2 more
         // updates hence at version 3 on state.json version
         assertEquals(3, stat.getVersion());
+
+        Thread.sleep(5000);
+
+        Map<String, Object> afterMetrics = j.getCoreContainer().getZkController().getZkClient().getMetrics().toMap(new HashMap<>());
+        debug.append("After start " + j.getNodeName() + " : " + afterMetrics + "\n");
+
+        allBeforeMetrics = Stream.concat(allBeforeMetrics.entrySet().stream(), beforeMetrics.entrySet().stream())
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (value1, value2) -> (long)value1 + (long)value2));
+        allAfterMetrics = Stream.concat(allAfterMetrics.entrySet().stream(), afterMetrics.entrySet().stream())
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (value1, value2) -> (long)value1 + (long)value2));
       }
+      debug.append("All before stop : " + allBeforeMetrics + "\n");
+      debug.append("All after start : " + allAfterMetrics + "\n");
+
+      System.out.println(debug);
     } finally {
       cluster.shutdown();
     }

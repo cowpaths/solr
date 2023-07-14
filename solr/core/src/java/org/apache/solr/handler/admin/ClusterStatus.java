@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,7 @@ import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.servlet.CoordinatorHttpSolrCall;
 import org.apache.zookeeper.KeeperException;
 
 public class ClusterStatus {
@@ -95,6 +97,28 @@ public class ClusterStatus {
     collection = props.getStr(ZkStateReader.COLLECTION_PROP);
   }
 
+  /**
+   * System collections are created and managed by the system without a user requesting for it . Our
+   * public APIs should not list them
+   */
+  private Map<String, DocCollection> filterSystemCollections(
+      Map<String, DocCollection> allCollections) {
+
+    ArrayList<String> syntheticCollections = new ArrayList<>(0);
+    for (String c : allCollections.keySet()) {
+      if (c.startsWith(CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX)) {
+        syntheticCollections.add(c);
+      }
+    }
+    if (!syntheticCollections.isEmpty()) {
+      allCollections = new LinkedHashMap<>(allCollections);
+      for (String c : syntheticCollections) {
+        allCollections.remove(c);
+      }
+    }
+    return allCollections;
+  }
+
   public void getClusterStatus(NamedList<Object> results)
       throws KeeperException, InterruptedException {
     // read aliases
@@ -128,6 +152,7 @@ public class ClusterStatus {
     Map<String, DocCollection> collectionsMap = null;
     if (collection == null) {
       collectionsMap = clusterState.getCollectionsMap();
+      collectionsMap = filterSystemCollections(collectionsMap);
     } else {
       collectionsMap =
           Collections.singletonMap(collection, clusterState.getCollectionOrNull(collection));

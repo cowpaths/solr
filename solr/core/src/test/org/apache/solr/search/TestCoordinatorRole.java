@@ -40,6 +40,7 @@ import org.apache.solr.client.solrj.impl.Http2SolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.client.solrj.response.CollectionAdminResponse;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
@@ -106,6 +107,9 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       expectedNodes.add(coordinatorJetty.getNodeName());
       collection.forEachReplica((s, replica) -> expectedNodes.remove(replica.getNodeName()));
       assertTrue(expectedNodes.isEmpty());
+      CollectionAdminRequest.ClusterStatus status = new CollectionAdminRequest.ClusterStatus();
+      CollectionAdminResponse resp = status.process(cluster.getSolrClient());
+      assertNull(resp._get("collections/" + SYNTHETIC_COLLECTION, null));
     } finally {
       cluster.shutdown();
     }

@@ -56,7 +56,7 @@ public class PerReplicaStates implements ReflectMapWriter {
   @JsonProperty public final String path;
 
   // the child version of that znode
-  @JsonProperty public final int cversion;
+  @JsonProperty public final Integer cversion;
 
   // states of individual replicas
   @JsonProperty public final SimpleMap<State> states;
@@ -70,7 +70,7 @@ public class PerReplicaStates implements ReflectMapWriter {
    * @param cversion the current child version of the znode
    * @param states the per-replica states (the list of all child nodes)
    */
-  public PerReplicaStates(String path, int cversion, List<String> states) {
+  public PerReplicaStates(String path, Integer cversion, List<String> states) {
     this.path = path;
     this.cversion = cversion;
     Map<String, State> tmp = new LinkedHashMap<>();
@@ -86,6 +86,32 @@ public class PerReplicaStates implements ReflectMapWriter {
       }
     }
     this.states = new WrappedSimpleMap<>(tmp);
+  }
+
+  private PerReplicaStates(String path, Integer cversion, Map<String, State> states) {
+    this.path = path;
+    this.cversion = cversion;
+    this.states = new WrappedSimpleMap<>(states);
+  }
+
+  public PerReplicaStates withState(String stateString, boolean isCreate) {
+    State newState = State.parse(stateString);
+    Map<String, State> stateMap = new LinkedHashMap<>(this.states.asMap());
+    String replica = newState.replica;
+    State existingState = stateMap.get(replica);
+    if (isCreate) {
+      if (existingState != null) {
+        newState = existingState.insert(newState);
+      }
+      stateMap.put(replica, newState);
+    } else {
+      if (existingState != null && existingState.version <= newState.version) {
+        stateMap.remove(replica);
+      } //else we can just ignore it...//TODO Not sure what duplicate is used for...
+    }
+
+    return new PerReplicaStates(path, null, stateMap); //we do not know cversion here
+
   }
 
   /** Check and return if all replicas are ACTIVE */
@@ -155,7 +181,7 @@ public class PerReplicaStates implements ReflectMapWriter {
   @Override
   public String toString() {
     StringBuilder sb =
-        new StringBuilder("{").append(path).append("/[").append(cversion).append("]: [");
+        new StringBuilder("{").append(path).append(" : [");
     appendStates(sb);
     return sb.append("]}").toString();
   }

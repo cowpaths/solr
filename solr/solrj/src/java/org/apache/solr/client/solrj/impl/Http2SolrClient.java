@@ -947,7 +947,7 @@ public class Http2SolrClient extends SolrClient {
   }
 
   private static class AsyncTracker {
-    private static final int MAX_OUTSTANDING_REQUESTS = 1000;
+    private static final int MAX_OUTSTANDING_REQUESTS = 10000;
 
     // wait for async requests
     private final Phaser phaser;

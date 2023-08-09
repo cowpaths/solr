@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -522,6 +523,7 @@ public class SearchHandler extends RequestHandlerBase
             // presume we'll get a response from each shard we send to
             sreq.responses = new ArrayList<>(sreq.actualShards.length);
 
+            randomizeStringArray(sreq.actualShards);
             // TODO: map from shard to address[]
             for (String shard : sreq.actualShards) {
               ModifiableSolrParams params = new ModifiableSolrParams(sreq.params);
@@ -637,6 +639,20 @@ public class SearchHandler extends RequestHandlerBase
           pos != -1 ? rb.shortCircuitedURL.substring(pos + 3) : rb.shortCircuitedURL;
       shardInfo.add(shardInfoName, nl);
       rsp.getValues().add(ShardParams.SHARDS_INFO, shardInfo);
+    }
+  }
+
+  private static void randomizeStringArray(String[] array) {
+    Random random = new Random();
+
+    for (int i = array.length - 1; i > 0; i--) {
+      // Generate a random index between 0 and i
+      int j = random.nextInt(i + 1);
+
+      // Swap elements at indices i and j
+      String temp = array[i];
+      array[i] = array[j];
+      array[j] = temp;
     }
   }
 

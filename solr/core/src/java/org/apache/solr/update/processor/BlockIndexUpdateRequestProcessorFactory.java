@@ -59,11 +59,11 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
       if (cmd.solrDoc != null) {
         String kind = (String) cmd.solrDoc.getFieldValue("Kind");
         if ("session".equals(kind)) {
-          sessions.put((String) cmd.solrDoc.getFieldValue("Id"), cmd.solrDoc);
+          sessions.put(String.valueOf(cmd.solrDoc.getFieldValue("SessionId")), cmd.solrDoc);
           return;
         }
         if ("event".equals(kind)) {
-          String session = (String) cmd.solrDoc.getFieldValue("SessionId");
+          String session = String.valueOf(cmd.solrDoc.getFieldValue("SessionId"));
           if (session != null) {
             SolrInputDocument s = sessions.get(session);
             if (s != null) {

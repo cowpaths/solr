@@ -41,14 +41,14 @@ public class BlockUpdateTest extends UpdateProcessorTestBase {
     processAdds(
         "block-update",
         params("sessionBlock", "true", "commit", "true"),
-        doc(f("Id", "11"), f("desc", "Session 11"), f("Kind", "session")),
-        doc(f("Id", "11!1"), f("desc", "Event 11!1"), f("Kind", "event"), f("SessionId", "11")));
+        doc(f("Id", "11"), f("desc", "Session 11"), f("Kind", "session"), f("SessionId", 11)),
+        doc(f("Id", "11!1"), f("desc", "Event 11!1"), f("Kind", "event"), f("SessionId", 11)));
     assertJQ(req("Id:11!1"), "response/docs/[0]/_nest_parent_==\"11\"");
     processAdds(
         "block-update",
         params("sessionBlock", "true", "commit", "true"),
-        doc(f("Id", "11!2"), f("desc", "Event 11!2"), f("Kind", "event"), f("SessionId", "11")),
-        doc(f("Id", "11!3"), f("desc", "Event 11!3"), f("Kind", "event"), f("SessionId", "11")));
+        doc(f("Id", "11!2"), f("desc", "Event 11!2"), f("Kind", "event"), f("SessionId", 11)),
+        doc(f("Id", "11!3"), f("desc", "Event 11!3"), f("Kind", "event"), f("SessionId", 11)));
     assertJQ(req("Id:11!1"), "response/docs/[0]/_nest_parent_==\"11\"");
     assertJQ(req("Id:11!2"), "response/docs/[0]/_nest_parent_==\"11\"");
     assertJQ(req("Id:11!3"), "response/docs/[0]/_nest_parent_==\"11\"");

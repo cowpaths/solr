@@ -17,12 +17,26 @@
 package org.apache.solr.handler.component;
 
 import java.io.IOException;
+import java.rmi.Remote;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queries.spans.SpanTermQuery;
+import org.apache.lucene.queryparser.xml.QueryBuilderFactory;
+import org.apache.lucene.queryparser.xml.builders.BooleanQueryBuilder;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.TermInSetQuery;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.util.BytesRef;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
+import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
@@ -30,6 +44,7 @@ import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -280,6 +295,69 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       miniCluster.shutdown();
       unIgnoreException("no active servers hosting shard:");
       unIgnoreException("ZooKeeper is not connected");
+    }
+  }
+
+  @Test
+  public void testLuceneIOExceptionHandling() throws Exception {
+    MiniSolrCloudCluster miniCluster =
+            new MiniSolrCloudCluster(1, createTempDir(), buildJettyConfig("/solr"));
+
+    final CloudSolrClient cloudSolrClient = miniCluster.getSolrClient();
+
+    try {
+      assertNotNull(miniCluster.getZkServer());
+      List<JettySolrRunner> jettys = miniCluster.getJettySolrRunners();
+      assertEquals(1, jettys.size());
+      for (JettySolrRunner jetty : jettys) {
+        assertTrue(jetty.isRunning());
+      }
+
+      // create collection
+      String collectionName = "testLuceneIOExceptionHandling";
+      String configName = collectionName + "Config";
+      miniCluster.uploadConfigSet(
+              SolrTestCaseJ4.TEST_PATH().resolve("collection1/conf"), configName);
+
+      CollectionAdminRequest.createCollection(collectionName, configName, 2, 1)
+              .setPerReplicaState(SolrCloudTestCase.USE_PER_REPLICA_STATE)
+              .process(miniCluster.getSolrClient());
+
+      for (int i = 0; i < 5; i++) {
+        SolrInputDocument doc = new SolrInputDocument();
+        doc.addField("id", i);
+        doc.addField("title", "test" + i);
+        cloudSolrClient.add(collectionName, doc);
+      }
+      cloudSolrClient.commit(collectionName);
+
+      Collection<BytesRef> terms = new ArrayList<>();
+      for (int i = 0; i < 2000; i++) {
+        terms.add(newBytesRef("term" + i));
+      }
+      TermInSetQuery termInSetQuery = new TermInSetQuery("name", terms);
+      SolrQuery solrQuery = new SolrQuery(termInSetQuery.toString());
+      QueryRequest req = new QueryRequest(solrQuery);
+      req.setMethod(SolrRequest.METHOD.POST);
+      try {
+        req.process(cloudSolrClient, collectionName);
+      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+        assertEquals(400, e.code());
+        assertTrue(e.getMessage().contains("org.apache.solr.search.SyntaxError"));
+      }
+
+      solrQuery = new SolrQuery("{!surround maxBasicQueries=1 df=title}99W(test1,test2,test3)");
+      req = new QueryRequest(solrQuery);
+      req.setMethod(SolrRequest.METHOD.POST);
+      try {
+        req.process(cloudSolrClient, collectionName);
+        fail("expected an exception for this request");
+      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+        assertEquals(400, e.code());
+        assertTrue(e.getMessage().contains("Exceeded maximum of 1 basic queries."));
+      }
+    } finally {
+      miniCluster.shutdown();
     }
   }
 

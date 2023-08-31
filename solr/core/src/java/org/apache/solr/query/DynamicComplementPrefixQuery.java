@@ -188,7 +188,8 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     private final int determinantIdx;
     private final int determinant;
 
-    public DirectPrefixTermsEnum(TermsEnum tenum, int limitLength, int determinantIdx, int determinant) {
+    public DirectPrefixTermsEnum(
+        TermsEnum tenum, int limitLength, int determinantIdx, int determinant) {
       super(tenum);
       this.limitLength = limitLength;
       this.determinantIdx = determinantIdx;
@@ -204,7 +205,9 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
       } else {
         candidate = tenum.next();
       }
-      if (limitLength != candidate.length || determinant != Byte.toUnsignedInt(candidate.bytes[candidate.offset + determinantIdx])) {
+      if (limitLength != candidate.length
+          || determinant
+              != Byte.toUnsignedInt(candidate.bytes[candidate.offset + determinantIdx])) {
         return candidate;
       } else {
         return null;

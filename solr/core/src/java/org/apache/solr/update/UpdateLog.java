@@ -380,7 +380,7 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
       //append the "dataDir" to the instance ie  <str name="dir">abc</str> -> <solr.data.home>/<core>/abc
       dataDir = core.getCoreDescriptor().getInstanceDir().resolve(dataDir + "/" + core.getName()).toString();
     } else {
-      dataDir = core.getUlogDir() + "/" + core.getName();
+      dataDir = core.getUlogDir();
     }
 
     log.info("update log dir {}, lastlogdir {}", dataDir, lastDataDir);

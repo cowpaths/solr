@@ -377,8 +377,13 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
    */
   public void init(UpdateHandler uhandler, SolrCore core) {
     if (dataDir != null) {
-      //append the "dataDir" to the instance ie  <str name="dir">abc</str> -> <solr.data.home>/<core>/abc
-      dataDir = core.getCoreDescriptor().getInstanceDir().resolve(dataDir + "/" + core.getName()).toString();
+      // append the "dataDir" to the instance ie  <str name="dir">abc</str> ->
+      // <solr.data.home>/<core>/abc
+      dataDir =
+          core.getCoreDescriptor()
+              .getInstanceDir()
+              .resolve(dataDir + "/" + core.getName())
+              .toString();
     } else {
       dataDir = core.getUlogDir();
     }

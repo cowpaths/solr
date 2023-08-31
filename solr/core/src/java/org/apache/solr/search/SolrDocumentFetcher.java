@@ -59,6 +59,7 @@ import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.misc.document.LazyDocument;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.CollectionUtil;
 import org.apache.lucene.util.NumericUtils;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentBase;
@@ -610,7 +611,7 @@ public class SolrDocumentFetcher {
           return Collections.singleton(firstHasFieldName.utf8ToString());
         }
       } else {
-        hasDynamicEventsFields = new HashSet<>(ct);
+        hasDynamicEventsFields = CollectionUtil.newHashSet(ct);
         assert firstHasFieldName.length != 0;
         hasDynamicEventsFields.add(firstHasFieldName.utf8ToString());
         int i = ct - 1;

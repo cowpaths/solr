@@ -22,8 +22,6 @@ import static org.apache.solr.common.params.CommonParams.PATH;
 import static org.apache.solr.common.params.CommonParams.STATUS;
 
 import com.codahale.metrics.Counter;
-import com.google.common.collect.Iterators;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
@@ -72,7 +70,6 @@ import org.apache.solr.schema.BloomStrField;
 import org.apache.solr.search.CursorMark;
 import org.apache.solr.search.SolrQueryTimeoutImpl;
 import org.apache.solr.search.SortSpec;
-import org.apache.solr.search.SyntaxError;
 import org.apache.solr.search.facet.FacetModule;
 import org.apache.solr.security.AuthorizationContext;
 import org.apache.solr.security.PermissionNameProvider;
@@ -495,7 +492,8 @@ public class SearchHandler extends RequestHandlerBase
             .asShallowMap()
             .put(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY, Boolean.TRUE);
       } catch (IndexSearcher.TooManyClauses | TooManyBasicQueries ex) {
-        // An IOException on a non-distributed request is typically an issue parsing the query at the lucene level
+        // An IOException on a non-distributed request is typically an issue parsing the query at
+        // the lucene level
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, ex);
       } finally {
         SolrQueryTimeoutImpl.reset();

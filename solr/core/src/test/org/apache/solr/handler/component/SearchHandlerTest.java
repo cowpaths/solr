@@ -17,20 +17,11 @@
 package org.apache.solr.handler.component;
 
 import java.io.IOException;
-import java.rmi.Remote;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-
-import org.apache.lucene.index.Term;
-import org.apache.lucene.queries.spans.SpanTermQuery;
-import org.apache.lucene.queryparser.xml.QueryBuilderFactory;
-import org.apache.lucene.queryparser.xml.builders.BooleanQueryBuilder;
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.TermInSetQuery;
-import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
@@ -302,7 +293,7 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
   public void testLuceneIOExceptionHandling() throws Exception {
     System.setProperty("solr.max.booleanClauses", String.valueOf(1));
     MiniSolrCloudCluster miniCluster =
-            new MiniSolrCloudCluster(1, createTempDir(), buildJettyConfig("/solr"));
+        new MiniSolrCloudCluster(1, createTempDir(), buildJettyConfig("/solr"));
 
     final CloudSolrClient cloudSolrClient = miniCluster.getSolrClient();
 
@@ -318,11 +309,11 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       String collectionName = "testLuceneIOExceptionHandling";
       String configName = collectionName + "Config";
       miniCluster.uploadConfigSet(
-              SolrTestCaseJ4.TEST_PATH().resolve("collection1/conf"), configName);
+          SolrTestCaseJ4.TEST_PATH().resolve("collection1/conf"), configName);
 
       CollectionAdminRequest.createCollection(collectionName, configName, 2, 1)
-              .setPerReplicaState(SolrCloudTestCase.USE_PER_REPLICA_STATE)
-              .process(miniCluster.getSolrClient());
+          .setPerReplicaState(SolrCloudTestCase.USE_PER_REPLICA_STATE)
+          .process(miniCluster.getSolrClient());
 
       for (int i = 0; i < 5; i++) {
         SolrInputDocument doc = new SolrInputDocument();
@@ -366,7 +357,9 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
         fail("expected an exception for this request");
       } catch (BaseHttpSolrClient.RemoteSolrException e) {
         assertEquals(400, e.code());
-        assertTrue(e.getMessage().contains("Query contains too many nested clauses; maxClauseCount is set to 1"));
+        assertTrue(
+            e.getMessage()
+                .contains("Query contains too many nested clauses; maxClauseCount is set to 1"));
       }
     } finally {
       System.clearProperty("solr.max.booleanClauses");

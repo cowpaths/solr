@@ -300,6 +300,7 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
 
   @Test
   public void testLuceneIOExceptionHandling() throws Exception {
+    System.setProperty("solr.max.booleanClauses", String.valueOf(1));
     MiniSolrCloudCluster miniCluster =
             new MiniSolrCloudCluster(1, createTempDir(), buildJettyConfig("/solr"));
 
@@ -332,7 +333,7 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       cloudSolrClient.commit(collectionName);
 
       Collection<BytesRef> terms = new ArrayList<>();
-      for (int i = 0; i < 2000; i++) {
+      for (int i = 0; i < 10; i++) {
         terms.add(newBytesRef("term" + i));
       }
       TermInSetQuery termInSetQuery = new TermInSetQuery("name", terms);
@@ -356,7 +357,19 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
         assertEquals(400, e.code());
         assertTrue(e.getMessage().contains("Exceeded maximum of 1 basic queries."));
       }
+
+      solrQuery = new SolrQuery("{!surround maxBasicQueries=1000 df=title}10W(tes*,test*)");
+      req = new QueryRequest(solrQuery);
+      req.setMethod(SolrRequest.METHOD.POST);
+      try {
+        req.process(cloudSolrClient, collectionName);
+        fail("expected an exception for this request");
+      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+        assertEquals(400, e.code());
+        assertTrue(e.getMessage().contains("Query contains too many nested clauses; maxClauseCount is set to 1"));
+      }
     } finally {
+      System.clearProperty("solr.max.booleanClauses");
       miniCluster.shutdown();
     }
   }

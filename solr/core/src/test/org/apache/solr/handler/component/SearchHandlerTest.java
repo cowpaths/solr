@@ -329,38 +329,42 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       }
       TermInSetQuery termInSetQuery = new TermInSetQuery("name", terms);
       SolrQuery solrQuery = new SolrQuery(termInSetQuery.toString());
-      QueryRequest req = new QueryRequest(solrQuery);
+      final QueryRequest req = new QueryRequest(solrQuery);
       req.setMethod(SolrRequest.METHOD.POST);
-      try {
-        req.process(cloudSolrClient, collectionName);
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
-        assertEquals(400, e.code());
-        assertTrue(e.getMessage().contains("org.apache.solr.search.SyntaxError"));
-      }
+      BaseHttpSolrClient.RemoteSolrException e =
+          assertThrows(
+              BaseHttpSolrClient.RemoteSolrException.class,
+              () -> {
+                req.process(cloudSolrClient, collectionName);
+              });
+      assertEquals(400, e.code());
+      assertTrue(e.getMessage().contains("org.apache.solr.search.SyntaxError"));
 
       solrQuery = new SolrQuery("{!surround maxBasicQueries=1 df=title}99W(test1,test2,test3)");
-      req = new QueryRequest(solrQuery);
-      req.setMethod(SolrRequest.METHOD.POST);
-      try {
-        req.process(cloudSolrClient, collectionName);
-        fail("expected an exception for this request");
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
-        assertEquals(400, e.code());
-        assertTrue(e.getMessage().contains("Exceeded maximum of 1 basic queries."));
-      }
+      final QueryRequest req2 = new QueryRequest(solrQuery);
+      req2.setMethod(SolrRequest.METHOD.POST);
+      e =
+          assertThrows(
+              BaseHttpSolrClient.RemoteSolrException.class,
+              () -> {
+                req2.process(cloudSolrClient, collectionName);
+              });
+      assertEquals(400, e.code());
+      assertTrue(e.getMessage().contains("Exceeded maximum of 1 basic queries."));
 
       solrQuery = new SolrQuery("{!surround maxBasicQueries=1000 df=title}10W(tes*,test*)");
-      req = new QueryRequest(solrQuery);
-      req.setMethod(SolrRequest.METHOD.POST);
-      try {
-        req.process(cloudSolrClient, collectionName);
-        fail("expected an exception for this request");
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
-        assertEquals(400, e.code());
-        assertTrue(
-            e.getMessage()
-                .contains("Query contains too many nested clauses; maxClauseCount is set to 1"));
-      }
+      final QueryRequest req3 = new QueryRequest(solrQuery);
+      req3.setMethod(SolrRequest.METHOD.POST);
+      e =
+          assertThrows(
+              BaseHttpSolrClient.RemoteSolrException.class,
+              () -> {
+                req3.process(cloudSolrClient, collectionName);
+              });
+      assertEquals(400, e.code());
+      assertTrue(
+          e.getMessage()
+              .contains("Query contains too many nested clauses; maxClauseCount is set to 1"));
     } finally {
       System.clearProperty("solr.max.booleanClauses");
       miniCluster.shutdown();

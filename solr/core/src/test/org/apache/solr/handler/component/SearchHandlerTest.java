@@ -334,9 +334,7 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       BaseHttpSolrClient.RemoteSolrException e =
           assertThrows(
               BaseHttpSolrClient.RemoteSolrException.class,
-              () -> {
-                req.process(cloudSolrClient, collectionName);
-              });
+              () -> req.process(cloudSolrClient, collectionName));
       assertEquals(400, e.code());
       assertTrue(e.getMessage().contains("org.apache.solr.search.SyntaxError"));
 
@@ -346,9 +344,7 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       e =
           assertThrows(
               BaseHttpSolrClient.RemoteSolrException.class,
-              () -> {
-                req2.process(cloudSolrClient, collectionName);
-              });
+              () -> req2.process(cloudSolrClient, collectionName));
       assertEquals(400, e.code());
       assertTrue(e.getMessage().contains("Exceeded maximum of 1 basic queries."));
 
@@ -358,9 +354,7 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       e =
           assertThrows(
               BaseHttpSolrClient.RemoteSolrException.class,
-              () -> {
-                req3.process(cloudSolrClient, collectionName);
-              });
+              () -> req3.process(cloudSolrClient, collectionName));
       assertEquals(400, e.code());
       assertTrue(
           e.getMessage()

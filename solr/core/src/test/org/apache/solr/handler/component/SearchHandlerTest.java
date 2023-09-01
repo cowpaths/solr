@@ -291,6 +291,7 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
 
   @Test
   public void testLuceneIOExceptionHandling() throws Exception {
+    String initialMaxBooleanClauses = System.getProperty("solr.max.booleanClauses");
     System.setProperty("solr.max.booleanClauses", String.valueOf(1));
     MiniSolrCloudCluster miniCluster =
         new MiniSolrCloudCluster(1, createTempDir(), buildJettyConfig("/solr"));
@@ -360,7 +361,11 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
           e.getMessage()
               .contains("Query contains too many nested clauses; maxClauseCount is set to 1"));
     } finally {
-      System.clearProperty("solr.max.booleanClauses");
+      if (initialMaxBooleanClauses != null) {
+        System.setProperty("solr.max.booleanClauses", initialMaxBooleanClauses);
+      } else {
+        System.clearProperty("solr.max.booleanClauses");
+      }
       miniCluster.shutdown();
     }
   }

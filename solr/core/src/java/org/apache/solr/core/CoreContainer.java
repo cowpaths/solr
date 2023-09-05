@@ -814,7 +814,7 @@ public class CoreContainer {
     } else {
       Map<String, SolrCache<?, ?>> m = CollectionUtil.newHashMap(cachesConfig.size());
       for (Map.Entry<String, CacheConfig> e : cachesConfig.entrySet()) {
-        SolrCache<?, ?> c = e.getValue().newInstance();
+        SolrCache<?, ?> c = e.getValue().newInstance(null);
         String cacheName = e.getKey();
         c.initializeMetrics(solrMetricsContext, "nodeLevelCache/" + cacheName);
         m.put(cacheName, c);

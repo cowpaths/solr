@@ -27,6 +27,7 @@ import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -38,7 +39,6 @@ import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.StreamSupport;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.queryparser.surround.query.TooManyBasicQueries;
 import org.apache.lucene.search.IndexSearcher;
@@ -93,8 +93,8 @@ public class SearchHandler extends RequestHandlerBase
 
   protected static final String SHARD_HANDLER_SUFFIX = "[shard]";
 
-  private static final SolrException.ErrorCode[] NONTOLERANT_ERROR_CODES =
-      new SolrException.ErrorCode[] {SolrException.ErrorCode.BAD_REQUEST};
+  private static final Collection<SolrException.ErrorCode> NONTOLERANT_ERROR_CODES =
+      List.of(SolrException.ErrorCode.BAD_REQUEST);
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -577,8 +577,7 @@ public class SearchHandler extends RequestHandlerBase
               log.warn("Shard request failed : {}", srsp);
               // If things are not tolerant, abort everything and rethrow
               if (!tolerant
-                  || ArrayUtils.contains(
-                      NONTOLERANT_ERROR_CODES,
+                  || NONTOLERANT_ERROR_CODES.contains(
                       SolrException.ErrorCode.getErrorCode(srsp.getRspCode()))) {
                 shardHandler1.cancelAll();
                 if (srsp.getException() instanceof SolrException) {

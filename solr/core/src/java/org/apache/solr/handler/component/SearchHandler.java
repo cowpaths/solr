@@ -45,6 +45,7 @@ import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.queryparser.surround.query.TooManyBasicQueries;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TotalHits;
+import org.apache.solr.client.solrj.SolrRequest.SolrRequestType;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrDocumentList;
@@ -345,8 +346,8 @@ public class SearchHandler extends RequestHandlerBase
   }
 
   /**
-   * Check if circuit breakers are tripped. Override this method in sub classes that do not want to
-   * check circuit breakers.
+   * Check if {@link SolrRequestType#QUERY} circuit breakers are tripped. Override this method in
+   * sub classes that do not want to check circuit breakers.
    *
    * @return true if circuit breakers are tripped, false otherwise.
    */
@@ -355,18 +356,18 @@ public class SearchHandler extends RequestHandlerBase
     final RTimerTree timer = rb.isDebug() ? req.getRequestTimer() : null;
 
     final CircuitBreakerRegistry circuitBreakerRegistry = req.getCore().getCircuitBreakerRegistry();
-    if (circuitBreakerRegistry.isEnabled()) {
+    if (circuitBreakerRegistry.isEnabled(SolrRequestType.QUERY)) {
       List<CircuitBreaker> trippedCircuitBreakers;
 
       if (timer != null) {
         RTimerTree subt = timer.sub("circuitbreaker");
         rb.setTimer(subt);
 
-        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped();
+        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
 
         rb.getTimer().stop();
       } else {
-        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped();
+        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
       }
 
       if (trippedCircuitBreakers != null) {
@@ -374,7 +375,7 @@ public class SearchHandler extends RequestHandlerBase
         rsp.add(STATUS, FAILURE);
         rsp.setException(
             new SolrException(
-                SolrException.ErrorCode.SERVICE_UNAVAILABLE,
+                CircuitBreaker.getErrorCode(trippedCircuitBreakers),
                 "Circuit Breakers tripped " + errorMessage));
         return true;
       }

@@ -38,6 +38,7 @@ import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.StreamSupport;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.queryparser.surround.query.TooManyBasicQueries;
 import org.apache.lucene.search.IndexSearcher;
@@ -91,6 +92,9 @@ public class SearchHandler extends RequestHandlerBase
   static final String INIT_LAST_COMPONENTS = "last-components";
 
   protected static final String SHARD_HANDLER_SUFFIX = "[shard]";
+
+  private static final SolrException.ErrorCode[] NONTOLERANT_ERROR_CODES =
+      new SolrException.ErrorCode[] {SolrException.ErrorCode.BAD_REQUEST};
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -572,7 +576,10 @@ public class SearchHandler extends RequestHandlerBase
             if (srsp.getException() != null) {
               log.warn("Shard request failed : {}", srsp);
               // If things are not tolerant, abort everything and rethrow
-              if (!tolerant) {
+              if (!tolerant
+                  || ArrayUtils.contains(
+                      NONTOLERANT_ERROR_CODES,
+                      SolrException.ErrorCode.getErrorCode(srsp.getRspCode()))) {
                 shardHandler1.cancelAll();
                 if (srsp.getException() instanceof SolrException) {
                   throw (SolrException) srsp.getException();

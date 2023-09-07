@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,9 +73,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               new OsMetricsApiCaller(),
               new ThreadMetricsApiCaller(),
               new StatusCodeMetricsApiCaller(),
-              new CoresMetricsApiCaller()));
+              new CoresMetricsApiCaller(),
+              new NodeCacheMetricsApiCaller()));
 
-  private final Map<String, PrometheusMetricType> cacheMetricTypes =
+  private static final Map<String, PrometheusMetricType> cacheMetricTypes =
       Map.of(
           "bytesUsed", PrometheusMetricType.GAUGE,
           "lookups", PrometheusMetricType.COUNTER,
@@ -138,6 +140,41 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
                   String.format(
                       Locale.ROOT, "%s %s for cache %s", name, type.getDisplayName(), cache),
                   stat.getValue()));
+        }
+      }
+    }
+  }
+
+  static class NodeCacheMetricsApiCaller extends MetricsApiCaller {
+    private static final String PREFIX = "CACHE.nodeLevelCache/";
+    NodeCacheMetricsApiCaller() {
+      super(
+          "node",
+          PREFIX,
+          "");
+    }
+
+    @Override
+    protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
+      JsonNode parent = metrics.path("solr.node");
+      Iterator<Map.Entry<String, JsonNode>> caches = parent.fields();
+      while (caches.hasNext()) {
+        Map.Entry<String, JsonNode> cacheEntry = caches.next();
+        String cacheName = cacheEntry.getKey().substring(PREFIX.length()).toLowerCase(Locale.ROOT);
+        Iterator<Map.Entry<String, JsonNode>> fields = cacheEntry.getValue().fields();
+        while (fields.hasNext()) {
+          Map.Entry<String, JsonNode> next = fields.next();
+          String fieldName = next.getKey();
+          PrometheusMetricType type = cacheMetricTypes.get(fieldName);
+          if (type != null) {
+            results.add(
+                new PrometheusMetric(
+                    String.format(Locale.ROOT, "cache_%s_%s", cacheName, fieldName),
+                    type,
+                    String.format(
+                        Locale.ROOT, "%s %s for cache %s", fieldName, type.getDisplayName(), cacheName),
+                    next.getValue().numberValue()));
+          }
         }
       }
     }

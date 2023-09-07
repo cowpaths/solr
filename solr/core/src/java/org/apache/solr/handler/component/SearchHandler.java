@@ -27,7 +27,6 @@ import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -93,8 +92,8 @@ public class SearchHandler extends RequestHandlerBase
 
   protected static final String SHARD_HANDLER_SUFFIX = "[shard]";
 
-  private static final Collection<SolrException.ErrorCode> NONTOLERANT_ERROR_CODES =
-      List.of(SolrException.ErrorCode.BAD_REQUEST);
+  private static final Set<SolrException.ErrorCode> NONTOLERANT_ERROR_CODES =
+      Set.of(SolrException.ErrorCode.BAD_REQUEST);
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 

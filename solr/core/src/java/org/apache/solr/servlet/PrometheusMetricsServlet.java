@@ -25,6 +25,7 @@ import java.io.PrintWriter;
 import java.lang.invoke.MethodHandles;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -76,13 +77,26 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               new CoresMetricsApiCaller(),
               new NodeCacheMetricsApiCaller()));
 
-  private static final Map<String, PrometheusMetricType> cacheMetricTypes =
+  private final Map<String, PrometheusMetricType> cacheMetricTypes =
       Map.of(
           "bytesUsed", PrometheusMetricType.GAUGE,
           "lookups", PrometheusMetricType.COUNTER,
           "hits", PrometheusMetricType.COUNTER,
           "puts", PrometheusMetricType.COUNTER,
           "evictions", PrometheusMetricType.COUNTER);
+
+  /**
+   * node-level caches use slightly different terminology for some fields, so we map to old
+   * terminology for consistency.
+   */
+  private static final Map<String, Map.Entry<String, PrometheusMetricType>>
+      nodeLevelCacheMetricTypes =
+          Map.of(
+              "ramBytesUsed", new SimpleImmutableEntry<>("bytesUsed", PrometheusMetricType.GAUGE),
+              "lookups", new SimpleImmutableEntry<>("lookups", PrometheusMetricType.COUNTER),
+              "hits", new SimpleImmutableEntry<>("hits", PrometheusMetricType.COUNTER),
+              "inserts", new SimpleImmutableEntry<>("puts", PrometheusMetricType.COUNTER),
+              "evictions", new SimpleImmutableEntry<>("evictions", PrometheusMetricType.COUNTER));
 
   @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -147,11 +161,9 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
   static class NodeCacheMetricsApiCaller extends MetricsApiCaller {
     private static final String PREFIX = "CACHE.nodeLevelCache/";
+
     NodeCacheMetricsApiCaller() {
-      super(
-          "node",
-          PREFIX,
-          "");
+      super("node", PREFIX, "");
     }
 
     @Override
@@ -164,15 +176,21 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         Iterator<Map.Entry<String, JsonNode>> fields = cacheEntry.getValue().fields();
         while (fields.hasNext()) {
           Map.Entry<String, JsonNode> next = fields.next();
-          String fieldName = next.getKey();
-          PrometheusMetricType type = cacheMetricTypes.get(fieldName);
-          if (type != null) {
+          Map.Entry<String, PrometheusMetricType> typeEntry =
+              nodeLevelCacheMetricTypes.get(next.getKey());
+          if (typeEntry != null) {
+            String fieldName = typeEntry.getKey();
+            PrometheusMetricType type = typeEntry.getValue();
             results.add(
                 new PrometheusMetric(
                     String.format(Locale.ROOT, "cache_%s_%s", cacheName, fieldName),
                     type,
                     String.format(
-                        Locale.ROOT, "%s %s for cache %s", fieldName, type.getDisplayName(), cacheName),
+                        Locale.ROOT,
+                        "%s %s for cache %s",
+                        fieldName,
+                        type.getDisplayName(),
+                        cacheName),
                     next.getValue().numberValue()));
           }
         }

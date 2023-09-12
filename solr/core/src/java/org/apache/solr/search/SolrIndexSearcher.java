@@ -376,7 +376,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     this.queryResultMaxDocsCached = solrConfig.queryResultMaxDocsCached;
     this.useFilterForSortedQuery = solrConfig.useFilterForSortedQuery;
 
-    ordMapCache = solrConfig.ordMapCacheConfig.newInstance();
+    ordMapCache = solrConfig.ordMapCacheConfig.newInstance(core);
     assert ordMapCache != null;
     this.leafReader = SlowCompositeReaderWrapper.wrap(this.reader, ordMapCache);
 

@@ -49,6 +49,7 @@ import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.SuppressForbidden;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.NodeRoles;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.api.V2ApiUtils;
 import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.logging.MDCSnapshot;
@@ -275,6 +276,18 @@ public class SolrDispatchFilter extends BaseSolrFilter implements PathExcluder {
       }
     } finally {
       call.destroy();
+      SolrCore core = call.getCore();
+      if (core != null) {
+        int coreRefCount = core.getOpenCount();
+        if (coreRefCount > 1) {
+          if (log.isInfoEnabled())
+            log.info(
+                "Core {} has ref count of {} . It's still used by other logic even if the current servlet request {} finishes",
+                core.getName(),
+                coreRefCount,
+                call.getReq().getServletPath());
+        }
+      }
       ExecutorUtil.setServerThreadFlag(null);
     }
   }

@@ -81,7 +81,6 @@ import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.DocList;
-import org.apache.solr.search.DocValuesIteratorCache;
 import org.apache.solr.search.QueryUtils;
 import org.apache.solr.search.ReturnFields;
 import org.apache.solr.search.SolrDocumentFetcher;
@@ -239,7 +238,7 @@ public class RealTimeGetComponent extends SearchComponent {
 
       boolean opennedRealtimeSearcher = false;
       BytesRefBuilder idBytes = new BytesRefBuilder();
-      DocValuesIteratorCache reuseDvIters = null;
+      Map<String, SolrDocumentFetcher.DVIterEntry> reuseDvIters = new HashMap<>();
       for (String idStr : reqIds.allIds) {
         fieldType.readableToIndexed(idStr, idBytes);
         // if _route_ is passed, id is a child doc.  TODO remove in SOLR-15064
@@ -350,9 +349,6 @@ public class RealTimeGetComponent extends SearchComponent {
             searcherInfo.getSearcher().doc(docid, rsp.getReturnFields().getLuceneFieldNames());
         SolrDocument doc = toSolrDoc(luceneDocument, core.getLatestSchema());
         SolrDocumentFetcher docFetcher = searcherInfo.getSearcher().getDocFetcher();
-        if (reuseDvIters == null) {
-          reuseDvIters = new DocValuesIteratorCache(searcherInfo.getSearcher());
-        }
         docFetcher.decorateDocValueFields(
             doc, docid, docFetcher.getNonStoredDVs(true), reuseDvIters);
         if (null != transformer) {
@@ -581,11 +577,7 @@ public class RealTimeGetComponent extends SearchComponent {
       if (!doc.containsKey(VERSION_FIELD)) {
         searcher
             .getDocFetcher()
-            .decorateDocValueFields(
-                doc,
-                docid,
-                Collections.singleton(VERSION_FIELD),
-                new DocValuesIteratorCache(searcher, false));
+            .decorateDocValueFields(doc, docid, Collections.singleton(VERSION_FIELD), null);
       }
 
       long docVersion = (long) doc.getFirstValue(VERSION_FIELD);
@@ -1061,10 +1053,7 @@ public class RealTimeGetComponent extends SearchComponent {
       for (String id : reqIds.allIds) {
         Slice slice =
             coll.getRouter()
-                .getTargetSlice(id, null, params.get(ShardParams._ROUTE_), params, coll);
-        if (slice == null) {
-          continue;
-        }
+                .getTargetSlice(params.get(ShardParams._ROUTE_, id), null, null, params, coll);
 
         List<String> idsForShard = sliceToId.get(slice.getName());
         if (idsForShard == null) {
@@ -1125,7 +1114,7 @@ public class RealTimeGetComponent extends SearchComponent {
     // the mappings.
 
     for (int i = 0; i < rb.slices.length; i++) {
-      log.trace("LOOKUP_SLICE:{}={}", rb.slices[i], rb.shards[i]);
+      log.info("LOOKUP_SLICE:{}={}", rb.slices[i], rb.shards[i]);
       if (lookup.equals(rb.slices[i]) || slice.equals(rb.slices[i])) {
         return new String[] {rb.shards[i]};
       }
@@ -1427,7 +1416,6 @@ public class RealTimeGetComponent extends SearchComponent {
   private static final class IdsRequested {
     /** An List (which may be empty but will never be null) of the uniqueKeys requested. */
     public final List<String> allIds;
-
     /**
      * true if the params provided by the user indicate that a single doc response structure should
      * be used. Value is meaningless if <code>ids</code> is empty.

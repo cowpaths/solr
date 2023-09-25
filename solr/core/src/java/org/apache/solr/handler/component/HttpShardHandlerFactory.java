@@ -18,6 +18,7 @@ package org.apache.solr.handler.component;
 
 import static org.apache.solr.util.stats.InstrumentedHttpListenerFactory.KNOWN_METRIC_NAME_STRATEGIES;
 
+import com.codahale.metrics.Meter;
 import java.lang.invoke.MethodHandles;
 import java.util.Iterator;
 import java.util.List;
@@ -94,6 +95,8 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory
   private SolrMetricsContext solrMetricsContext;
 
   private String scheme = null;
+
+  private Meter delayedRequests;
 
   private InstrumentedHttpListenerFactory.NameStrategy metricNameStrategy;
 
@@ -287,7 +290,13 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory
             .withMaxConnectionsPerHost(maxConnectionsPerHost)
             .build();
     this.defaultClient.addListenerFactory(this.httpListenerFactory);
-    this.loadbalancer = new LBHttp2SolrClient.Builder(defaultClient).build();
+    this.loadbalancer =
+        new LBHttp2SolrClient.Builder(defaultClient)
+            .setDelayedRequestListener(
+                n -> {
+                  if (delayedRequests != null) delayedRequests.mark(n);
+                })
+            .build();
 
     initReplicaListTransformers(getParameter(args, "replicaRouting", null, sb));
 
@@ -410,6 +419,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     solrMetricsContext = parentContext.getChildContext(this);
     String expandedScope = SolrMetricManager.mkName(scope, SolrInfoBean.Category.QUERY.name());
+    delayedRequests = solrMetricsContext.meter("delayedInterNodeRequests", expandedScope);
     httpListenerFactory.initializeMetrics(solrMetricsContext, expandedScope);
     commExecutor =
         MetricUtils.instrumentedExecutorService(

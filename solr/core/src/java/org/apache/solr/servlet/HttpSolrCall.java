@@ -649,10 +649,7 @@ public class HttpSolrCall {
   // called after init().
   protected void populateTracingSpan(Span span) {
     // Set db.instance
-    String coreOrColName = HttpSolrCall.this.origCorename;
-    if (coreOrColName == null && getCore() != null) {
-      coreOrColName = getCore().getName();
-    }
+    String coreOrColName = getCoreOrColName();
     if (coreOrColName != null) {
       span.setTag(Tags.DB_INSTANCE, coreOrColName);
     }
@@ -670,6 +667,14 @@ public class HttpSolrCall {
     String verb =
         getQueryParams().get(CoreAdminParams.ACTION, req.getMethod()).toLowerCase(Locale.ROOT);
     span.setOperationName(verb + ":" + path);
+  }
+
+  protected String getCoreOrColName() {
+    String coreOrColName = HttpSolrCall.this.origCorename;
+    if (coreOrColName == null && getCore() != null) {
+      coreOrColName = getCore().getName();
+    }
+    return coreOrColName;
   }
 
   public boolean shouldAudit() {

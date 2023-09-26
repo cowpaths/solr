@@ -91,7 +91,7 @@ public class LBHttp2SolrClient extends LBSolrClient {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private final Http2SolrClient solrClient;
 
-  private final LongConsumer delayedRequestlistener;
+  private final LongConsumer delayedRequestListener;
 
   /**
    * @deprecated Use {@link LBHttp2SolrClient.Builder} instead
@@ -100,14 +100,14 @@ public class LBHttp2SolrClient extends LBSolrClient {
   public LBHttp2SolrClient(Http2SolrClient solrClient, String... baseSolrUrls) {
     super(Arrays.asList(baseSolrUrls));
     this.solrClient = solrClient;
-    this.delayedRequestlistener = null;
+    this.delayedRequestListener = null;
   }
 
   private LBHttp2SolrClient(
-      Http2SolrClient solrClient, List<String> baseSolrUrls, LongConsumer delayedRequestlistener) {
+      Http2SolrClient solrClient, List<String> baseSolrUrls, LongConsumer delayedRequestListener) {
     super(baseSolrUrls);
     this.solrClient = solrClient;
-    this.delayedRequestlistener = delayedRequestlistener;
+    this.delayedRequestListener = delayedRequestListener;
   }
 
   @Override
@@ -284,8 +284,8 @@ public class LBHttp2SolrClient extends LBSolrClient {
                   long delay = TimeUnit.MILLISECONDS.convert(delayed, TimeUnit.NANOSECONDS);
                   log.info(
                       "Remote shard request to {} delayed by {} milliseconds", req.servers, delay);
-                  if (delayedRequestlistener != null) {
-                    delayedRequestlistener.accept(delay);
+                  if (delayedRequestListener != null) {
+                    delayedRequestListener.accept(delay);
                   }
                 }
                 AsyncListener.super.onStart();
@@ -360,8 +360,8 @@ public class LBHttp2SolrClient extends LBSolrClient {
       this.baseSolrUrls = baseSolrUrls;
     }
 
-    public Builder setDelayedRequestListener(LongConsumer delayedRequestListener) {
-      this.delayedRequestListener = delayedRequestListener;
+    public Builder setDelayedRequestListener(LongConsumer listener) {
+      this.delayedRequestListener = listener;
       return this;
     }
 

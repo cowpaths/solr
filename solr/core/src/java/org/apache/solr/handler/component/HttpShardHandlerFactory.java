@@ -197,6 +197,9 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory
         new RequestReplicaListTransformerGenerator(defaultRltFactory, stableRltFactory);
   }
 
+  private static final long DELAY_WARN_THRESHOLD =
+      TimeUnit.NANOSECONDS.convert(200, TimeUnit.MILLISECONDS);
+
   @Override
   public void init(PluginInfo info) {
     StringBuilder sb = new StringBuilder();
@@ -293,11 +296,12 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory
     this.loadbalancer =
         new LBHttp2SolrClient.Builder(defaultClient)
             .setDelayedRequestListener(
-                n -> {
-                  if (delayedRequests != null) delayedRequests.mark(n);
+                it -> {
+                  if (it > DELAY_WARN_THRESHOLD && delayedRequests != null) {
+                    delayedRequests.mark(it);
+                  }
                 })
             .build();
-
     initReplicaListTransformers(getParameter(args, "replicaRouting", null, sb));
 
     log.debug("created with {}", sb);

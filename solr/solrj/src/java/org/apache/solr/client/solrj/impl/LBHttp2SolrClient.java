@@ -100,14 +100,15 @@ public class LBHttp2SolrClient extends LBSolrClient {
   public LBHttp2SolrClient(Http2SolrClient solrClient, String... baseSolrUrls) {
     super(Arrays.asList(baseSolrUrls));
     this.solrClient = solrClient;
-    this.delayedRequestListener = null;
+    this.delayedRequestListener = DELAYED_REQ_LOGGER;
   }
 
   private LBHttp2SolrClient(
       Http2SolrClient solrClient, List<String> baseSolrUrls, LongConsumer delayedRequestListener) {
     super(baseSolrUrls);
     this.solrClient = solrClient;
-    this.delayedRequestListener = delayedRequestListener;
+    this.delayedRequestListener =
+        delayedRequestListener == null ? DELAYED_REQ_LOGGER : delayedRequestListener;
   }
 
   @Override
@@ -256,6 +257,14 @@ public class LBHttp2SolrClient extends LBSolrClient {
 
   private static final long DELAY_WARN_THRESHOLD =
       TimeUnit.NANOSECONDS.convert(2000, TimeUnit.MILLISECONDS);
+  static LongConsumer DELAYED_REQ_LOGGER =
+      it -> {
+        if (it > DELAY_WARN_THRESHOLD) {
+          log.info(
+              "Remote shard request delayed by {} milliseconds",
+              TimeUnit.MILLISECONDS.convert(it, TimeUnit.NANOSECONDS));
+        }
+      };
 
   private Cancellable doRequest(
       String baseUrl,
@@ -279,15 +288,7 @@ public class LBHttp2SolrClient extends LBSolrClient {
                 // the request. Here we add extra logging to notify us if this assumption is
                 // violated. See: SOLR-16099, SOLR-16129,
                 // https://github.com/fullstorydev/lucene-solr/commit/445508adb4a
-                long delayed = System.nanoTime() - requestSubmitTimeNanos;
-                if (delayed > DELAY_WARN_THRESHOLD) {
-                  long delay = TimeUnit.MILLISECONDS.convert(delayed, TimeUnit.NANOSECONDS);
-                  log.info(
-                      "Remote shard request to {} delayed by {} milliseconds", req.servers, delay);
-                  if (delayedRequestListener != null) {
-                    delayedRequestListener.accept(delay);
-                  }
-                }
+                delayedRequestListener.accept(System.nanoTime() - requestSubmitTimeNanos);
                 AsyncListener.super.onStart();
               }
 

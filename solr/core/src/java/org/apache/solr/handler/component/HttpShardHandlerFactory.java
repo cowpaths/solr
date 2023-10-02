@@ -19,7 +19,6 @@ package org.apache.solr.handler.component;
 import static org.apache.solr.util.stats.InstrumentedHttpListenerFactory.KNOWN_METRIC_NAME_STRATEGIES;
 
 import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
 import java.lang.invoke.MethodHandles;
 import java.util.Iterator;
 import java.util.List;

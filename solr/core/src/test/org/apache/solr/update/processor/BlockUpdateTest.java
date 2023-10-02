@@ -54,6 +54,26 @@ public class BlockUpdateTest extends UpdateProcessorTestBase {
     assertJQ(req("Id:11!3"), "response/docs/[0]/_nest_parent_==\"11\"");
   }
 
+  public void testBulkUpdateDedupe() throws Exception{
+    processAdds(
+            "block-update",
+            params("sessionBlock", "true", "commit", "true", "dedupeEventFields", "true"),
+            doc(f("Id", "111"), f("desc", "Session 111"), f("Kind", "session"), f("SessionId", 111)),
+            doc(f("Id", "111!1"), f("desc", "Event 111!1"), f("Kind", "event"),
+                    //"UserCreated":"2019-09-19T14:01:04.759Z","UserDisplayName":"User 38702","UserEmail":"","UserId":131625339194449602,
+                    f("SessionId", 111),
+                    f("UserCreated","2019-09-19T14:01:04.759Z"),
+                    f("UserDisplayName","User 38702"),
+                    f("UserEmail","a@b.com"),
+                    f("UserId","131625339194449602")
+                    ));
+    assertJQ(req("Id:111!1"), "response/docs/[0]/_nest_parent_==\"111\"");
+    assertJQ(req("Id:111"), "response/docs/[0]/UserCreated==\"2019-09-19T14:01:04.759Z\"",
+            "response/docs/[0]/UserDisplayName==\"User 38702\"",
+            "response/docs/[0]/UserEmail==\"a@b.com\"",
+            "response/docs/[0]/UserId==\"131625339194449602\"");
+  }
+
   /**
    * Runs a document through the specified chain, and returns the final document used when the chain
    * is completed (NOTE: some chains may modify the document in place

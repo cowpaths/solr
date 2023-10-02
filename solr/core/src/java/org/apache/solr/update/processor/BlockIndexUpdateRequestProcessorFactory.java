@@ -18,24 +18,73 @@
 package org.apache.solr.update.processor;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.SolrInputField;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.handler.component.RealTimeGetComponent;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.AddUpdateCommand;
 import org.apache.solr.update.CommitUpdateCommand;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProcessorFactory {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
+ private boolean dedupe = false;
+  @Override
+  public void init(NamedList<?> args) {
+    super.init(args);
+    dedupe = "true".equals(args._get("dedupe", "false"));
+  }
+
+  public static final Set<String> DEDUPED_FLDS = Set.of(
+          "PageCountry",
+          "UserEmail",
+          "UserAppKey",
+          "PageScreenWidth",
+          "UserId",
+          "PageOperatingSystem",
+          "PageRefererUrlHost",
+          "UserCreated",
+          "UserDisplayName",
+          "PageAgent",
+          "PageBrowser",
+          "SessionStart",
+          "PageUrlHost",
+          "PageDevice",
+          "PageLatLongQuadStr",
+          "PageLatLongQuad",
+          "PageRegion",
+          "PagePlatform",
+          "PageIp",
+          "PageCity",
+          "SessionTipDeleted",
+          "AppDeviceModel",
+          "AppOsVersion",
+          "SessionTipActiveSec",
+          "AppPackageName",
+          "AppName",
+          "AppVersion",
+          "SessionTipTotalSec",
+          "AppFsVersion",
+          "SessionTipNumEvents",
+          "AppDeviceVendor",
+          "PageName",
+          "SessionTipNumPages",
+          "EventWebSourceFileUrlHost",
+          "PageViewportWidth",
+          "IndvSample",
+          "PageBrowserVersion",
+          "CaptureSourceIntegration"
+
+  );
   @Override
   public UpdateRequestProcessor getInstance(
       SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor next) {
@@ -44,6 +93,7 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
 
   private class URP extends UpdateRequestProcessor {
     final boolean isEnabled;
+    final boolean dedupe ;
     private Map<String, SolrInputDocument> sessions = new LinkedHashMap<>();
     private Map<String, List<SolrInputDocument>> events = new LinkedHashMap<>();
     private final SolrQueryRequest req;
@@ -52,6 +102,12 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
       super(next);
       this.req = req;
       isEnabled = true;
+      if(req.getParams().get("dedupeEventFields") !=null){
+        dedupe = req.getParams().getBool("dedupeEventFields", false);
+      } else {
+        dedupe = BlockIndexUpdateRequestProcessorFactory.this.dedupe;
+      }
+
     }
 
     @Override
@@ -63,7 +119,16 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
       if (cmd.solrDoc != null) {
         String kind = (String) cmd.solrDoc.getFieldValue("Kind");
         if ("session".equals(kind)) {
-          sessions.put(String.valueOf(cmd.solrDoc.getFieldValue("SessionId")), cmd.solrDoc);
+          String sessionId = String.valueOf(cmd.solrDoc.getFieldValue("SessionId"));
+          sessions.put(sessionId, cmd.solrDoc);
+          //maybe some events came before the session itself
+          List<SolrInputDocument> ev = events.remove(sessionId);
+          if(ev!= null) {
+            for (SolrInputDocument e : ev) {
+              dedupeFields(cmd.solrDoc, e);
+            }
+            cmd.solrDoc.addField("events", ev);
+          }
           return;
         }
         if ("event".equals(kind)) {
@@ -72,6 +137,7 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
             SolrInputDocument s = sessions.get(session);
             if (s != null) {
               s.addField("events", cmd.solrDoc);
+              dedupeFields(s, cmd.solrDoc);
             } else {
               events.computeIfAbsent(session, s1 -> new ArrayList<>()).add(cmd.solrDoc);
             }
@@ -79,7 +145,22 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
             // no sessionId in the event. It shouldn't happen
             super.processAdd(cmd);
           }
-        } else super.processAdd(cmd);
+        } else{
+          super.processAdd(cmd);
+        }
+      }
+    }
+
+    private void dedupeFields(SolrInputDocument session, SolrInputDocument event) {
+      if(!dedupe) return;
+      for (String fld : DEDUPED_FLDS) {
+        SolrInputField f = event.removeField(fld);
+        if(f != null) {
+          SolrInputField old = session.getField(fld);
+          if(old == null) {
+            session.addField(fld, f.getValue());
+          }
+        }
       }
     }
 
@@ -101,15 +182,18 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
 
     private void processNested() throws IOException {
       if (!sessions.isEmpty()) {
-        for (SolrInputDocument d : sessions.values()) {
+        Map<String, SolrInputDocument> sessionCopy = sessions;
+        sessions = new HashMap<>();
+        for (SolrInputDocument d : sessionCopy.values()) {
           AddUpdateCommand add = new AddUpdateCommand(req);
           add.solrDoc = d;
           next.processAdd(add);
         }
-        sessions.clear();
       }
       if (!events.isEmpty()) {
-        for (Map.Entry<String, List<SolrInputDocument>> e : events.entrySet()) {
+        Map<String, List<SolrInputDocument>> eventsCopy = events;
+        events = new HashMap<>();
+        for (Map.Entry<String, List<SolrInputDocument>> e : eventsCopy.entrySet()) {
           BytesRef session = new BytesRef(e.getKey());
           final SolrInputDocument oldSessionWithoutChildren =
               RealTimeGetComponent.getInputDocument(
@@ -134,7 +218,6 @@ public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProces
             next.processAdd(add);
           }
         }
-        events.clear();
       }
     }
   }

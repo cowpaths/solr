@@ -1339,6 +1339,7 @@ public class ZkStateReader implements SolrCloseable {
       }
 
       StatefulCollectionWatch scw = collectionWatches.statefulWatchesByCollectionName.get(coll);
+      log.info("Watched event {} {} on StateWatcher {}, collection watch active? {} state watcher active? {}", System.identityHashCode(event), event, System.identityHashCode(this), collectionWatches.watchedCollections().contains(coll), scw == null || scw.associatedWatcher != this);
       if (scw == null || scw.associatedWatcher != this) {
         // Collection no longer interesting, or we have been replaced by a different watcher.
         log.debug("Uninteresting collection {}", coll);

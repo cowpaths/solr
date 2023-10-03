@@ -1331,6 +1331,7 @@ public class ZkStateReader implements SolrCloseable {
         return;
       }
 
+      log.info("Watched event {} {} on StateWatcher {}, collection watch active? {}", System.identityHashCode(event), event, System.identityHashCode(this), collectionWatches.watchedCollections().contains(coll));
       if (!collectionWatches.watchedCollections().contains(coll)) {
         // This collection is no longer interesting, stop watching.
         log.debug("Uninteresting collection {}", coll);

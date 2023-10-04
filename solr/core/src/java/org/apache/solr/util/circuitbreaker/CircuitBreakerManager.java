@@ -87,10 +87,12 @@ public class CircuitBreakerManager implements PluginInfoInitialized {
       for (CircuitBreaker circuitBreaker : circuitBreakerList) {
         if (circuitBreaker.isEnabled() && circuitBreaker.isTripped()) {
           if (debugMode) {
-            log.info(
-                "Circuit tripped for {} with debug info {}",
-                circuitBreaker.getClass().getName(),
-                circuitBreaker.getDebugInfo());
+            if (log.isInfoEnabled()) {
+              log.info(
+                  "Circuit tripped for {} with debug info {}",
+                  circuitBreaker.getClass().getName(),
+                  circuitBreaker.getDebugInfo());
+            }
           } else {
             if (triggeredCircuitBreakers == null) {
               triggeredCircuitBreakers = new ArrayList<>();
@@ -116,10 +118,12 @@ public class CircuitBreakerManager implements PluginInfoInitialized {
       for (CircuitBreaker circuitBreaker : circuitBreakerList) {
         if (circuitBreaker.isEnabled() && circuitBreaker.isTripped()) {
           if (debugMode) {
-            log.info(
-                "Circuit tripped for {} with debug info {}",
-                circuitBreaker.getClass().getName(),
-                circuitBreaker.getDebugInfo());
+            if (log.isInfoEnabled()) {
+              log.info(
+                  "Circuit tripped for {} with debug info {}",
+                  circuitBreaker.getClass().getName(),
+                  circuitBreaker.getDebugInfo());
+            }
           } else {
             return true;
           }

@@ -35,6 +35,7 @@ import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
@@ -379,6 +380,55 @@ public class SearchHandlerTest extends SolrTestCaseJ4 {
       } else {
         System.clearProperty("solr.max.booleanClauses");
       }
+      miniCluster.shutdown();
+    }
+  }
+
+  @Test
+  public void testMaxBasicQueriesCompanion() throws Exception {
+    MiniSolrCloudCluster miniCluster =
+            new MiniSolrCloudCluster(1, createTempDir(), buildJettyConfig("/solr"));
+
+    final CloudSolrClient cloudSolrClient = miniCluster.getSolrClient();
+
+    try {
+      assertNotNull(miniCluster.getZkServer());
+      List<JettySolrRunner> jettys = miniCluster.getJettySolrRunners();
+      assertEquals(1, jettys.size());
+      for (JettySolrRunner jetty : jettys) {
+        assertTrue(jetty.isRunning());
+      }
+
+      // create collection
+      String collectionName = "testMaxBasicQueryCompanion";
+      String configName = collectionName + "Config";
+      miniCluster.uploadConfigSet(
+              SolrTestCaseJ4.TEST_PATH().resolve("collection1/conf"), configName);
+
+      CollectionAdminRequest.createCollection(collectionName, configName, 2, 1)
+              .setPerReplicaState(SolrCloudTestCase.USE_PER_REPLICA_STATE)
+              .process(miniCluster.getSolrClient());
+
+      for (int i = 0; i < 100; i++) {
+        SolrInputDocument doc = new SolrInputDocument();
+        doc.addField("id", i);
+        doc.addField("title", "test prefix" + i);
+        doc.addField("title_max_substring", "test prefix");
+        cloudSolrClient.add(collectionName, doc);
+      }
+      cloudSolrClient.commit(collectionName);
+
+      SolrQuery solrQuery = new SolrQuery("{!surround maxBasicQueries=50 df=title}99W(test,prefix*)");
+      final QueryRequest req2 = new QueryRequest(solrQuery);
+      req2.setMethod(SolrRequest.METHOD.POST);
+      QueryResponse response = req2.process(cloudSolrClient, collectionName);
+
+      System.out.println(response.getResults().getNumFound() + "!!!!!");
+      for (SolrDocument result : response.getResults()) {
+        System.out.println(result);
+      }
+
+    } finally {
       miniCluster.shutdown();
     }
   }

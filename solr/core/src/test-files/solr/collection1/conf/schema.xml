@@ -555,6 +555,7 @@
   <field name="text" type="text" indexed="true" stored="false"/>
   <field name="subject" type="text" indexed="true" stored="true"/>
   <field name="title" type="nametext" indexed="true" stored="true"/>
+  <field name="title_max_substring" type="nametext" indexed="true" stored="true"/>
   <field name="weight" type="float" indexed="true" stored="true" multiValued="false"/>
   <field name="bday" type="date" indexed="true" stored="true" multiValued="false"/>
 

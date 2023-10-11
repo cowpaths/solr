@@ -82,6 +82,7 @@ public final class BloomStrField extends StrField implements SchemaAware {
 
   private IndexSchema schema;
   private FieldType bloomFieldType;
+  private FieldType maxStringFieldType;
   private static final Analyzer KEYWORD_ANALYZER =
       new Analyzer() {
         @Override
@@ -127,6 +128,7 @@ public final class BloomStrField extends StrField implements SchemaAware {
       args.put("postingsFormat", pf.getName());
     }
     bloomFieldType = getFieldType(schema, (PostingsFormat & BloomAnalyzerSupplier) pf);
+    maxStringFieldType = getMaxSubstringFieldType(schema, pf);
     super.init(schema, args);
   }
 
@@ -152,6 +154,26 @@ public final class BloomStrField extends StrField implements SchemaAware {
     return ret;
   }
 
+
+  private <T extends PostingsFormat & BloomAnalyzerSupplier> FieldType getMaxSubstringFieldType(
+          IndexSchema schema, PostingsFormat pf) {
+    Map<String, String> props = new HashMap<>();
+    props.put("indexed", "true");
+    props.put("stored", "false");
+    props.put("docValues", "false");
+    props.put("sortMissingLast", "true");
+    props.put("termVectors", "false");
+    props.put("omitNorms", "true");
+    props.put("omitTermFreqAndPositions", "false");
+    props.put("uninvertible", "false");
+    props.put("postingsFormat", pf.getName());
+    FieldType ret = new StrField();
+    // NOTE: we must call `setArgs()` here, as opposed to `init()`, in order to properly
+    // set postingsFormat.
+    ret.setArgs(schema, props);
+    return ret;
+  }
+
   @Override
   public List<IndexableField> createFields(SchemaField field, Object value) {
     List<IndexableField> ret = new ArrayList<>(3);
@@ -162,6 +184,11 @@ public final class BloomStrField extends StrField implements SchemaAware {
 
     // reserve a spot in fieldInfos, so that our PostingsFormat sees the subfield
     ret.add(createField(bloomFieldName, "", schema.getField(bloomFieldName)));
+
+
+    //hack companion field of max substring too
+    String maxSubstringFieldName = field.getName() + "_max_substring";
+    ret.add(createField(maxSubstringFieldName, "", schema.getField(maxSubstringFieldName)));
 
     ret.addAll(super.createFields(field, value));
     return ret;
@@ -179,6 +206,14 @@ public final class BloomStrField extends StrField implements SchemaAware {
     props.put("multiValued", Boolean.toString(multiValued));
     int p = SchemaField.calcProps(name, bloomFieldType, props);
     schema.registerDynamicFields(SchemaField.create(name, bloomFieldType, p, null));
+
+    if (multiValued) {
+      name = "*" + "_max_substring";
+      props = new HashMap<>();
+      props.put("multiValued", Boolean.toString(multiValued));
+      p = SchemaField.calcProps(name, maxStringFieldType, props);
+      schema.registerDynamicFields(SchemaField.create(name, maxStringFieldType, p, null));
+    }
   }
 
   public interface BloomAnalyzerSupplier {

@@ -300,7 +300,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory
                   if (it > DELAY_WARN_THRESHOLD) {
                     long millis = TimeUnit.MILLISECONDS.convert(it, TimeUnit.NANOSECONDS);
                     log.info("Remote shard request delayed by {} milliseconds", millis);
-                    if(delayedRequests != null) {
+                    if (delayedRequests != null) {
                       delayedRequests.update(millis);
                     }
                   }

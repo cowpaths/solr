@@ -154,9 +154,7 @@ public final class BloomStrField extends StrField implements SchemaAware {
     return ret;
   }
 
-
-  private <T extends PostingsFormat & BloomAnalyzerSupplier> FieldType getMaxSubstringFieldType(
-          IndexSchema schema, PostingsFormat pf) {
+  private FieldType getMaxSubstringFieldType(IndexSchema schema, PostingsFormat pf) {
     Map<String, String> props = new HashMap<>();
     props.put("indexed", "true");
     props.put("stored", "false");
@@ -185,8 +183,7 @@ public final class BloomStrField extends StrField implements SchemaAware {
     // reserve a spot in fieldInfos, so that our PostingsFormat sees the subfield
     ret.add(createField(bloomFieldName, "", schema.getField(bloomFieldName)));
 
-
-    //hack companion field of max substring too
+    // hack companion field of max substring too
     String maxSubstringFieldName = field.getName() + "_max_substring";
     ret.add(createField(maxSubstringFieldName, "", schema.getField(maxSubstringFieldName)));
 

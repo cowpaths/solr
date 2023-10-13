@@ -162,7 +162,7 @@ public final class BloomStrField extends StrField implements SchemaAware {
     props.put("sortMissingLast", "true");
     props.put("termVectors", "false");
     props.put("omitNorms", "true");
-    props.put("omitTermFreqAndPositions", "false");
+    props.put("omitTermFreqAndPositions", "true");
     props.put("uninvertible", "false");
     props.put("postingsFormat", pf.getName());
     FieldType ret = new StrField();

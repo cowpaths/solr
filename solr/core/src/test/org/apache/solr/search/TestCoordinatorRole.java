@@ -20,7 +20,13 @@ package org.apache.solr.search;
 import static org.apache.solr.common.params.CommonParams.OMIT_HEADER;
 import static org.apache.solr.common.params.CommonParams.TRUE;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.invoke.MethodHandles;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -37,6 +43,7 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.Http2SolrClient;
+import org.apache.solr.client.solrj.impl.JsonMapResponseParser;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
@@ -51,17 +58,80 @@ import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.cloud.ZkStateReaderAccessor;
 import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.core.NodeRoles;
 import org.apache.solr.embedded.JettySolrRunner;
 import org.apache.solr.servlet.CoordinatorHttpSolrCall;
+import org.noggit.JSONParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TestCoordinatorRole extends SolrCloudTestCase {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+  public void testSolrExport() throws Exception {
+    MiniSolrCloudCluster cluster =
+            configureCluster(4).addConfig("conf", configset("cloud-minimal")).configure();
+    try {
+      CloudSolrClient client = cluster.getSolrClient();
+      String COLLECTION_NAME = "test_coll";
+      String SYNTHETIC_COLLECTION = CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX + "conf";
+      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 2, 1)
+              .process(cluster.getSolrClient());
+      cluster.waitForActiveCollection(COLLECTION_NAME, 2, 2);
+      Random rd = new Random();
+      UpdateRequest ur = new UpdateRequest();
+      for (int i = 0; i < 100000; i++) {
+        SolrInputDocument doc2 = new SolrInputDocument();
+        doc2.addField("id", "" + rd.nextInt());
+        doc2.addField("user_i18n_navigator_language_s", "en-US");
+        doc2.addField("user_i18n_server_language_s", "en");
+        doc2.addField("user_i18n_loaded_bundle_path_s", "/s/lang/messages_en.json");
+        doc2.addField("user_i18n_selected_language_s", "en");
+        ur.add(doc2);
+      }
+
+      ur.commit(client, COLLECTION_NAME);
+
+
+    JettySolrRunner node1 = cluster.getJettySolrRunner(0);
+
+    String url = node1.getBaseUrl().toString() + "/test_coll/stream?wt=json&expr=" + URLEncoder.encode("select(search(test_coll, q=\"*:*\", fl=\"*_s,id\", qt=\"/export\", sort=\"id asc\"), id, *_s)");
+
+     sendGET(url);
+    } finally {
+      cluster.shutdown();
+    }
+  }
+
+  private static void sendGET(String url) throws IOException {
+
+    URL obj = new URL(url);
+    HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+    con.setRequestMethod("GET");
+
+    int responseCode = con.getResponseCode();
+    System.out.println("GET Response Code :: " + responseCode);
+    if (responseCode == HttpURLConnection.HTTP_OK) { // success
+      BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+      String inputLine;
+      StringBuffer response = new StringBuffer();
+
+      while ((inputLine = in.readLine()) != null) {
+        response.append(inputLine);
+      }
+      in.close();
+
+      // print result
+      System.out.println(response.toString());
+    } else {
+      System.out.println("GET request did not work.");
+    }
+
+  }
 
   public void testSimple() throws Exception {
     MiniSolrCloudCluster cluster =

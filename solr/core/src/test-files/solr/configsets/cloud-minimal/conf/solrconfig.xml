@@ -25,7 +25,8 @@
 
   <directoryFactory name="DirectoryFactory"
                     class="${solr.directoryFactory:solr.NRTCachingDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
+				<schemaFactory class="ClassicIndexSchemaFactory"/>
+	  <!-- codecFactory class="solr.SchemaCodecFactory"/ -->
 
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
 

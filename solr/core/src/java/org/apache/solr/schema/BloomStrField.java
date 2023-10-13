@@ -164,7 +164,7 @@ public final class BloomStrField extends StrField implements SchemaAware {
     props.put("omitNorms", "true");
     props.put("omitTermFreqAndPositions", "true");
     props.put("uninvertible", "false");
-    props.put("postingsFormat", pf.getName());
+    props.put("postingsFormat", "X".concat(pf.getName()));
     FieldType ret = new StrField();
     // NOTE: we must call `setArgs()` here, as opposed to `init()`, in order to properly
     // set postingsFormat.

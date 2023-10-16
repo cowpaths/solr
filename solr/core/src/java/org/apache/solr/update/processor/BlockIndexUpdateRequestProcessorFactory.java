@@ -18,207 +18,112 @@
 package org.apache.solr.update.processor;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.lang.invoke.MethodHandles;
 
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.SolrInputField;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.handler.component.RealTimeGetComponent;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.AddUpdateCommand;
 import org.apache.solr.update.CommitUpdateCommand;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class BlockIndexUpdateRequestProcessorFactory extends UpdateRequestProcessorFactory {
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
- private boolean dedupe = false;
-  @Override
-  public void init(NamedList<?> args) {
-    super.init(args);
-    dedupe = "true".equals(args._get("dedupe", "false"));
-  }
-
-  public static final Set<String> DEDUPED_FLDS = Set.of(
-          "PageCountry",
-          "UserEmail",
-          "UserAppKey",
-          "PageScreenWidth",
-          "UserId",
-          "PageOperatingSystem",
-          "PageRefererUrlHost",
-          "UserCreated",
-          "UserDisplayName",
-          "PageAgent",
-          "PageBrowser",
-          "SessionStart",
-          "PageUrlHost",
-          "PageDevice",
-          "PageLatLongQuadStr",
-          "PageLatLongQuad",
-          "PageRegion",
-          "PagePlatform",
-          "PageIp",
-          "PageCity",
-          "SessionTipDeleted",
-          "AppDeviceModel",
-          "AppOsVersion",
-          "SessionTipActiveSec",
-          "AppPackageName",
-          "AppName",
-          "AppVersion",
-          "SessionTipTotalSec",
-          "AppFsVersion",
-          "SessionTipNumEvents",
-          "AppDeviceVendor",
-          "PageName",
-          "SessionTipNumPages",
-          "EventWebSourceFileUrlHost",
-          "PageViewportWidth",
-          "IndvSample",
-          "PageBrowserVersion",
-          "CaptureSourceIntegration"
-
-  );
-  @Override
-  public UpdateRequestProcessor getInstance(
-      SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor next) {
-    return new URP(req, rsp, next);
-  }
-
-  private class URP extends UpdateRequestProcessor {
-    final boolean isEnabled;
-    final boolean dedupe ;
-    private Map<String, SolrInputDocument> sessions = new LinkedHashMap<>();
-    private Map<String, List<SolrInputDocument>> events = new LinkedHashMap<>();
-    private final SolrQueryRequest req;
-
-    public URP(SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor next) {
-      super(next);
-      this.req = req;
-      isEnabled = true;
-      if(req.getParams().get("dedupeEventFields") !=null){
-        dedupe = req.getParams().getBool("dedupeEventFields", false);
-      } else {
-        dedupe = BlockIndexUpdateRequestProcessorFactory.this.dedupe;
-      }
-
-    }
+    private boolean dedupe = false;
 
     @Override
-    public void processAdd(AddUpdateCommand cmd) throws IOException {
-      if (!isEnabled) {
-        super.processAdd(cmd);
-        return;
-      }
-      if (cmd.solrDoc != null) {
-        String kind = (String) cmd.solrDoc.getFieldValue("Kind");
-        if ("session".equals(kind)) {
-          String sessionId = String.valueOf(cmd.solrDoc.getFieldValue("SessionId"));
-          sessions.put(sessionId, cmd.solrDoc);
-          //maybe some events came before the session itself
-          List<SolrInputDocument> ev = events.remove(sessionId);
-          if(ev!= null) {
-            for (SolrInputDocument e : ev) {
-              dedupeFields(cmd.solrDoc, e);
-            }
-            cmd.solrDoc.addField("events", ev);
-          }
-          return;
-        }
-        if ("event".equals(kind)) {
-          String session = String.valueOf(cmd.solrDoc.getFieldValue("SessionId"));
-          if (session != null) {
-            SolrInputDocument s = sessions.get(session);
-            if (s != null) {
-              s.addField("events", cmd.solrDoc);
-              dedupeFields(s, cmd.solrDoc);
+    public void init(NamedList<?> args) {
+        super.init(args);
+        dedupe = "true".equals(args._get("dedupe", "false"));
+    }
+
+
+    @Override
+    public UpdateRequestProcessor getInstance(
+            SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor next) {
+        return new URP(req, rsp, next);
+    }
+
+    private class URP extends UpdateRequestProcessor {
+        final boolean isEnabled;
+        final boolean dedupe;
+        private final DocumentNester documentNester;
+        private final SolrQueryRequest req;
+
+        public URP(SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor next) {
+            super(next);
+            this.req = req;
+            isEnabled = true;
+            if (req.getParams().get("dedupeEventFields") != null) {
+                dedupe = req.getParams().getBool("dedupeEventFields", false);
             } else {
-              events.computeIfAbsent(session, s1 -> new ArrayList<>()).add(cmd.solrDoc);
+                dedupe = BlockIndexUpdateRequestProcessorFactory.this.dedupe;
             }
-          } else {
-            // no sessionId in the event. It shouldn't happen
-            super.processAdd(cmd);
-          }
-        } else{
-          super.processAdd(cmd);
+            documentNester = new DocumentNester(
+                    k -> fetchDoc(k),
+                    d -> index(req, next, d)
+            );
+
         }
-      }
-    }
 
-    private void dedupeFields(SolrInputDocument session, SolrInputDocument event) {
-      if(!dedupe) return;
-      for (String fld : DEDUPED_FLDS) {
-        SolrInputField f = event.removeField(fld);
-        if(f != null) {
-          SolrInputField old = session.getField(fld);
-          if(old == null) {
-            session.addField(fld, f.getValue());
-          }
-        }
-      }
-    }
-
-    @Override
-    public void processCommit(CommitUpdateCommand cmd) throws IOException {
-      processNested();
-      super.processCommit(cmd);
-    }
-
-    @Override
-    public void finish() throws IOException {
-      if (!isEnabled) {
-        super.finish();
-        return;
-      }
-      processNested();
-      next.finish();
-    }
-
-    private void processNested() throws IOException {
-      if (!sessions.isEmpty()) {
-        Map<String, SolrInputDocument> sessionCopy = sessions;
-        sessions = new HashMap<>();
-        for (SolrInputDocument d : sessionCopy.values()) {
-          AddUpdateCommand add = new AddUpdateCommand(req);
-          add.solrDoc = d;
-          next.processAdd(add);
-        }
-      }
-      if (!events.isEmpty()) {
-        Map<String, List<SolrInputDocument>> eventsCopy = events;
-        events = new HashMap<>();
-        for (Map.Entry<String, List<SolrInputDocument>> e : eventsCopy.entrySet()) {
-          BytesRef session = new BytesRef(e.getKey());
-          final SolrInputDocument oldSessionWithoutChildren =
-              RealTimeGetComponent.getInputDocument(
-                  req.getCore(),
-                  session,
-                  session,
-                  null,
-                  null,
-                  RealTimeGetComponent.Resolution.DOC); // when no children, just fetches the doc
-          if (oldSessionWithoutChildren == null) {
-            // strange. The session does not exist. just index as is
-            for (SolrInputDocument d : e.getValue()) {
-              AddUpdateCommand add = new AddUpdateCommand(req);
-              add.solrDoc = d;
-              next.processAdd(add);
+        private SolrInputDocument fetchDoc(String k) {
+            try {
+                BytesRef session = new BytesRef(k);
+                return RealTimeGetComponent.getInputDocument(
+                        req.getCore(),
+                        session,
+                        session,
+                        null,
+                        null,
+                        RealTimeGetComponent.Resolution.DOC);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
+        }
 
-          } else {
-            oldSessionWithoutChildren.addField("events", Map.of("add", e.getValue()));
+        private void index(SolrQueryRequest req, UpdateRequestProcessor next, SolrInputDocument d) {
+            if(d == null) {
+                log.warn("NULLDOC");
+                return;
+            }
             AddUpdateCommand add = new AddUpdateCommand(req);
-            add.solrDoc = oldSessionWithoutChildren;
-            next.processAdd(add);
-          }
+            add.solrDoc = d;
+            try {
+                next.processAdd(add);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
-      }
+
+        @Override
+        public void processAdd(AddUpdateCommand cmd) throws IOException {
+            if (!isEnabled) {
+                super.processAdd(cmd);
+                return;
+            }
+            if (cmd.solrDoc != null) {
+                documentNester.add(cmd.solrDoc);
+            }
+        }
+        @Override
+        public void processCommit(CommitUpdateCommand cmd) throws IOException {
+            documentNester.close();
+            super.processCommit(cmd);
+        }
+
+        @Override
+        public void finish() throws IOException {
+            if (!isEnabled) {
+                super.finish();
+                return;
+            }
+            documentNester.close();
+            next.finish();
+        }
     }
-  }
 }

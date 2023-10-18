@@ -71,6 +71,15 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     this(prefix, noInvert, multiValued, false);
   }
 
+  private static final byte[] BIG_TERM_BYTES = new byte[UnicodeUtil.BIG_TERM.length + 1];
+
+  static {
+    // NOTE: we don't directly use `UnicodeUtil.BIG_TERM`, to avoid incorrect inferences
+    // based on negative suffix values on seek terms.
+    BytesRef bt = UnicodeUtil.BIG_TERM;
+    System.arraycopy(bt.bytes, bt.offset, BIG_TERM_BYTES, 0, bt.length);
+  }
+
   public DynamicComplementPrefixQuery(
       Term prefix, boolean noInvert, boolean multiValued, boolean forceCacheFieldExists) {
     super(
@@ -80,10 +89,10 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
             : new InvertingRewriteMethod(CONSTANT_SCORE_REWRITE, multiValued));
     this.termPrefix = prefix;
     BytesRef tmp = prefix.bytes();
-    byte[] backing = new byte[tmp.length + UnicodeUtil.BIG_TERM.length];
+    byte[] backing = new byte[tmp.length + BIG_TERM_BYTES.length];
     System.arraycopy(tmp.bytes, tmp.offset, backing, 0, tmp.length);
     System.arraycopy(
-        UnicodeUtil.BIG_TERM.bytes, 0, backing, tmp.length, UnicodeUtil.BIG_TERM.length);
+        BIG_TERM_BYTES, 0, backing, tmp.length, BIG_TERM_BYTES.length);
     this.prefix = new BytesRef(backing, 0, tmp.length);
     this.limit = new BytesRef(backing);
     this.multiValued = multiValued;

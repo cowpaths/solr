@@ -91,8 +91,7 @@ public class DynamicComplementPrefixQuery extends MultiTermQuery {
     BytesRef tmp = prefix.bytes();
     byte[] backing = new byte[tmp.length + BIG_TERM_BYTES.length];
     System.arraycopy(tmp.bytes, tmp.offset, backing, 0, tmp.length);
-    System.arraycopy(
-        BIG_TERM_BYTES, 0, backing, tmp.length, BIG_TERM_BYTES.length);
+    System.arraycopy(BIG_TERM_BYTES, 0, backing, tmp.length, BIG_TERM_BYTES.length);
     this.prefix = new BytesRef(backing, 0, tmp.length);
     this.limit = new BytesRef(backing);
     this.multiValued = multiValued;

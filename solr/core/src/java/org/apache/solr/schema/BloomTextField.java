@@ -16,12 +16,12 @@
  */
 package org.apache.solr.schema;
 
-import org.apache.lucene.codecs.PostingsFormat;
-import org.apache.lucene.index.IndexableField;
-import org.apache.solr.schema.BloomUtils.BloomAnalyzerSupplier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.apache.lucene.codecs.PostingsFormat;
+import org.apache.lucene.index.IndexableField;
+import org.apache.solr.schema.BloomUtils.BloomAnalyzerSupplier;
 
 /**
  * A specialized TextField variant that facilitates configuration of a ngram subfield (populated at
@@ -54,17 +54,14 @@ public final class BloomTextField extends TextField implements SchemaAware {
   @Override
   public List<IndexableField> createFields(SchemaField field, Object value) {
     List<IndexableField> ret = new ArrayList<>(3);
-    String bloomFieldName =
-        field
-            .getName()
-            .concat(field.multiValued() ? BloomUtils.BLOOM_FIELD_BASE_SUFFIX_MULTI : BloomUtils.BLOOM_FIELD_BASE_SUFFIX_SINGLE);
+    String bloomFieldName = BloomUtils.getNgramFieldName(field);
 
     // reserve a spot in fieldInfos, so that our PostingsFormat sees the subfield
     ret.add(createField(bloomFieldName, "", schema.getField(bloomFieldName)));
 
     if (maxStringFieldType != null) {
       // hack companion field of max substring too
-      String maxSubstringFieldName = field.getName().concat(BloomUtils.maxSubstringSuffix(field));
+      String maxSubstringFieldName = BloomUtils.getMaxSubstringFieldName(field);
       ret.add(createField(maxSubstringFieldName, "", schema.getField(maxSubstringFieldName)));
     }
 

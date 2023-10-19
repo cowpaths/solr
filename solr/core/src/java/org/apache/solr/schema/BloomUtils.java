@@ -36,8 +36,8 @@ import org.apache.lucene.util.IOFunction;
 import org.apache.solr.request.SolrQueryRequest;
 
 /**
- * Utilities to facilitate configuration of a ngram subfield (populated at segment flush by a
- * custom PostingsFormat) that can be used to pre-filter terms that must be evaluated for
+ * Utilities to facilitate configuration of a ngram subfield (populated at segment flush by a custom
+ * PostingsFormat) that can be used to pre-filter terms that must be evaluated for
  * substring/wildcard/regex search. See {@link BloomStrField} and {@link BloomTextField}.
  */
 public final class BloomUtils {
@@ -52,19 +52,21 @@ public final class BloomUtils {
    * Base suffix must start with `0` to ensure that FieldsProducer visits the subfield immediately
    * after the parent field -- i.e., the fieldnames must sort lexicographically adjacent.
    */
-  public static final String BLOOM_FIELD_BASE_SUFFIX = "0Ngram";
+  private static final String BLOOM_FIELD_BASE_SUFFIX = "0Ngram";
 
-  public static final String MAX_SUBSTRING_FIELD_BASE_SUFFIX = "_max_substring";
+  private static final String MAX_SUBSTRING_FIELD_BASE_SUFFIX = "_max_substring";
 
-  public static final String BLOOM_FIELD_BASE_SUFFIX_SINGLE = BLOOM_FIELD_BASE_SUFFIX.concat("S"); // single-valued
+  /** Single-valued ngram suffix */
+  private static final String BLOOM_FIELD_BASE_SUFFIX_SINGLE = BLOOM_FIELD_BASE_SUFFIX.concat("S");
 
-  public static final String BLOOM_FIELD_BASE_SUFFIX_MULTI = BLOOM_FIELD_BASE_SUFFIX.concat("M"); // multiValued
+  /** multi-valued ngram suffix */
+  private static final String BLOOM_FIELD_BASE_SUFFIX_MULTI = BLOOM_FIELD_BASE_SUFFIX.concat("M");
 
   private static final int REQUIRE_LENGTH_DIFFERENTIAL = BLOOM_FIELD_BASE_SUFFIX_SINGLE.length();
 
   /**
-   * Returns null if ngramField is _not_ an ngram field; otherwise returns the
-   * field name of the ngramField's associated raw field.
+   * Returns null if ngramField is _not_ an ngram field; otherwise returns the field name of the
+   * ngramField's associated raw field.
    */
   public static String isNgramSubfield(String srcField, String ngramField) {
     int thisLen = ngramField.length();
@@ -195,27 +197,16 @@ public final class BloomUtils {
   private static final char OMIT_NORMS = 'A';
   private static final char OMIT_TERM_FREQS_AND_POSITIONS = 'B';
   private static final char MULTI_VALUED = 'D';
-  private static final char ALL_FEATURES = OMIT_NORMS | OMIT_TERM_FREQS_AND_POSITIONS | MULTI_VALUED;
+  private static final char ALL_FEATURES =
+      OMIT_NORMS | OMIT_TERM_FREQS_AND_POSITIONS | MULTI_VALUED;
   private static final char NO_FEATURES = ALL_FEATURES + 1;
   private static final char INITIAL = OMIT_NORMS - 1;
 
-  static String maxSubstringSuffix(SchemaField sf) {
-    char suffix = INITIAL;
-    if (sf.omitNorms()) {
-      suffix |= OMIT_NORMS;
-    }
-    if (sf.omitTermFreqAndPositions()) {
-      suffix |= OMIT_TERM_FREQS_AND_POSITIONS;
-    }
-    if (sf.multiValued()) {
-      suffix |= MULTI_VALUED;
-    }
-    return MAX_SUBSTRING_FIELD_BASE_SUFFIX + (suffix == INITIAL ? NO_FEATURES : suffix);
-  }
-
-  static void registerDynamicSubfields(IndexSchema schema, FieldType bloomFieldType, FieldType maxStringFieldType) {
-    for (boolean multiValued : new boolean[]{true, false}) {
-      String name = "*" + (multiValued ? BLOOM_FIELD_BASE_SUFFIX_MULTI : BLOOM_FIELD_BASE_SUFFIX_SINGLE);
+  static void registerDynamicSubfields(
+      IndexSchema schema, FieldType bloomFieldType, FieldType maxStringFieldType) {
+    for (boolean multiValued : new boolean[] {true, false}) {
+      String name =
+          "*" + (multiValued ? BLOOM_FIELD_BASE_SUFFIX_MULTI : BLOOM_FIELD_BASE_SUFFIX_SINGLE);
       Map<String, String> props = new HashMap<>();
       props.put("multiValued", Boolean.toString(multiValued));
       int p = SchemaField.calcProps(name, bloomFieldType, props);
@@ -227,7 +218,10 @@ public final class BloomUtils {
         String name = base + feature;
         Map<String, String> props = new HashMap<>();
         props.put("omitNorms", Boolean.toString((feature & OMIT_NORMS) == OMIT_NORMS));
-        props.put("omitTermFreqAndPositions", Boolean.toString((feature & OMIT_TERM_FREQS_AND_POSITIONS) == OMIT_TERM_FREQS_AND_POSITIONS));
+        props.put(
+            "omitTermFreqAndPositions",
+            Boolean.toString(
+                (feature & OMIT_TERM_FREQS_AND_POSITIONS) == OMIT_TERM_FREQS_AND_POSITIONS));
         props.put("multiValued", Boolean.toString((feature & MULTI_VALUED) == MULTI_VALUED));
         int p = SchemaField.calcProps(name, maxStringFieldType, props);
         schema.registerDynamicFields(SchemaField.create(name, maxStringFieldType, p, null));
@@ -235,7 +229,33 @@ public final class BloomUtils {
     }
   }
 
-  public static Terms getNgramTerms(String rawField, FieldsProducer fp, String[] ngramTermsField) throws IOException {
+  public static String getNgramFieldName(SchemaField sf) {
+    return sf.getName()
+        .concat(
+            sf.multiValued()
+                ? BloomUtils.BLOOM_FIELD_BASE_SUFFIX_MULTI
+                : BloomUtils.BLOOM_FIELD_BASE_SUFFIX_SINGLE);
+  }
+
+  public static String getMaxSubstringFieldName(SchemaField sf) {
+    char suffix = INITIAL;
+    if (sf.omitNorms()) {
+      suffix |= OMIT_NORMS;
+    }
+    if (sf.omitTermFreqAndPositions()) {
+      suffix |= OMIT_TERM_FREQS_AND_POSITIONS;
+    }
+    if (sf.multiValued()) {
+      suffix |= MULTI_VALUED;
+    }
+    if (suffix == INITIAL) {
+      suffix = NO_FEATURES;
+    }
+    return sf.getName() + MAX_SUBSTRING_FIELD_BASE_SUFFIX + suffix;
+  }
+
+  public static Terms getNgramTerms(String rawField, FieldsProducer fp, String[] ngramTermsField)
+      throws IOException {
     String ntf = rawField.concat(BLOOM_FIELD_BASE_SUFFIX_SINGLE);
     Terms ret = fp.terms(ntf);
     if (ret != null) {
@@ -250,7 +270,8 @@ public final class BloomUtils {
     return ret;
   }
 
-  public static <T> T getMaxSubstring(String rawField, IOFunction<String, T> func, String[] maxSubstringField) throws IOException {
+  public static <T> T getMaxSubstring(
+      String rawField, IOFunction<String, T> func, String[] maxSubstringField) throws IOException {
     String base = rawField.concat(MAX_SUBSTRING_FIELD_BASE_SUFFIX);
     for (char feature = NO_FEATURES; feature >= OMIT_NORMS; feature--) {
       String fieldName = base + feature;

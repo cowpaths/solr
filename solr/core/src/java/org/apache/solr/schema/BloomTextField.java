@@ -18,7 +18,7 @@ package org.apache.solr.schema;
 
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.index.IndexableField;
-import org.apache.solr.schema.BloomStrField.BloomAnalyzerSupplier;
+import org.apache.solr.schema.BloomUtils.BloomAnalyzerSupplier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +28,7 @@ import java.util.Map;
  * segment flush by a custom PostingsFormat) that can be used to pre-filter terms that must be
  * evaluated for substring/wildcard/regex search.
  */
-public final class BloomTextField extends StrField implements SchemaAware {
+public final class BloomTextField extends TextField implements SchemaAware {
 
   @Override
   public boolean isPolyField() {
@@ -42,11 +42,11 @@ public final class BloomTextField extends StrField implements SchemaAware {
   @Override
   protected void init(IndexSchema schema, Map<String, String> args) {
     this.schema = schema;
-    PostingsFormat pf = BloomStrField.getPostingsFormat(args);
-    bloomFieldType = BloomStrField.getFieldType(schema, (PostingsFormat & BloomAnalyzerSupplier) pf);
+    PostingsFormat pf = BloomUtils.getPostingsFormat(args);
+    bloomFieldType = BloomUtils.getFieldType(schema, (PostingsFormat & BloomAnalyzerSupplier) pf);
     String maxSubstring = args.remove("maxSubstring");
     if (maxSubstring == null || "true".equals(maxSubstring)) {
-      maxStringFieldType = BloomStrField.getMaxSubstringFieldType(schema, pf);
+      maxStringFieldType = BloomUtils.getMaxSubstringFieldType(schema, pf);
     }
     super.init(schema, args);
   }
@@ -57,14 +57,14 @@ public final class BloomTextField extends StrField implements SchemaAware {
     String bloomFieldName =
         field
             .getName()
-            .concat(field.multiValued() ? BloomStrField.BLOOM_FIELD_BASE_SUFFIX_MULTI : BloomStrField.BLOOM_FIELD_BASE_SUFFIX_SINGLE);
+            .concat(field.multiValued() ? BloomUtils.BLOOM_FIELD_BASE_SUFFIX_MULTI : BloomUtils.BLOOM_FIELD_BASE_SUFFIX_SINGLE);
 
     // reserve a spot in fieldInfos, so that our PostingsFormat sees the subfield
     ret.add(createField(bloomFieldName, "", schema.getField(bloomFieldName)));
 
     if (maxStringFieldType != null) {
       // hack companion field of max substring too
-      String maxSubstringFieldName = field.getName().concat("_max_substring");
+      String maxSubstringFieldName = field.getName().concat(BloomUtils.maxSubstringSuffix(field));
       ret.add(createField(maxSubstringFieldName, "", schema.getField(maxSubstringFieldName)));
     }
 
@@ -74,6 +74,6 @@ public final class BloomTextField extends StrField implements SchemaAware {
 
   @Override
   public void inform(IndexSchema schema) {
-    BloomStrField.registerDynamicSubfields(schema, bloomFieldType, maxStringFieldType);
+    BloomUtils.registerDynamicSubfields(schema, bloomFieldType, maxStringFieldType);
   }
 }

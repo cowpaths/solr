@@ -1255,7 +1255,11 @@ public class ZkController implements Closeable {
                     zkClient.getZkACLProvider().getACLsToAdd(nodePath),
                     CreateMode.EPHEMERAL)));
 
-    zkClient.multi(ops, true);
+    try {
+      zkClient.multi(ops, true);
+    } catch (KeeperException.NodeExistsException e) {
+      //Ignore if the node is already created. this is OK
+    }
   }
 
   public void removeEphemeralLiveNode() throws KeeperException, InterruptedException {

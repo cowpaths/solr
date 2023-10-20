@@ -87,6 +87,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.automaton.CompiledAutomaton;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -105,6 +106,7 @@ import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.schema.BloomUtils;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.OrdMapRegenerator.OrdinalMapValue;
@@ -156,6 +158,10 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   private final boolean useFilterForSortedQuery;
 
   private final boolean cachingEnabled;
+
+  // TODO: make highFreqNgramAutomatonCache a user cache
+  private final Map<String, CompiledAutomaton> highFreqNgramAutomatonCache =
+      new ConcurrentHashMap<>();
   private final SolrCache<Query, DocSet> filterCache;
   private final SolrCache<String, OrdinalMapValue> ordMapCache;
   private final SolrCache<QueryResultKey, DocList> queryResultCache;
@@ -424,6 +430,30 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       this.fieldValueCache = null;
       this.cacheMap = NO_GENERIC_CACHES;
       this.cacheList = NO_CACHES;
+    }
+
+    for (LeafReaderContext ctx : this.rawReader.leaves()) {
+      BloomUtils.registerMaxNgramAutomatonFetcher(
+          ctx.reader(),
+          (f, compute) -> {
+            IOException[] computeException = new IOException[1];
+            CompiledAutomaton ret =
+                highFreqNgramAutomatonCache.computeIfAbsent(
+                    f,
+                    (ignored) -> {
+                      try {
+                        return compute.apply(null);
+                      } catch (IOException e) {
+                        computeException[0] = e;
+                        return null;
+                      }
+                    });
+            if (computeException[0] != null) {
+              throw computeException[0];
+            } else {
+              return ret;
+            }
+          });
     }
 
     // We already have our own filter cache

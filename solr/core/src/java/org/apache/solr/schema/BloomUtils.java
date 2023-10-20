@@ -17,9 +17,13 @@
 package org.apache.solr.schema;
 
 import java.io.IOException;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
@@ -29,10 +33,14 @@ import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.perfield.PerFieldPostingsFormat;
 import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.FilterLeafReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.SegmentInfo;
+import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.util.IOFunction;
+import org.apache.lucene.util.automaton.CompiledAutomaton;
 import org.apache.solr.request.SolrQueryRequest;
 
 /**
@@ -290,8 +298,8 @@ public final class BloomUtils {
     Analyzer getBloomAnalyzer();
   }
 
-  private static final WeakHashMap<IndexReader.CacheKey, Map<String, Analyzer>> bloomAnalyzerCache =
-      new WeakHashMap<>();
+  private static final WeakHashMap<IndexReader.CacheKey, Map<String, Analyzer>>
+      BLOOM_ANALYZER_CACHE = new WeakHashMap<>();
 
   /**
    * This method should be used to retrieve a bloom analyzer that is compatible with the analyzer
@@ -320,9 +328,111 @@ public final class BloomUtils {
     if (key == null) {
       return func.apply(field);
     } else {
-      return bloomAnalyzerCache
+      return BLOOM_ANALYZER_CACHE
           .computeIfAbsent(key, (k) -> new HashMap<>())
           .computeIfAbsent(field, func);
+    }
+  }
+
+  // TODO: ensure that caching on SegmentInfo key will not result in a leak. I think this should be
+  //  ok, relying on cleanup from `CacheKeyWeakRef`, but we should verify.
+  private static final Map<SegmentInfo, CacheKeyWeakRef> CACHE_KEY_LOOKUP =
+      new ConcurrentHashMap<>();
+  private static final Map<CacheKeyWeakRef, MaxNgramAutomatonFetcher> COMPUTE_MAP =
+      new ConcurrentHashMap<>();
+  private static final ReferenceQueue<IndexReader.CacheKey> CLEANUP_CACHE_KEY =
+      new ReferenceQueue<>();
+
+  private static final class CacheKeyWeakRef extends WeakReference<IndexReader.CacheKey> {
+    private final SegmentInfo segmentKey;
+    private final int hashCode;
+
+    public CacheKeyWeakRef(
+        IndexReader.CacheKey referent,
+        SegmentInfo segmentKey,
+        ReferenceQueue<? super IndexReader.CacheKey> q) {
+      super(referent, q);
+      this.segmentKey = segmentKey;
+      hashCode = referent.hashCode();
+    }
+
+    @Override
+    public int hashCode() {
+      return hashCode;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      } else {
+        return Objects.equals(get(), ((CacheKeyWeakRef) obj).get());
+      }
+    }
+  }
+
+  public interface MaxNgramAutomatonFetcher {
+    CompiledAutomaton getCompiledAutomaton(
+        String field, IOFunction<Void, CompiledAutomaton> compute) throws IOException;
+  }
+
+  public static void registerMaxNgramAutomatonFetcher(
+      LeafReader r, MaxNgramAutomatonFetcher compute) {
+    IndexReader.CacheHelper outerCacheHelper = r.getCoreCacheHelper();
+    if (outerCacheHelper == null) {
+      return;
+    }
+    r = FilterLeafReader.unwrap(r);
+    IndexReader.CacheHelper cch;
+    if (!(r instanceof SegmentReader) || (cch = r.getCoreCacheHelper()) != outerCacheHelper) {
+      return;
+    }
+    CacheKeyWeakRef stale;
+    while ((stale = (CacheKeyWeakRef) CLEANUP_CACHE_KEY.poll()) != null) {
+      COMPUTE_MAP.remove(stale);
+      CacheKeyWeakRef removed = CACHE_KEY_LOOKUP.remove(stale.segmentKey);
+      assert stale == removed;
+    }
+    SegmentInfo si = ((SegmentReader) r).getSegmentInfo().info;
+    boolean[] weComputed = new boolean[1];
+    CacheKeyWeakRef ref =
+        CACHE_KEY_LOOKUP.computeIfAbsent(
+            si,
+            (k) -> {
+              weComputed[0] = true;
+              return new CacheKeyWeakRef(cch.getKey(), k, CLEANUP_CACHE_KEY);
+            });
+    assert weComputed[0] || ref.get() == cch.getKey();
+    COMPUTE_MAP.put(ref, compute); // replace if present
+  }
+
+  public static CompiledAutomaton compute(
+      SegmentInfo si, String field, IOFunction<Void, CompiledAutomaton> compute)
+      throws IOException {
+    CacheKeyWeakRef ref = CACHE_KEY_LOOKUP.get(si);
+    IndexReader.CacheKey key;
+    if (ref == null || (key = ref.get()) == null) {
+      return compute.apply(null);
+    }
+    CompiledAutomaton[] ret = new CompiledAutomaton[1];
+    IOException[] computeException = new IOException[1];
+    MaxNgramAutomatonFetcher fetcher =
+        COMPUTE_MAP.computeIfPresent(
+            new CacheKeyWeakRef(key, si, null),
+            (k, v) -> {
+              try {
+                ret[0] = v.getCompiledAutomaton(field, compute);
+              } catch (IOException ex) {
+                computeException[0] = ex;
+              }
+              return v;
+            });
+    if (fetcher == null) {
+      return compute.apply(null);
+    } else if (computeException[0] != null) {
+      throw computeException[0];
+    } else {
+      return ret[0];
     }
   }
 }

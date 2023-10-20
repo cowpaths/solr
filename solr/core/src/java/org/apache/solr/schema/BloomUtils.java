@@ -96,23 +96,46 @@ public final class BloomUtils {
     return null;
   }
 
-  private static final boolean DEFAULT_ENABLE_NGRAMS =
-      !"false".equals(System.getProperty("enableNgrams"));
+  public enum NgramStatus {
+    DISABLED,
+    ENABLE_NGRAMS,
+    ENABLE_MAX_SUBSTRING,
+    ENABLED
+  }
 
-  private static final ThreadLocal<Boolean> ENABLE_NGRAMS =
+  private static final NgramStatus DEFAULT_ENABLE_NGRAMS =
+      "false".equals(System.getProperty("enableNgrams"))
+          ? NgramStatus.DISABLED
+          : NgramStatus.ENABLED;
+
+  private static final ThreadLocal<NgramStatus> ENABLE_NGRAMS =
       new ThreadLocal<>() {
         @Override
-        protected Boolean initialValue() {
+        protected NgramStatus initialValue() {
           return DEFAULT_ENABLE_NGRAMS;
         }
       };
 
   public static void init(SolrQueryRequest req) {
-    boolean enableNgrams = req.getParams().getBool("enableNgrams", DEFAULT_ENABLE_NGRAMS);
+    String spec = req.getParams().get("enableNgrams");
+    NgramStatus enableNgrams;
+    if (spec == null) {
+      enableNgrams = DEFAULT_ENABLE_NGRAMS;
+    } else if ("ngramOnly".equals(spec)) {
+      enableNgrams = NgramStatus.ENABLE_NGRAMS;
+    } else if ("maxSubstringOnly".equals(spec)) {
+      enableNgrams = NgramStatus.ENABLE_MAX_SUBSTRING;
+    } else if ("false".equals(spec)) {
+      enableNgrams = NgramStatus.DISABLED;
+    } else if ("true".equals(spec)) {
+      enableNgrams = NgramStatus.ENABLED;
+    } else {
+      throw new IllegalArgumentException("bad enableNgrams spec: " + spec);
+    }
     ENABLE_NGRAMS.set(enableNgrams);
   }
 
-  public static boolean enableNgrams() {
+  public static NgramStatus enableNgrams() {
     return ENABLE_NGRAMS.get();
   }
 

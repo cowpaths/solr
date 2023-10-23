@@ -359,24 +359,21 @@ public final class BloomUtils {
 
   // TODO: ensure that caching on SegmentInfo key will not result in a leak. I think this should be
   //  ok, relying on cleanup from `CacheKeyWeakRef`, but we should verify.
-  private static final Map<SegmentInfo, CacheKeyWeakRef> CACHE_KEY_LOOKUP =
+  private static final Map<SegmentInfoWeakRef, CacheKeyEntry> CACHE_KEY_LOOKUP =
       new ConcurrentHashMap<>();
-  private static final Map<CacheKeyWeakRef, MaxNgramAutomatonFetcher> COMPUTE_MAP =
+  private static final Map<IndexReader.CacheKey, WeakReference<MaxNgramAutomatonFetcher>> COMPUTE_MAP =
       new ConcurrentHashMap<>();
-  private static final ReferenceQueue<IndexReader.CacheKey> CLEANUP_CACHE_KEY =
+  private static final ReferenceQueue<SegmentInfo> CLEANUP_CACHE_KEY =
       new ReferenceQueue<>();
 
-  private static final class CacheKeyWeakRef extends WeakReference<IndexReader.CacheKey> {
-    private final SegmentInfo segmentKey;
+  private static final class SegmentInfoWeakRef extends WeakReference<SegmentInfo> {
     private final int hashCode;
+    private final IndexReader.CacheKey cacheKey;
 
-    public CacheKeyWeakRef(
-        IndexReader.CacheKey referent,
-        SegmentInfo segmentKey,
-        ReferenceQueue<? super IndexReader.CacheKey> q) {
+    public SegmentInfoWeakRef(SegmentInfo referent, IndexReader.CacheKey cacheKey, ReferenceQueue<? super SegmentInfo> q) {
       super(referent, q);
-      this.segmentKey = segmentKey;
-      hashCode = referent.hashCode();
+      this.hashCode = referent.hashCode();
+      this.cacheKey = cacheKey;
     }
 
     @Override
@@ -389,8 +386,20 @@ public final class BloomUtils {
       if (this == obj) {
         return true;
       } else {
-        return Objects.equals(get(), ((CacheKeyWeakRef) obj).get());
+        return Objects.equals(get(), ((SegmentInfoWeakRef) obj).get());
       }
+    }
+  }
+
+  private static final class CacheKeyEntry {
+    private final IndexReader.CacheKey cacheKey;
+    private final SegmentInfoWeakRef segmentKey;
+
+    public CacheKeyEntry(
+        IndexReader.CacheKey cacheKey,
+        SegmentInfoWeakRef segmentKey) {
+      this.cacheKey = cacheKey;
+      this.segmentKey = segmentKey;
     }
   }
 
@@ -410,41 +419,47 @@ public final class BloomUtils {
     if (!(r instanceof SegmentReader) || (cch = r.getCoreCacheHelper()) != outerCacheHelper) {
       return;
     }
-    CacheKeyWeakRef stale;
-    while ((stale = (CacheKeyWeakRef) CLEANUP_CACHE_KEY.poll()) != null) {
-      COMPUTE_MAP.remove(stale);
-      CacheKeyWeakRef removed = CACHE_KEY_LOOKUP.remove(stale.segmentKey);
-      assert stale == removed;
+    SegmentInfoWeakRef stale;
+    while ((stale = (SegmentInfoWeakRef) CLEANUP_CACHE_KEY.poll()) != null) {
+      CacheKeyEntry removed = CACHE_KEY_LOOKUP.remove(stale);
+      COMPUTE_MAP.remove(stale.cacheKey);
+      assert stale == removed.segmentKey;
     }
-    SegmentInfo si = ((SegmentReader) r).getSegmentInfo().info;
+    IndexReader.CacheKey cacheKey = cch.getKey();
+    SegmentInfoWeakRef si = new SegmentInfoWeakRef(((SegmentReader) r).getSegmentInfo().info, cacheKey, CLEANUP_CACHE_KEY);
     boolean[] weComputed = new boolean[1];
-    CacheKeyWeakRef ref =
+    CacheKeyEntry ref =
         CACHE_KEY_LOOKUP.computeIfAbsent(
             si,
             (k) -> {
               weComputed[0] = true;
-              return new CacheKeyWeakRef(cch.getKey(), k, CLEANUP_CACHE_KEY);
+              return new CacheKeyEntry(cacheKey, k);
             });
-    assert weComputed[0] || ref.get() == cch.getKey();
-    COMPUTE_MAP.put(ref, compute); // replace if present
+    assert weComputed[0] || ref.cacheKey == cacheKey;
+    COMPUTE_MAP.put(cacheKey, new WeakReference<>(compute)); // replace if present
   }
 
   public static CompiledAutomaton compute(
       SegmentInfo si, String field, IOFunction<Void, CompiledAutomaton> compute)
       throws IOException {
-    CacheKeyWeakRef ref = CACHE_KEY_LOOKUP.get(si);
+    SegmentInfoWeakRef siRef = new SegmentInfoWeakRef(si, null, null);
+    CacheKeyEntry ref = CACHE_KEY_LOOKUP.get(siRef);
     IndexReader.CacheKey key;
-    if (ref == null || (key = ref.get()) == null) {
+    if (ref == null || (key = ref.cacheKey) == null) {
       return compute.apply(null);
     }
     CompiledAutomaton[] ret = new CompiledAutomaton[1];
     IOException[] computeException = new IOException[1];
-    MaxNgramAutomatonFetcher fetcher =
+    WeakReference<MaxNgramAutomatonFetcher> fetcher =
         COMPUTE_MAP.computeIfPresent(
-            new CacheKeyWeakRef(key, si, null),
+            key,
             (k, v) -> {
               try {
-                ret[0] = v.getCompiledAutomaton(field, compute);
+                MaxNgramAutomatonFetcher f = v.get();
+                if (f == null) {
+                  return null;
+                }
+                ret[0] = f.getCompiledAutomaton(field, compute);
               } catch (IOException ex) {
                 computeException[0] = ex;
               }

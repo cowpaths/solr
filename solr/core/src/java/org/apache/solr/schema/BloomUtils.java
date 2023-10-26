@@ -361,16 +361,18 @@ public final class BloomUtils {
   //  ok, relying on cleanup from `CacheKeyWeakRef`, but we should verify.
   private static final Map<SegmentInfoWeakRef, CacheKeyEntry> CACHE_KEY_LOOKUP =
       new ConcurrentHashMap<>();
-  private static final Map<IndexReader.CacheKey, WeakReference<MaxNgramAutomatonFetcher>> COMPUTE_MAP =
-      new ConcurrentHashMap<>();
-  private static final ReferenceQueue<SegmentInfo> CLEANUP_CACHE_KEY =
-      new ReferenceQueue<>();
+  private static final Map<IndexReader.CacheKey, WeakReference<MaxNgramAutomatonFetcher>>
+      COMPUTE_MAP = new ConcurrentHashMap<>();
+  private static final ReferenceQueue<SegmentInfo> CLEANUP_CACHE_KEY = new ReferenceQueue<>();
 
   private static final class SegmentInfoWeakRef extends WeakReference<SegmentInfo> {
     private final int hashCode;
     private final IndexReader.CacheKey cacheKey;
 
-    public SegmentInfoWeakRef(SegmentInfo referent, IndexReader.CacheKey cacheKey, ReferenceQueue<? super SegmentInfo> q) {
+    public SegmentInfoWeakRef(
+        SegmentInfo referent,
+        IndexReader.CacheKey cacheKey,
+        ReferenceQueue<? super SegmentInfo> q) {
       super(referent, q);
       this.hashCode = referent.hashCode();
       this.cacheKey = cacheKey;
@@ -395,9 +397,7 @@ public final class BloomUtils {
     private final IndexReader.CacheKey cacheKey;
     private final SegmentInfoWeakRef segmentKey;
 
-    public CacheKeyEntry(
-        IndexReader.CacheKey cacheKey,
-        SegmentInfoWeakRef segmentKey) {
+    public CacheKeyEntry(IndexReader.CacheKey cacheKey, SegmentInfoWeakRef segmentKey) {
       this.cacheKey = cacheKey;
       this.segmentKey = segmentKey;
     }
@@ -405,7 +405,8 @@ public final class BloomUtils {
 
   public interface MaxNgramAutomatonFetcher {
     CompiledAutomaton getCompiledAutomaton(
-        String field, IOFunction<Void, CompiledAutomaton> compute) throws IOException;
+        IndexReader.CacheKey segKey, String field, IOFunction<Void, CompiledAutomaton> compute)
+        throws IOException;
   }
 
   public static void registerMaxNgramAutomatonFetcher(
@@ -426,7 +427,9 @@ public final class BloomUtils {
       assert stale == removed.segmentKey;
     }
     IndexReader.CacheKey cacheKey = cch.getKey();
-    SegmentInfoWeakRef si = new SegmentInfoWeakRef(((SegmentReader) r).getSegmentInfo().info, cacheKey, CLEANUP_CACHE_KEY);
+    SegmentInfoWeakRef si =
+        new SegmentInfoWeakRef(
+            ((SegmentReader) r).getSegmentInfo().info, cacheKey, CLEANUP_CACHE_KEY);
     boolean[] weComputed = new boolean[1];
     CacheKeyEntry ref =
         CACHE_KEY_LOOKUP.computeIfAbsent(
@@ -459,7 +462,7 @@ public final class BloomUtils {
                 if (f == null) {
                   return null;
                 }
-                ret[0] = f.getCompiledAutomaton(field, compute);
+                ret[0] = f.getCompiledAutomaton(key, field, compute);
               } catch (IOException ex) {
                 computeException[0] = ex;
               }

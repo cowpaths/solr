@@ -20,6 +20,7 @@ import com.codahale.metrics.Gauge;
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -160,8 +161,8 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   private final boolean cachingEnabled;
 
   // TODO: make highFreqNgramAutomatonCache a user cache
-  private final Map<String, CompiledAutomaton> highFreqNgramAutomatonCache =
-      new ConcurrentHashMap<>();
+  private final Map<Map.Entry<IndexReader.CacheKey, String>, CompiledAutomaton>
+      highFreqNgramAutomatonCache = new ConcurrentHashMap<>();
   private final SolrCache<Query, DocSet> filterCache;
   private final SolrCache<String, OrdinalMapValue> ordMapCache;
   private final SolrCache<QueryResultKey, DocList> queryResultCache;
@@ -435,11 +436,11 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     for (LeafReaderContext ctx : this.rawReader.leaves()) {
       BloomUtils.registerMaxNgramAutomatonFetcher(
           ctx.reader(),
-          (f, compute) -> {
+          (segKey, f, compute) -> {
             IOException[] computeException = new IOException[1];
             CompiledAutomaton ret =
                 highFreqNgramAutomatonCache.computeIfAbsent(
-                    f,
+                    new SimpleImmutableEntry<>(segKey, f),
                     (ignored) -> {
                       try {
                         return compute.apply(null);

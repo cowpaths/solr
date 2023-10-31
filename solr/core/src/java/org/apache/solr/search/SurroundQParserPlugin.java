@@ -24,6 +24,7 @@ import org.apache.lucene.search.Query;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.SchemaField;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,8 +88,10 @@ public class SurroundQParserPlugin extends QParserPlugin {
       // so what do we do with the SrndQuery ??
       // processing based on example in LIA Ch 9
 
-      BasicQueryFactory bqFactory = new BasicQueryFactory(this.maxBasicQueries);
       String defaultField = getParam(CommonParams.DF);
+      SchemaField sf = req.getSchema().getField(defaultField);
+      BasicQueryFactory bqFactory =
+          new BasicQueryFactory(this.maxBasicQueries, sf.getType().getQueryAnalyzer());
       Query lquery = sq.makeLuceneQueryField(defaultField, bqFactory);
       return lquery;
     }

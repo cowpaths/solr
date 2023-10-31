@@ -700,6 +700,7 @@ public class LukeRequestHandler extends RequestHandlerBase {
     if (terms == null) { // field does not exist
       return;
     }
+    FieldType ft = req.getSchema().getField(field).getType();
     TermsEnum termsEnum = terms.iterator();
     BytesRef text;
     int[] buckets = new int[HIST_ARRAY_SIZE];
@@ -710,7 +711,7 @@ public class LukeRequestHandler extends RequestHandlerBase {
       int slot = 32 - Integer.numberOfLeadingZeros(Math.max(0, freq - 1));
       buckets[slot] = buckets[slot] + 1;
       if (numTerms > 0 && freq > tiq.minFreq) {
-        spare.copyUTF8Bytes(text);
+        ft.indexedToReadable(text, spare);
         String t = spare.toString();
 
         tiq.add(new TopTermQueue.TermInfo(new Term(field, t), termsEnum.docFreq()));

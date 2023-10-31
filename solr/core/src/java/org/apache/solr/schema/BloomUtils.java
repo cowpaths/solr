@@ -39,6 +39,9 @@ import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.Terms;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.CharsRef;
+import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.IOFunction;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
 import org.apache.solr.request.SolrQueryRequest;
@@ -71,6 +74,11 @@ public final class BloomUtils {
   private static final String BLOOM_FIELD_BASE_SUFFIX_MULTI = BLOOM_FIELD_BASE_SUFFIX.concat("M");
 
   private static final int REQUIRE_LENGTH_DIFFERENTIAL = BLOOM_FIELD_BASE_SUFFIX_SINGLE.length();
+
+  private static final int COMPLETE_TERM_SIGNAL = 0xFF;
+  private static final int PREFIX_SIGNAL = 0xFE;
+  private static final int SUFFIX_SIGNAL = 0xFD;
+  private static final int SUBSTRING_SIGNAL = 0xFC;
 
   /**
    * Returns null if ngramField is _not_ an ngram field; otherwise returns the field name of the
@@ -218,7 +226,28 @@ public final class BloomUtils {
     props.put("uninvertible", "false");
     props.put("multiValued", "true");
     props.put("postingsFormat", "X".concat(pf.getName()));
-    FieldType ret = new StrField();
+    FieldType ret =
+        new StrField() {
+          @Override
+          public CharsRef indexedToReadable(BytesRef input, CharsRefBuilder output) {
+            input = new BytesRef(input.bytes, input.offset, input.length - 1);
+            switch (input.bytes[input.length] & 0xff) {
+              case COMPLETE_TERM_SIGNAL:
+              case PREFIX_SIGNAL:
+              case SUFFIX_SIGNAL:
+              case SUBSTRING_SIGNAL:
+                break;
+              case 0:
+                input.offset += Long.BYTES + 1;
+                input.length -= Long.BYTES + 1;
+                break;
+              default:
+                throw new IllegalArgumentException();
+            }
+            return super.indexedToReadable(input, output);
+          }
+        };
+    ret.setTypeName("max_substring");
     // NOTE: we must call `setArgs()` here, as opposed to `init()`, in order to properly
     // set postingsFormat.
     ret.setArgs(schema, props);

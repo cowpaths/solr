@@ -163,6 +163,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   // TODO: make highFreqNgramAutomatonCache a user cache
   private final Map<Map.Entry<IndexReader.CacheKey, String>, CompiledAutomaton>
       highFreqNgramAutomatonCache = new ConcurrentHashMap<>();
+  private final BloomUtils.MaxNgramAutomatonFetcher[] strongFetcherRefs;
   private final SolrCache<Query, DocSet> filterCache;
   private final SolrCache<String, OrdinalMapValue> ordMapCache;
   private final SolrCache<QueryResultKey, DocList> queryResultCache;
@@ -433,9 +434,9 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       this.cacheList = NO_CACHES;
     }
 
+    strongFetcherRefs = new BloomUtils.MaxNgramAutomatonFetcher[rawReader.leaves().size()];
     for (LeafReaderContext ctx : this.rawReader.leaves()) {
-      BloomUtils.registerMaxNgramAutomatonFetcher(
-          ctx.reader(),
+      BloomUtils.MaxNgramAutomatonFetcher fetcher =
           (segKey, f, compute) -> {
             IOException[] computeException = new IOException[1];
             CompiledAutomaton ret =
@@ -454,7 +455,9 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
             } else {
               return ret;
             }
-          });
+          };
+      strongFetcherRefs[ctx.ord] = fetcher;
+      BloomUtils.registerMaxNgramAutomatonFetcher(ctx.reader(), fetcher);
     }
 
     // We already have our own filter cache

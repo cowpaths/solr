@@ -82,11 +82,17 @@ public class CircuitBreakerRegistry implements Closeable {
     for (CircuitBreaker circuitBreaker :
         circuitBreakerMap.getOrDefault(requestType, Collections.emptyList())) {
       if (circuitBreaker.isTripped()) {
-        if (triggeredCircuitBreakers == null) {
-          triggeredCircuitBreakers = new ArrayList<>();
-        }
+        if (circuitBreaker.isDebugMode()) {
+          if (log.isInfoEnabled()) {
+            log.info("Circuit breaker {} has tripped: {}", circuitBreaker.getClass().getSimpleName(), circuitBreaker.getErrorMessage());
+          }
+        } else {
+          if (triggeredCircuitBreakers == null) {
+            triggeredCircuitBreakers = new ArrayList<>();
+          }
 
-        triggeredCircuitBreakers.add(circuitBreaker);
+          triggeredCircuitBreakers.add(circuitBreaker);
+        }
       }
     }
 

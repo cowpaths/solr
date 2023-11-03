@@ -104,6 +104,38 @@ public final class BloomUtils {
     return null;
   }
 
+  private static final int INDIVIDUAL_MAX_SUBSTRINGS_FLAG = 0b1 << Byte.SIZE;
+  private static final int CONCAT_MAX_SUBSTRINGS_FLAG = 0b10 << Byte.SIZE;
+
+  public static int flags(boolean concatenated, boolean individual, int requireAdditionalNgrams) {
+    if (!concatenated && !individual) {
+      throw new IllegalArgumentException("must enable at least one of concatenated/individual");
+    }
+    if (requireAdditionalNgrams > Byte.MAX_VALUE || requireAdditionalNgrams < 0) {
+      throw new IllegalArgumentException("requireAdditionalNgrams out of range: " + requireAdditionalNgrams);
+    }
+    int ret = 0;
+    if (concatenated) {
+      ret |= CONCAT_MAX_SUBSTRINGS_FLAG;
+    }
+    if (individual) {
+      ret |= INDIVIDUAL_MAX_SUBSTRINGS_FLAG;
+    }
+    return ret | (requireAdditionalNgrams & Byte.MAX_VALUE);
+  }
+
+  public static boolean hasConcatenated(int flags) {
+    return (flags & CONCAT_MAX_SUBSTRINGS_FLAG) != 0;
+  }
+
+  public static boolean hasIndividual(int flags) {
+    return (flags & INDIVIDUAL_MAX_SUBSTRINGS_FLAG) != 0;
+  }
+
+  public static int getAdditionalNgramRequirement(int flags) {
+    return flags & Byte.MAX_VALUE;
+  }
+
   public enum NgramStatus {
     DISABLED,
     ENABLE_NGRAMS,
@@ -433,8 +465,8 @@ public final class BloomUtils {
   }
 
   public interface MaxNgramAutomatonFetcher {
-    CompiledAutomaton getCompiledAutomaton(
-        IndexReader.CacheKey segKey, String field, IOFunction<Void, CompiledAutomaton> compute)
+    AutomatonEntry getCompiledAutomaton(
+        IndexReader.CacheKey segKey, String field, IOFunction<Void, AutomatonEntry> compute)
         throws IOException;
   }
 
@@ -471,8 +503,17 @@ public final class BloomUtils {
     COMPUTE_MAP.put(cacheKey, new WeakReference<>(compute)); // replace if present
   }
 
-  public static CompiledAutomaton compute(
-      SegmentInfo si, String field, IOFunction<Void, CompiledAutomaton> compute)
+  public static final class AutomatonEntry {
+    public final CompiledAutomaton a;
+    public final int flags;
+    public AutomatonEntry(CompiledAutomaton a, int flags) {
+      this.a = a;
+      this.flags = flags;
+    }
+  }
+
+  public static AutomatonEntry compute(
+      SegmentInfo si, String field, IOFunction<Void, AutomatonEntry> compute)
       throws IOException {
     SegmentInfoWeakRef siRef = new SegmentInfoWeakRef(si, null, null);
     CacheKeyEntry ref = CACHE_KEY_LOOKUP.get(siRef);
@@ -480,7 +521,7 @@ public final class BloomUtils {
     if (ref == null || (key = ref.cacheKey) == null) {
       return compute.apply(null);
     }
-    CompiledAutomaton[] ret = new CompiledAutomaton[1];
+    AutomatonEntry[] ret = new AutomatonEntry[1];
     IOException[] computeException = new IOException[1];
     WeakReference<MaxNgramAutomatonFetcher> fetcher =
         COMPUTE_MAP.computeIfPresent(

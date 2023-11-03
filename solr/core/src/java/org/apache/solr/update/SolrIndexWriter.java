@@ -110,13 +110,8 @@ public class SolrIndexWriter extends IndexWriter {
     try {
       w = new SolrIndexWriter(core, name, path, d, create, schema, config, delPolicy, codec);
       w.setDirectoryFactory(directoryFactory);
-
       BloomUtils.registerMaxSubstringEnabledLookup(core, d);
-
       return w;
-    } catch (Throwable e ){
-      e.printStackTrace();
-      throw e;
     } finally {
       if (null == w && null != d) {
         directoryFactory.doneWithDirectory(d);

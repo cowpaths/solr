@@ -42,6 +42,7 @@ import org.apache.solr.core.DirectoryFactory.DirContext;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.SolrMetricsContext;
+import org.apache.solr.schema.BloomUtils;
 import org.apache.solr.schema.IndexSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,13 +110,21 @@ public class SolrIndexWriter extends IndexWriter {
     try {
       w = new SolrIndexWriter(core, name, path, d, create, schema, config, delPolicy, codec);
       w.setDirectoryFactory(directoryFactory);
+
+      BloomUtils.registerMaxSubstringEnabledLookup(core, d);
+
       return w;
+    } catch (Throwable e ){
+      e.printStackTrace();
+      throw e;
     } finally {
       if (null == w && null != d) {
         directoryFactory.doneWithDirectory(d);
         directoryFactory.release(d);
       }
     }
+
+
   }
 
   public SolrIndexWriter(String name, Directory d, IndexWriterConfig conf) throws IOException {

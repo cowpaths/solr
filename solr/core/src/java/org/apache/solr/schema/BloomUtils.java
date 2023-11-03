@@ -19,7 +19,10 @@ package org.apache.solr.schema;
 import java.io.IOException;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
@@ -39,11 +42,16 @@ import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.Terms;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.IOFunction;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
+import org.apache.solr.cloud.ZkDynamicProperty;
+import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
 
 /**
@@ -503,6 +511,55 @@ public final class BloomUtils {
       throw computeException[0];
     } else {
       return ret[0];
+    }
+  }
+
+
+  private static final Map<Directory, String> DIRECTORY_COLLECTION_LOOKUP =
+          new WeakHashMap<>();
+
+  private static volatile MaxSubstringEnabledMonitor maxSubstringEnabledMonitor;
+  public static void registerMaxSubstringEnabledLookup(SolrCore core, Directory directory) {
+    if (core.getCoreContainer().isZooKeeperAware() && maxSubstringEnabledMonitor == null) {
+      synchronized(BloomUtils.class) {
+        if (maxSubstringEnabledMonitor == null) {
+          maxSubstringEnabledMonitor = new MaxSubstringEnabledMonitor(core.getCoreContainer().getZkController().getZkClient());
+        }
+      }
+    }
+
+    DIRECTORY_COLLECTION_LOOKUP.put(FilterDirectory.unwrap(directory), core.getCoreDescriptor().getCollectionName());
+  }
+  public static boolean isMaxSubstringWriteEnabled(Directory directory) {
+    String collection = DIRECTORY_COLLECTION_LOOKUP.get(FilterDirectory.unwrap(directory));
+    return collection != null && maxSubstringEnabledMonitor != null && maxSubstringEnabledMonitor.isEnabled(collection);
+  }
+
+  private static class MaxSubstringEnabledMonitor {
+    private final ZkDynamicProperty maxSubstringEnabledProperty;
+    private final ZkDynamicProperty maxSubstringBlacklistProperty;
+    private final ZkDynamicProperty maxSubstringWhitelistProperty;
+    private volatile List<String> whitelist;
+    private volatile List<String> blacklist;
+    private volatile boolean enabled;
+    private MaxSubstringEnabledMonitor(SolrZkClient zkClient) {
+      maxSubstringEnabledProperty = new ZkDynamicProperty(zkClient, "max_substring/enabled", zkValue -> {
+        enabled = zkValue != null ? Boolean.valueOf(new String(zkValue)) : true;
+      });
+      maxSubstringBlacklistProperty = new ZkDynamicProperty(zkClient, "max_substring/blacklist", zkValue -> {
+        blacklist = zkValue != null && zkValue.length > 0 ? Arrays.asList(new String(zkValue).split(",")) : Collections.emptyList();
+      });
+      maxSubstringWhitelistProperty = new ZkDynamicProperty(zkClient, "max_substring/whitelist", zkValue -> {
+        whitelist = zkValue != null && zkValue.length > 0 ? Arrays.asList(new String(zkValue).split(",")) : Collections.emptyList();
+      });
+    }
+
+    private boolean isEnabled(String collection) {
+      if (enabled) {
+        return !blacklist.contains(collection);
+      } else {
+        return whitelist.contains(collection);
+      }
     }
   }
 }

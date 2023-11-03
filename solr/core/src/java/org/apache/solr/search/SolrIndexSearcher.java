@@ -161,7 +161,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   private final boolean cachingEnabled;
 
   // TODO: make highFreqNgramAutomatonCache a user cache
-  private final Map<Map.Entry<IndexReader.CacheKey, String>, CompiledAutomaton>
+  private final Map<Map.Entry<IndexReader.CacheKey, String>, BloomUtils.AutomatonEntry>
       highFreqNgramAutomatonCache = new ConcurrentHashMap<>();
   private final BloomUtils.MaxNgramAutomatonFetcher[] strongFetcherRefs;
   private final SolrCache<Query, DocSet> filterCache;
@@ -439,7 +439,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       BloomUtils.MaxNgramAutomatonFetcher fetcher =
           (segKey, f, compute) -> {
             IOException[] computeException = new IOException[1];
-            CompiledAutomaton ret =
+            BloomUtils.AutomatonEntry ret =
                 highFreqNgramAutomatonCache.computeIfAbsent(
                     new SimpleImmutableEntry<>(segKey, f),
                     (ignored) -> {

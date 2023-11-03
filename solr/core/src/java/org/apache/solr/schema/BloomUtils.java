@@ -156,6 +156,14 @@ public final class BloomUtils {
         }
       };
 
+  private static final ThreadLocal<Boolean> FORCE_MAX_SUBSTRING_CONCAT =
+      new ThreadLocal<>() {
+        @Override
+        protected Boolean initialValue() {
+          return Boolean.FALSE;
+        }
+      };
+
   public static void init(SolrQueryRequest req) {
     String spec = req.getParams().get("enableNgrams");
     NgramStatus enableNgrams;
@@ -173,10 +181,18 @@ public final class BloomUtils {
       throw new IllegalArgumentException("bad enableNgrams spec: " + spec);
     }
     ENABLE_NGRAMS.set(enableNgrams);
+    FORCE_MAX_SUBSTRING_CONCAT.set("true".equals(req.getParams().get("forceMaxSubstringConcat")));
   }
 
   public static NgramStatus enableNgrams() {
     return ENABLE_NGRAMS.get();
+  }
+
+  public static boolean forceMaxSubstringsConcat(int flags) {
+    if (!hasConcatenated(flags)) {
+      throw new IllegalStateException("concat not enabled");
+    }
+    return FORCE_MAX_SUBSTRING_CONCAT.get();
   }
 
   static final Analyzer KEYWORD_ANALYZER =

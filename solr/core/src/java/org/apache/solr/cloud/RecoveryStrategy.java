@@ -329,7 +329,9 @@ public class RecoveryStrategy implements Runnable, Closeable {
   }
 
   public final void doRecovery(SolrCore core) throws Exception {
-    if (core.getCoreDescriptor().getName().startsWith(CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX)) {
+    if (core.getCoreDescriptor()
+        .getName()
+        .startsWith(CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX)) {
       log.info("Coordinator node. Short circuit recovery. Mark as ACTIVE");
       zkController.publish(this.coreDescriptor, Replica.State.ACTIVE);
       return;

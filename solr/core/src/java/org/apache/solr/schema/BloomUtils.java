@@ -164,6 +164,14 @@ public final class BloomUtils {
         }
       };
 
+  private static final ThreadLocal<Boolean> COLLATED_POSTINGS_FORMAT =
+      new ThreadLocal<>() {
+        @Override
+        protected Boolean initialValue() {
+          return Boolean.TRUE;
+        }
+      };
+
   public static void init(SolrQueryRequest req) {
     String spec = req.getParams().get("enableNgrams");
     NgramStatus enableNgrams;
@@ -182,6 +190,11 @@ public final class BloomUtils {
     }
     ENABLE_NGRAMS.set(enableNgrams);
     FORCE_MAX_SUBSTRING_CONCAT.set("true".equals(req.getParams().get("forceMaxSubstringConcat")));
+    COLLATED_POSTINGS_FORMAT.set(!"false".equals(req.getParams().get("collatedPostingsFormat")));
+  }
+
+  public static boolean collatedPostingsFormat() {
+    return COLLATED_POSTINGS_FORMAT.get();
   }
 
   public static NgramStatus enableNgrams() {

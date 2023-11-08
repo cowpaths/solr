@@ -78,11 +78,28 @@
 
   </query>
 
-  <circuitBreaker class="solr.CircuitBreakerManager" enabled="true">
-    <str name="memEnabled">true</str>
-    <str name="memThreshold">75</str>
-    <str name="cpuEnabled">true</str>
-    <str name="cpuThreshold">75</str>
+  <circuitBreaker class="solr.MemoryCircuitBreaker">
+    <double  name="threshold">75</double>
+    <arr name="requestTypes">
+      <str>update</str>
+    </arr>
+  </circuitBreaker>
+
+  <circuitBreaker class="solr.MemoryCircuitBreaker">
+    <double  name="threshold">80</double>
+<!-- Default is query
+    <arr name="requestTypes">
+      <str>query</str>
+    </arr>
+-->
+  </circuitBreaker>
+
+  <circuitBreaker class="solr.CPUCircuitBreaker">
+    <double  name="threshold">75</double>
+  </circuitBreaker>
+
+  <circuitBreaker class="solr.LoadAverageCircuitBreaker">
+    <double  name="threshold">3</double>
   </circuitBreaker>
 
   <initParams path="/select">

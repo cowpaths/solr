@@ -136,6 +136,8 @@ public final class BloomUtils {
     return flags & Byte.MAX_VALUE;
   }
 
+  public enum CollatingPostings {NONE, MERGED, UNMERGED}
+
   public enum NgramStatus {
     DISABLED,
     ENABLE_NGRAMS,
@@ -164,11 +166,11 @@ public final class BloomUtils {
         }
       };
 
-  private static final ThreadLocal<Boolean> COLLATED_POSTINGS_FORMAT =
+  private static final ThreadLocal<CollatingPostings> COLLATED_POSTINGS_FORMAT =
       new ThreadLocal<>() {
         @Override
-        protected Boolean initialValue() {
-          return Boolean.TRUE;
+        protected CollatingPostings initialValue() {
+          return CollatingPostings.UNMERGED;
         }
       };
 
@@ -190,10 +192,21 @@ public final class BloomUtils {
     }
     ENABLE_NGRAMS.set(enableNgrams);
     FORCE_MAX_SUBSTRING_CONCAT.set("true".equals(req.getParams().get("forceMaxSubstringConcat")));
-    COLLATED_POSTINGS_FORMAT.set(!"false".equals(req.getParams().get("collatedPostingsFormat")));
+    CollatingPostings collationType;
+    spec = req.getParams().get("collatedPostingsFormat");
+    if (spec == null || "true".equals(spec) || "unmerged".equals(spec)) {
+      collationType = CollatingPostings.UNMERGED;
+    } else if ("merged".equals(spec)) {
+      collationType = CollatingPostings.MERGED;
+    } else if ("false".equals(spec)) {
+      collationType = CollatingPostings.NONE;
+    } else {
+      throw new IllegalArgumentException("bad collatedPostingsFormat spec: " + spec);
+    }
+    COLLATED_POSTINGS_FORMAT.set(collationType);
   }
 
-  public static boolean collatedPostingsFormat() {
+  public static CollatingPostings collatedPostingsFormat() {
     return COLLATED_POSTINGS_FORMAT.get();
   }
 

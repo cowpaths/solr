@@ -91,7 +91,7 @@ public class SurroundQParserPlugin extends QParserPlugin {
       String defaultField = getParam(CommonParams.DF);
       SchemaField sf = req.getSchema().getField(defaultField);
       BasicQueryFactory bqFactory =
-          new BasicQueryFactory(this.maxBasicQueries, sf.getType().getQueryAnalyzer());
+          new BasicQueryFactory(this.maxBasicQueries);
       Query lquery = sq.makeLuceneQueryField(defaultField, bqFactory);
       return lquery;
     }

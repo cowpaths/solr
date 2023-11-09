@@ -24,11 +24,11 @@ import org.apache.lucene.index.IndexableField;
 import org.apache.solr.schema.BloomUtils.BloomAnalyzerSupplier;
 
 /**
- * A specialized StrField variant that facilitates configuration of a ngram subfield (populated at
+ * A specialized TextField variant that facilitates configuration of a ngram subfield (populated at
  * segment flush by a custom PostingsFormat) that can be used to pre-filter terms that must be
  * evaluated for substring/wildcard/regex search.
  */
-public final class BloomStrField extends StrField implements SchemaAware {
+public final class BloomTextField extends TextField implements SchemaAware {
 
   @Override
   public boolean isPolyField() {

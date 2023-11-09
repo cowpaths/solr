@@ -55,7 +55,7 @@ import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.request.SimpleFacets;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.schema.BloomStrField;
+import org.apache.solr.schema.BloomUtils;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.DocIterator;
 import org.apache.solr.search.DocList;
@@ -99,7 +99,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase {
     SolrParams params = req.getParams();
 
     SolrQueryTimeoutImpl.set(req);
-    BloomStrField.init(req);
+    BloomUtils.init(req);
     try {
 
       // Set field flags

@@ -150,6 +150,31 @@ public final class BloomUtils {
           ? NgramStatus.DISABLED
           : NgramStatus.ENABLED;
 
+  private static final int DEFAULT_DEFAULT_POSTINGS_LIMIT = 16;
+  private static final int DEFAULT_POSTINGS_LIMIT;
+
+  static {
+    String spec = System.getProperty("collatedPostingsLimit");
+    if (spec == null) {
+      DEFAULT_POSTINGS_LIMIT = DEFAULT_DEFAULT_POSTINGS_LIMIT;
+    } else {
+      int setLimit;
+      try {
+        setLimit = Integer.parseInt(spec);
+      } catch (NumberFormatException ex) {
+        // TODO: log this
+        setLimit = DEFAULT_DEFAULT_POSTINGS_LIMIT;
+      }
+      if (setLimit == 0) {
+        DEFAULT_POSTINGS_LIMIT = DEFAULT_DEFAULT_POSTINGS_LIMIT;
+      } else if (setLimit < 0) {
+        DEFAULT_POSTINGS_LIMIT = -1;
+      } else {
+        DEFAULT_POSTINGS_LIMIT = setLimit;
+      }
+    }
+  }
+
   private static final ThreadLocal<NgramStatus> ENABLE_NGRAMS =
       new ThreadLocal<>() {
         @Override
@@ -166,11 +191,11 @@ public final class BloomUtils {
         }
       };
 
-  private static final ThreadLocal<CollatingPostings> COLLATED_POSTINGS_FORMAT =
+  private static final ThreadLocal<Integer> COLLATED_POSTINGS_LIMIT =
       new ThreadLocal<>() {
         @Override
-        protected CollatingPostings initialValue() {
-          return CollatingPostings.UNMERGED;
+        protected Integer initialValue() {
+          return DEFAULT_POSTINGS_LIMIT;
         }
       };
 
@@ -191,23 +216,29 @@ public final class BloomUtils {
       throw new IllegalArgumentException("bad enableNgrams spec: " + spec);
     }
     ENABLE_NGRAMS.set(enableNgrams);
-    FORCE_MAX_SUBSTRING_CONCAT.set("true".equals(req.getParams().get("forceMaxSubstringConcat")));
-    CollatingPostings collationType;
-    spec = req.getParams().get("collatedPostingsFormat");
-    if (spec == null || "true".equals(spec) || "unmerged".equals(spec)) {
-      collationType = CollatingPostings.UNMERGED;
-    } else if ("merged".equals(spec)) {
-      collationType = CollatingPostings.MERGED;
-    } else if ("false".equals(spec)) {
-      collationType = CollatingPostings.NONE;
+    int postingsLimit;
+    spec = req.getParams().get("collatedPostingsLimit");
+    if (spec == null) {
+      postingsLimit = DEFAULT_POSTINGS_LIMIT;
     } else {
-      throw new IllegalArgumentException("bad collatedPostingsFormat spec: " + spec);
+      try {
+        postingsLimit = Integer.parseInt(spec);
+      } catch (NumberFormatException ex) {
+        throw new IllegalArgumentException("bad collatedPostingsLimit spec: " + spec);
+      }
+      if (postingsLimit == 0) {
+        // explicitly requested default
+        postingsLimit = DEFAULT_POSTINGS_LIMIT;
+      } else if (postingsLimit < 0) {
+        // normalize any negative values to -1 (disabled).
+        postingsLimit = -1;
+      }
     }
-    COLLATED_POSTINGS_FORMAT.set(collationType);
+    COLLATED_POSTINGS_LIMIT.set(postingsLimit);
   }
 
-  public static CollatingPostings collatedPostingsFormat() {
-    return COLLATED_POSTINGS_FORMAT.get();
+  public static int collatedPostingsLimit() {
+    return COLLATED_POSTINGS_LIMIT.get();
   }
 
   public static NgramStatus enableNgrams() {

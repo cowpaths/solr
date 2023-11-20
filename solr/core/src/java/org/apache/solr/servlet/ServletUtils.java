@@ -209,7 +209,7 @@ public abstract class ServletUtils {
     RateLimitManager rateLimitManager = getRateLimitManager(request);
     try {
       try {
-        if(rateLimitManager != null) {
+        if (rateLimitManager != null) {
           accepted = rateLimitManager.handleRequest(request);
         } else {
           accepted = true;
@@ -231,7 +231,7 @@ public abstract class ServletUtils {
       traceHttpRequestExecution2(request, response, limitedExecution, trace);
     } finally {
       if (accepted) {
-        if(rateLimitManager!= null) rateLimitManager.decrementActiveRequests(request);
+        if (rateLimitManager != null) rateLimitManager.decrementActiveRequests(request);
       }
     }
   }

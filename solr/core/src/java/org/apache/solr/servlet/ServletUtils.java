@@ -231,7 +231,7 @@ public abstract class ServletUtils {
       traceHttpRequestExecution2(request, response, limitedExecution, trace);
     } finally {
       if (accepted) {
-        rateLimitManager.decrementActiveRequests(request);
+        if(rateLimitManager!= null) rateLimitManager.decrementActiveRequests(request);
       }
     }
   }

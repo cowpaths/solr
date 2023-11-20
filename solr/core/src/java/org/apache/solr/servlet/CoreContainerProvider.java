@@ -62,6 +62,7 @@ import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.MetricsConfig;
 import org.apache.solr.core.NodeConfig;
@@ -77,6 +78,7 @@ import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.servlet.RateLimitManager.Builder;
 import org.apache.solr.util.SolrVersion;
 import org.apache.solr.util.StartupLoggingUtils;
+import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -254,7 +256,16 @@ public class CoreContainerProvider implements ServletContextListener {
         zkClient = zkController.getZkClient();
       }
 
-      Builder builder = new Builder(zkClient);
+      SolrZkClient zkClientCopy = zkClient;
+      Builder builder =
+          new Builder(
+              () -> {
+                try {
+                  return zkClientCopy.getNode(ZkStateReader.CLUSTER_PROPS, null, true);
+                } catch (KeeperException | InterruptedException e) {
+                  throw new RuntimeException(e);
+                }
+              });
 
       this.rateLimitManager = builder.build();
 

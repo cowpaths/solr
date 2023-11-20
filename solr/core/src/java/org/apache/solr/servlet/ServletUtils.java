@@ -209,7 +209,11 @@ public abstract class ServletUtils {
     RateLimitManager rateLimitManager = getRateLimitManager(request);
     try {
       try {
-        accepted = rateLimitManager.handleRequest(request);
+        if(rateLimitManager != null) {
+          accepted = rateLimitManager.handleRequest(request);
+        } else {
+          accepted = true;
+        }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new SolrException(ErrorCode.SERVER_ERROR, e.getMessage());

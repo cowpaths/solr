@@ -92,6 +92,7 @@ public class Slice extends ZkNodeProps implements Iterable<Replica> {
     replicasCopy.put(modified.getName(), modified);
     return new Slice(name, replicasCopy, propMap, collection);
   }
+
   /** The slice's state. */
   public enum State {
 
@@ -180,7 +181,7 @@ public class Slice extends ZkNodeProps implements Iterable<Replica> {
     }
     range = tmpRange;
 
-    /**
+    /*
      * debugging. this isn't an error condition for custom sharding. if (range == null) {
      * System.out.println("###### NO RANGE for " + name + " props=" + props); }
      */
@@ -252,6 +253,7 @@ public class Slice extends ZkNodeProps implements Iterable<Replica> {
   public String getCollection() {
     return collection;
   }
+
   /** Return slice name (shard id). */
   public String getName() {
     return name;

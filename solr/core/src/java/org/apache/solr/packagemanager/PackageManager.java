@@ -38,9 +38,11 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.solr.cli.SolrCLI;
+import org.apache.solr.client.api.util.SolrVersion;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.SolrZkClientTimeout;
 import org.apache.solr.client.solrj.request.GenericSolrRequest;
 import org.apache.solr.client.solrj.request.V2Request;
 import org.apache.solr.client.solrj.request.beans.PackagePayload;
@@ -55,13 +57,12 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.Pair;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.Utils;
-import org.apache.solr.filestore.DistribPackageStore;
+import org.apache.solr.filestore.DistribFileStore;
 import org.apache.solr.handler.admin.ContainerPluginsApi;
 import org.apache.solr.packagemanager.SolrPackage.Command;
 import org.apache.solr.packagemanager.SolrPackage.Manifest;
 import org.apache.solr.packagemanager.SolrPackage.Plugin;
 import org.apache.solr.pkg.SolrPackageLoader;
-import org.apache.solr.util.SolrVersion;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +84,7 @@ public class PackageManager implements Closeable {
     this.zkClient =
         new SolrZkClient.Builder()
             .withUrl(zkHost)
-            .withTimeout(30000, TimeUnit.MILLISECONDS)
+            .withTimeout(SolrZkClientTimeout.DEFAULT_ZK_CLIENT_TIMEOUT, TimeUnit.MILLISECONDS)
             .build();
     log.info("Done initializing a zkClient instance...");
   }
@@ -167,7 +168,7 @@ public class PackageManager implements Closeable {
     filesToDelete.add(
         String.format(Locale.ROOT, "/package/%s/%s/%s", packageName, version, "manifest.json"));
     for (String filePath : filesToDelete) {
-      DistribPackageStore.deleteZKFileEntry(zkClient, filePath);
+      DistribFileStore.deleteZKFileEntry(zkClient, filePath);
       String path = "/api/cluster/files" + filePath;
       PackageUtils.printGreen("Deleting " + path);
       solrClient.request(new GenericSolrRequest(SolrRequest.METHOD.DELETE, path));
@@ -870,7 +871,7 @@ public class PackageManager implements Closeable {
         if (pkg.version.equals(version)) {
           return pkg;
         }
-        if (PackageUtils.compareVersions(latest.version, pkg.version) <= 0) {
+        if (SolrVersion.compareVersions(latest.version, pkg.version) <= 0) {
           latest = pkg;
         }
       }
@@ -918,20 +919,12 @@ public class PackageManager implements Closeable {
     }
 
     Manifest manifest = packageInstance.manifest;
-    try {
-      if (!SolrVersion.LATEST.satisfies(manifest.versionConstraint)) {
-        PackageUtils.printRed(
-            "Version incompatible! Solr version: "
-                + SolrVersion.LATEST
-                + ", package version constraint: "
-                + manifest.versionConstraint);
-        System.exit(1);
-      }
-    } catch (SolrVersion.InvalidSemVerExpressionException ex) {
+    if (!SolrVersion.LATEST.satisfies(manifest.versionConstraint)) {
       PackageUtils.printRed(
-          "Error in version constraint given in package manifest: "
-              + manifest.versionConstraint
-              + ". It does not a valid SemVer expression.");
+          "Version incompatible! Solr version: "
+              + SolrVersion.LATEST
+              + ", package version constraint: "
+              + manifest.versionConstraint);
       System.exit(1);
     }
 

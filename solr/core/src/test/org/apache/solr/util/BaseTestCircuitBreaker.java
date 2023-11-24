@@ -252,7 +252,7 @@ public abstract class BaseTestCircuitBreaker extends SolrTestCaseJ4 {
   }
 
   public void testCircuitBreakerDebug() {
-    CircuitBreaker circuitBreaker = new FakeCPUCircuitBreaker(h.getCore());
+    CPUCircuitBreaker circuitBreaker = new FakeCPUCircuitBreaker(h.getCore());
     circuitBreaker.setDebugMode(true);
     circuitBreaker.setThreshold(75);
 

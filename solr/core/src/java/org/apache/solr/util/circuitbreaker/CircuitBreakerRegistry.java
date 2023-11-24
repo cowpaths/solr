@@ -85,9 +85,9 @@ public class CircuitBreakerRegistry implements Closeable {
         if (circuitBreaker.isDebugMode()) {
           if (log.isInfoEnabled()) {
             log.info(
-                    "Circuit breaker {} has tripped: {}",
-                    circuitBreaker.getClass().getSimpleName(),
-                    circuitBreaker.getErrorMessage());
+                "Circuit breaker {} has tripped: {}",
+                circuitBreaker.getClass().getSimpleName(),
+                circuitBreaker.getErrorMessage());
           }
         } else {
           if (triggeredCircuitBreakers == null) {

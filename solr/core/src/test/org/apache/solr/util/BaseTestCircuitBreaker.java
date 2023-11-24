@@ -31,7 +31,6 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
-import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.util.circuitbreaker.CPUCircuitBreaker;
 import org.apache.solr.util.circuitbreaker.CircuitBreaker;
@@ -257,7 +256,7 @@ public abstract class BaseTestCircuitBreaker extends SolrTestCaseJ4 {
     circuitBreaker.setDebugMode(true);
     circuitBreaker.setThreshold(75);
 
-    assertThatHighQueryLoadTrips(circuitBreaker, 0); //should not trip
+    assertThatHighQueryLoadTrips(circuitBreaker, 0); // should not trip
   }
 
   private static void removeAllExistingCircuitBreakers() {

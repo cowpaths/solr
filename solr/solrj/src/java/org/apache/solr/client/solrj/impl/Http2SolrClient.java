@@ -594,7 +594,11 @@ public class Http2SolrClient extends SolrClient {
     return "Basic " + Base64.getEncoder().encodeToString(userPass.getBytes(FALLBACK_CHARSET));
   }
 
-  private void decorateRequest(Request req, SolrRequest<?> solrRequest, boolean isAsync, AsyncListener asyncListener) {
+  private void decorateRequest(
+      Request req,
+      SolrRequest<?> solrRequest,
+      boolean isAsync,
+      AsyncListener<NamedList<Object>> asyncListener) {
     req.headers(headers -> headers.remove(HttpHeader.ACCEPT_ENCODING));
 
     if (requestTimeoutMillis > 0) {
@@ -668,14 +672,18 @@ public class Http2SolrClient extends SolrClient {
     return basePath + path;
   }
 
-
   private Request makeRequestAndSend(
-          SolrRequest<?> solrRequest, String url, InputStreamResponseListener listener, boolean isAsync)
-          throws IOException, SolrServerException {
+      SolrRequest<?> solrRequest, String url, InputStreamResponseListener listener, boolean isAsync)
+      throws IOException, SolrServerException {
     return makeRequestAndSend(solrRequest, url, listener, isAsync, null);
   }
+
   private Request makeRequestAndSend(
-          SolrRequest<?> solrRequest, String url, InputStreamResponseListener listener, boolean isAsync, AsyncListener<NamedList<Object>> asyncListener)
+      SolrRequest<?> solrRequest,
+      String url,
+      InputStreamResponseListener listener,
+      boolean isAsync,
+      AsyncListener<NamedList<Object>> asyncListener)
       throws IOException, SolrServerException {
 
     // TODO add invariantParams support

@@ -418,7 +418,7 @@ public class Http2SolrClient extends SolrClient {
             .newRequest(basePath + "update" + requestParams.toQueryString())
             .method(HttpMethod.POST)
             .body(content);
-    decorateRequest(postRequest, updateRequest, false);
+    decorateRequest(postRequest, updateRequest, false, null);
     InputStreamResponseListener responseListener = new InputStreamReleaseTrackingResponseListener();
     postRequest.send(responseListener);
 
@@ -508,7 +508,7 @@ public class Http2SolrClient extends SolrClient {
             }
           };
 
-      req = makeRequestAndSend(solrRequest, url, listener, true);
+      req = makeRequestAndSend(solrRequest, url, listener, true, asyncListener);
     } catch (SolrServerException | IOException e) {
       asyncListener.onFailure(e);
       return FAILED_MAKING_REQUEST_CANCELLABLE;
@@ -526,7 +526,7 @@ public class Http2SolrClient extends SolrClient {
     Request req = null;
     try {
       InputStreamResponseListener listener = new InputStreamReleaseTrackingResponseListener();
-      req = makeRequestAndSend(solrRequest, url, listener, false);
+      req = makeRequestAndSend(solrRequest, url, listener, false, null);
       Response response = listener.get(idleTimeoutMillis, TimeUnit.MILLISECONDS);
       url = req.getURI().toString();
       InputStream is = listener.getInputStream();
@@ -593,7 +593,11 @@ public class Http2SolrClient extends SolrClient {
     return "Basic " + Base64.getEncoder().encodeToString(userPass.getBytes(FALLBACK_CHARSET));
   }
 
-  private void decorateRequest(Request req, SolrRequest<?> solrRequest, boolean isAsync) {
+  private void decorateRequest(
+      Request req,
+      SolrRequest<?> solrRequest,
+      boolean isAsync,
+      AsyncListener<NamedList<Object>> asyncListener) {
     req.headers(headers -> headers.remove(HttpHeader.ACCEPT_ENCODING));
 
     if (requestTimeoutMillis > 0) {
@@ -616,6 +620,9 @@ public class Http2SolrClient extends SolrClient {
     if (isAsync) {
       req.onRequestQueued(asyncTracker.queuedListener);
       req.onComplete(asyncTracker.completeListener);
+      if (asyncListener != null) {
+        req.onRequestBegin(request -> asyncListener.onStart());
+      }
     }
 
     Map<String, String> headers = solrRequest.getHeaders();
@@ -667,6 +674,16 @@ public class Http2SolrClient extends SolrClient {
   private Request makeRequestAndSend(
       SolrRequest<?> solrRequest, String url, InputStreamResponseListener listener, boolean isAsync)
       throws IOException, SolrServerException {
+    return makeRequestAndSend(solrRequest, url, listener, isAsync, null);
+  }
+
+  private Request makeRequestAndSend(
+      SolrRequest<?> solrRequest,
+      String url,
+      InputStreamResponseListener listener,
+      boolean isAsync,
+      AsyncListener<NamedList<Object>> asyncListener)
+      throws IOException, SolrServerException {
 
     // TODO add invariantParams support
     ResponseParser parser =
@@ -686,14 +703,14 @@ public class Http2SolrClient extends SolrClient {
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "GET can't send streams!");
       }
       var r = httpClient.newRequest(url + wparams.toQueryString()).method(HttpMethod.GET);
-      decorateRequest(r, solrRequest, isAsync);
+      decorateRequest(r, solrRequest, isAsync, asyncListener);
       r.send(listener);
       return r;
     }
 
     if (SolrRequest.METHOD.DELETE == solrRequest.getMethod()) {
       var r = httpClient.newRequest(url + wparams.toQueryString()).method(HttpMethod.DELETE);
-      decorateRequest(r, solrRequest, isAsync);
+      decorateRequest(r, solrRequest, isAsync, asyncListener);
       r.send(listener);
       return r;
     }
@@ -717,7 +734,7 @@ public class Http2SolrClient extends SolrClient {
       if (contentWriter != null) {
         var content = new OutputStreamRequestContent(contentWriter.getContentType());
         var r = httpClient.newRequest(url + wparams.toQueryString()).method(method).body(content);
-        decorateRequest(r, solrRequest, isAsync);
+        decorateRequest(r, solrRequest, isAsync, asyncListener);
         r.send(listener);
         try (var output = content.getOutputStream()) {
           contentWriter.write(output);
@@ -730,7 +747,7 @@ public class Http2SolrClient extends SolrClient {
         queryParams.add(calculateQueryParams(solrRequest.getQueryParams(), wparams));
         Request req = httpClient.newRequest(url + queryParams.toQueryString()).method(method);
         var r = fillContentStream(req, streams, wparams, isMultipart);
-        decorateRequest(r, solrRequest, isAsync);
+        decorateRequest(r, solrRequest, isAsync, asyncListener);
         r.send(listener);
         return r;
 
@@ -741,7 +758,7 @@ public class Http2SolrClient extends SolrClient {
             new InputStreamRequestContent(
                 contentStream.getContentType(), contentStream.getStream());
         var r = httpClient.newRequest(url + wparams.toQueryString()).method(method).body(content);
-        decorateRequest(r, solrRequest, isAsync);
+        decorateRequest(r, solrRequest, isAsync, asyncListener);
         r.send(listener);
         return r;
       }
@@ -1020,7 +1037,9 @@ public class Http2SolrClient extends SolrClient {
   }
 
   private static class AsyncTracker {
-    private static final int MAX_OUTSTANDING_REQUESTS = 1000;
+    private static final int MAX_OUTSTANDING_REQUESTS =
+        Integer.parseInt(System.getProperty("solr.http2.maxOutstandingRequests", "1000"));
+    private static final int MAX_REQUESTS_QUEUED_PER_DESTINATION = 3000;
 
     // wait for async requests
     private final Phaser phaser;
@@ -1050,8 +1069,7 @@ public class Http2SolrClient extends SolrClient {
     }
 
     int getMaxRequestsQueuedPerDestination() {
-      // comfortably above max outstanding requests
-      return MAX_OUTSTANDING_REQUESTS * 3;
+      return MAX_REQUESTS_QUEUED_PER_DESTINATION;
     }
 
     public void waitForComplete() {

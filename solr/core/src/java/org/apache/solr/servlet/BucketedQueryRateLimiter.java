@@ -92,8 +92,8 @@ public class BucketedQueryRateLimiter extends RequestRateLimiter implements Solr
       return ew -> {
         ew.put("queueLength", guaranteedSlotsPool.getQueueLength());
         ew.put("available", guaranteedSlotsPool.availablePermits());
-        ew.put("tries", tries);
-        ew.put("success", success);
+        ew.put("tries", tries.longValue());
+        ew.put("success", success.longValue());
         ew.put("fails", fails);
         ew.put("tryWaitAverage", tryWait.getMeanRate());
       };

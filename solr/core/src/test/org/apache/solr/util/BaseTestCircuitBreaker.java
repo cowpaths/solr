@@ -251,6 +251,14 @@ public abstract class BaseTestCircuitBreaker extends SolrTestCaseJ4 {
         CircuitBreaker.getErrorCode(List.of(dummyMemBreaker)));
   }
 
+  public void testCircuitBreakerDebug() {
+    CPUCircuitBreaker circuitBreaker = new FakeCPUCircuitBreaker(h.getCore());
+    circuitBreaker.setDebugMode(true);
+    circuitBreaker.setThreshold(75);
+
+    assertThatHighQueryLoadTrips(circuitBreaker, 0); // should not trip
+  }
+
   private static void removeAllExistingCircuitBreakers() {
     try {
       h.getCore().getCircuitBreakerRegistry().deregisterAll();

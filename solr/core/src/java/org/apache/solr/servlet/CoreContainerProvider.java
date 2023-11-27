@@ -58,6 +58,7 @@ import javax.servlet.UnavailableException;
 import org.apache.http.client.HttpClient;
 import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.VectorUtil;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
@@ -268,6 +269,10 @@ public class CoreContainerProvider implements ServletContextListener {
               });
 
       this.rateLimitManager = builder.build();
+      RequestRateLimiter queryRateLimiter =  this.rateLimitManager.getRequestRateLimiter(SolrRequest.SolrRequestType.QUERY);
+      if(queryRateLimiter instanceof BucketedQueryRateLimiter) {
+        ((BucketedQueryRateLimiter)queryRateLimiter).initializeMetrics(coresInit.getSolrMetricsContext(), "bucketedQueryRateLimiter");
+      }
 
       if (zkController != null) {
         zkController.zkStateReader.registerClusterPropertiesListener(this.rateLimitManager);

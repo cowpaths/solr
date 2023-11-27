@@ -1,5 +1,6 @@
 package org.apache.solr.servlet;
 
+import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -7,14 +8,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Pattern;
+
 import org.apache.solr.client.solrj.request.beans.RateLimiterPayload;
+import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.RateLimiterConfig;
+import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.metrics.MetricsMap;
+import org.apache.solr.metrics.SolrMetricProducer;
+import org.apache.solr.metrics.SolrMetricsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class BucketedQueryRateLimiter extends RequestRateLimiter {
+public class BucketedQueryRateLimiter extends RequestRateLimiter implements SolrMetricProducer {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private static final Map<String, Class<? extends Condition>> conditionImpls =
@@ -26,11 +34,14 @@ public class BucketedQueryRateLimiter extends RequestRateLimiter {
   public SlotMetadata handleRequest(RequestWrapper request) throws InterruptedException {
     for (Bucket bucket : buckets) {
       if (bucket.test(request)) {
+        bucket.tries.increment();
         if (bucket.guaranteedSlotsPool.tryAcquire(
             bucket.bucketCfg.slotAcquisitionTimeoutInMS, TimeUnit.MILLISECONDS)) {
+          bucket.success.increment();
           return bucket.guaranteedSlotMetadata;
         } else {
-          // could not acquire  aslot
+          bucket.fails.increment();
+          // could not acquire  a slot
           return RequestRateLimiter.nullSlotMetadata;
         }
       }
@@ -39,12 +50,33 @@ public class BucketedQueryRateLimiter extends RequestRateLimiter {
     return null;
   }
 
+  private SolrMetricsContext metrics;
+  @Override
+  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
+    metrics = parentContext.getChildContext(this);
+    MetricsMap metricsMap = new MetricsMap(ew -> buckets.forEach(bucket -> ew.putNoEx(bucket.bucketCfg.name, bucket.getMetrics())));
+    metrics.gauge(
+            metricsMap, true, scope, null, SolrInfoBean.Category.CONTAINER.toString());
+
+  }
+
+  @Override
+  public SolrMetricsContext getSolrMetricsContext() {
+    return metrics;
+  }
+
   static class Bucket {
+    //for debugging purposes
     private final String cfg;
     private RateLimiterPayload.ReadBucketConfig bucketCfg;
     private final Semaphore guaranteedSlotsPool;
     private final SlotMetadata guaranteedSlotMetadata;
     private final List<Condition> conditions = new ArrayList<>();
+
+    public LongAdder tries = new LongAdder();
+    public LongAdder success =new LongAdder();
+    public LongAdder fails=new LongAdder();
+    public com.codahale.metrics.Timer tryWait = new com.codahale.metrics.Timer();
 
     private Bucket fallback;
 
@@ -54,6 +86,17 @@ public class BucketedQueryRateLimiter extends RequestRateLimiter {
         if (!condition.test(req)) isPass = false;
       }
       return isPass;
+    }
+
+    public MapWriter getMetrics() {
+      return ew -> {
+        ew.put("queueLength", guaranteedSlotsPool.getQueueLength());
+        ew.put("available", guaranteedSlotsPool.availablePermits());
+        ew.put("tries", tries);
+        ew.put("success", success);
+        ew.put("fails", fails);
+        ew.put("tryWaitAverage", tryWait.getMeanRate());
+      };
     }
 
     public Bucket(RateLimiterPayload.ReadBucketConfig bucketCfg) {

@@ -716,7 +716,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public void finish() throws IOException {
+    public void complete() throws IOException {
       if (contexts.length == 0) {
         return;
       }
@@ -807,7 +807,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       }
 
       if (delegate instanceof DelegatingCollector) {
-        ((DelegatingCollector) delegate).finish();
+        ((DelegatingCollector) delegate).complete();
       }
     }
   }
@@ -923,7 +923,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public void finish() throws IOException {
+    public void complete() throws IOException {
       if (contexts.length == 0) {
         return;
       }
@@ -997,7 +997,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       }
 
       if (delegate instanceof DelegatingCollector) {
-        ((DelegatingCollector) delegate).finish();
+        ((DelegatingCollector) delegate).complete();
       }
     }
   }
@@ -1200,7 +1200,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public void finish() throws IOException {
+    public void complete() throws IOException {
       if (contexts.length == 0) {
         return;
       }
@@ -1282,7 +1282,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       }
 
       if (delegate instanceof DelegatingCollector) {
-        ((DelegatingCollector) delegate).finish();
+        ((DelegatingCollector) delegate).complete();
       }
     }
   }
@@ -1449,7 +1449,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public void finish() throws IOException {
+    public void complete() throws IOException {
       if (contexts.length == 0) {
         return;
       }
@@ -1513,7 +1513,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       }
 
       if (delegate instanceof DelegatingCollector) {
-        ((DelegatingCollector) delegate).finish();
+        ((DelegatingCollector) delegate).complete();
       }
     }
   }
@@ -1593,11 +1593,11 @@ public class CollapsingQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public void finish() throws IOException {
+    public void complete() throws IOException {
       // Deal with last group (if any)...
       maybeDelegateCollect();
 
-      super.finish();
+      super.complete();
     }
 
     /**
@@ -3396,9 +3396,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
         public void purgeGroupsThatHaveBoostedDocs(
             final FixedBitSet collapsedSet,
             final LongProcedure removeGroupKey,
-            final Runnable resetNullGroupHead) {
-          return;
-        }
+            final Runnable resetNullGroupHead) {}
       };
     }
 

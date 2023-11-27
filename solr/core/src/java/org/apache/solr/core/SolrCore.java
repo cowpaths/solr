@@ -175,7 +175,8 @@ import org.apache.solr.util.PropertiesInputStream;
 import org.apache.solr.util.PropertiesOutputStream;
 import org.apache.solr.util.RefCounted;
 import org.apache.solr.util.TestInjection;
-import org.apache.solr.util.circuitbreaker.CircuitBreakerManager;
+import org.apache.solr.util.circuitbreaker.CircuitBreaker;
+import org.apache.solr.util.circuitbreaker.CircuitBreakerRegistry;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 import org.apache.solr.util.plugin.PluginInfoInitialized;
 import org.apache.solr.util.plugin.SolrCoreAware;
@@ -250,7 +251,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
   private final ConfigSet configSet;
   // singleton listener for all packages used in schema
 
-  private final CircuitBreakerManager circuitBreakerManager;
+  private final CircuitBreakerRegistry circuitBreakerRegistry = new CircuitBreakerRegistry();
 
   private final List<Runnable> confListeners = new CopyOnWriteArrayList<>();
 
@@ -374,7 +375,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
    */
   public void setLatestSchema(IndexSchema replacementSchema) {
     // 1) For a newly instantiated core, the Similarity needs SolrCore before inform() is called on
-    // any registered SolrCoreAware listeners (which will likeley need to use the SolrIndexSearcher.
+    // any registered SolrCoreAware listeners (which will likely need to use the SolrIndexSearcher.
     //
     // 2) If a new IndexSchema is assigned to an existing live SolrCore (ie: managed schema
     // replacement via SolrCloud) then we need to explicitly inform() the similarity because
@@ -409,12 +410,12 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
   /**
    * Returns the indexdir as given in index.properties. If index.properties exists in dataDir and
-   * there is a property <i>index</i> available and it points to a valid directory in dataDir that
+   * there is a property <i>index</i> available, and it points to a valid directory in dataDir that
    * is returned. Else dataDir/index is returned. Only called for creating new indexSearchers and
    * indexwriters. Use the getIndexDir() method to know the active index directory
    *
    * @return the indexdir as given in index.properties
-   * @throws SolrException if for any reason the a reasonable index directory cannot be determined.
+   * @throws SolrException if for any reason an index directory cannot be determined.
    */
   public String getNewIndexDir() {
     Directory dir = null;
@@ -432,7 +433,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       String errorMessage = "Error in getNewIndexDir, exception: ";
       log.error(errorMessage, e);
       // See SOLR-11687. It is inadvisable to assume we can do the right thing for any but a small
-      // number of exceptions that ware caught and swallowed in getIndexProperty.
+      // number of exceptions that were caught and swallowed in getIndexProperty.
       throw new SolrException(ErrorCode.SERVER_ERROR, errorMessage, e);
     } finally {
       if (dir != null) {
@@ -1089,7 +1090,6 @@ public class SolrCore implements SolrInfoBean, Closeable {
       this.configSetProperties = configSet.getProperties();
       // Initialize the metrics manager
       this.coreMetricManager = initCoreMetricManager(solrConfig);
-      this.circuitBreakerManager = initCircuitBreakerManager();
       solrMetricsContext = coreMetricManager.getSolrMetricsContext();
       this.coreMetricManager.loadReporters();
 
@@ -1116,6 +1116,9 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
       // initialize core metrics
       initializeMetrics(solrMetricsContext, null);
+
+      // init pluggable circuit breakers, after metrics because some circuit breakers use metrics
+      initPlugins(null, CircuitBreaker.class);
 
       SolrFieldCacheBean solrFieldCacheBean = new SolrFieldCacheBean();
       // this is registered at the CONTAINER level because it's not core-specific - for now we
@@ -1330,13 +1333,6 @@ public class SolrCore implements SolrInfoBean, Closeable {
     return coreMetricManager;
   }
 
-  private CircuitBreakerManager initCircuitBreakerManager() {
-    final PluginInfo info = solrConfig.getPluginInfo(CircuitBreakerManager.class.getName());
-    CircuitBreakerManager circuitBreakerManager = CircuitBreakerManager.build(info);
-
-    return circuitBreakerManager;
-  }
-
   @Override
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     newSearcherCounter = parentContext.counter("new", Category.SEARCHER.toString());
@@ -1418,9 +1414,9 @@ public class SolrCore implements SolrInfoBean, Closeable {
       // we are evidently running in cloud mode.
       //
       // In cloud mode, version field is required for correct consistency
-      // ideally this check would be more fine grained, and individual features
+      // ideally this check would be more fine-grained, and individual features
       // would assert it when they initialize, but DistributedUpdateProcessor
-      // is currently a big ball of wax that does more then just distributing
+      // is currently a big ball of wax that does more than just distributing
       // updates (ie: partial document updates), so it needs to work in no cloud
       // mode as well, and can't assert version field support on init.
 
@@ -1447,7 +1443,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
    * @param dataDir An optional hint to the data directory location. Will be normalized and used if
    *     not null.
    * @param config A solr config to retrieve the default data directory location, if used.
-   * @param coreDescriptor descriptor to load the actual data dir from, if not using the defualt.
+   * @param coreDescriptor descriptor to load the actual data dir from, if not using the default.
    * @return a normalized data directory name
    * @throws SolrException if the data directory cannot be loaded from the core descriptor
    */
@@ -1716,8 +1712,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
     return updateProcessors;
   }
 
-  public CircuitBreakerManager getCircuitBreakerManager() {
-    return circuitBreakerManager;
+  public CircuitBreakerRegistry getCircuitBreakerRegistry() {
+    return circuitBreakerRegistry;
   }
 
   // this core current usage count
@@ -1773,6 +1769,17 @@ public class SolrCore implements SolrInfoBean, Closeable {
     log.info("CLOSING SolrCore {}", this);
 
     ExecutorUtil.shutdownAndAwaitTermination(coreAsyncTaskExecutor);
+
+    // Close circuit breakers that may have background threads, before metrics because some circuit
+    // breakers use metrics
+    try {
+      getCircuitBreakerRegistry().close();
+    } catch (Throwable e) {
+      log.error("Exception closing circuit breakers", e);
+      if (e instanceof Error) {
+        throw (Error) e;
+      }
+    }
 
     // stop reporting metrics
     try {
@@ -2534,7 +2541,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
     // if it isn't necessary.
 
     synchronized (searcherLock) {
-      for (; ; ) { // this loop is so w can retry in the event that we exceed maxWarmingSearchers
+      for (; ; ) { // this loop is so we can retry in the event that we exceed maxWarmingSearchers
         // see if we can return the current searcher
         if (_searcher != null && !forceNew) {
           if (returnSearcher) {
@@ -2551,7 +2558,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
             searcherLock.wait();
           } catch (InterruptedException e) {
             if (log.isInfoEnabled()) {
-              log.info("Interupted waiting for searcherLock", e);
+              log.info("Interrupted waiting for searcherLock", e);
             }
           }
         }
@@ -2582,7 +2589,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
             searcherLock.wait();
           } catch (InterruptedException e) {
             if (log.isInfoEnabled()) {
-              log.info("Interupted waiting for searcherLock", e);
+              log.info("Interrupted waiting for searcherLock", e);
             }
           }
           continue; // go back to the top of the loop and retry
@@ -2663,6 +2670,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
           future =
               searcherExecutor.submit(
                   () -> {
+                    newSearcher.bootstrapFirstSearcher();
                     for (SolrEventListener listener : firstSearcherListeners) {
                       try {
                         listener.newSearcher(newSearcher, null);
@@ -2806,7 +2814,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
   }
 
   // Take control of newSearcherHolder (which should have a reference count of at
-  // least 1 already.  If the caller wishes to use the newSearcherHolder directly
+  // least 1 already). If the caller wishes to use the newSearcherHolder directly
   // after registering it, then they should increment the reference count *before*
   // calling this method.
   //
@@ -2924,7 +2932,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       }
 
       /* slowQueryThresholdMillis defaults to -1 in SolrConfig -- not enabled.*/
-      if (log.isWarnEnabled() && slowQueryThresholdMillis >= 0) {
+      if (slowLog.isWarnEnabled() && slowQueryThresholdMillis >= 0) {
         final long qtime = (long) (req.getRequestTimer().getTime());
         if (qtime >= slowQueryThresholdMillis) {
           slowLog.warn("slow: {}", rsp.getToLogAsString());
@@ -3064,10 +3072,10 @@ public class SolrCore implements SolrInfoBean, Closeable {
     try {
       m.put(
           "xlsx",
-          (QueryResponseWriter)
-              Class.forName("org.apache.solr.handler.extraction.XLSXResponseWriter")
-                  .getConstructor()
-                  .newInstance());
+          Class.forName("org.apache.solr.handler.extraction.XLSXResponseWriter")
+              .asSubclass(QueryResponseWriter.class)
+              .getDeclaredConstructor()
+              .newInstance());
     } catch (Exception e) {
       // don't worry; extraction module not in class path
     }
@@ -3184,10 +3192,13 @@ public class SolrCore implements SolrInfoBean, Closeable {
     T def = null;
     for (PluginInfo info : pluginInfos) {
       T o = createInitInstance(info, type, type.getSimpleName(), defClassName);
-      registry.put(info.name, o);
+      if (registry != null) registry.put(info.name, o);
       if (o instanceof SolrMetricProducer) {
         coreMetricManager.registerMetricProducer(
             type.getSimpleName() + "." + info.name, (SolrMetricProducer) o);
+      }
+      if (o instanceof CircuitBreaker) {
+        circuitBreakerRegistry.register((CircuitBreaker) o);
       }
       if (info.isDefault()) {
         def = o;
@@ -3417,20 +3428,20 @@ public class SolrCore implements SolrInfoBean, Closeable {
       ManagedIndexSchema mis = (ManagedIndexSchema) core.getLatestSchema();
       schemaRes = mis.getResourceName();
     }
-    final String managedSchmaResourcePath =
+    final String managedSchemaResourcePath =
         schemaRes == null ? null : zkSolrResourceLoader.getConfigSetZkPath() + "/" + schemaRes;
     return () -> {
       log.info("config update listener called for core {}", coreName);
       SolrZkClient zkClient = cc.getZkController().getZkClient();
-      int solrConfigversion, overlayVersion, managedSchemaVersion = 0;
+      int solrConfigVersion, overlayVersion, managedSchemaVersion = 0;
       SolrConfig cfg = null;
       try (SolrCore solrCore = cc.solrCores.getCoreFromAnyList(coreName, true, coreId)) {
         if (solrCore == null || solrCore.isClosed() || solrCore.getCoreContainer().isShutDown())
           return;
         cfg = solrCore.getSolrConfig();
-        solrConfigversion = solrCore.getSolrConfig().getZnodeVersion();
+        solrConfigVersion = solrCore.getSolrConfig().getZnodeVersion();
         overlayVersion = solrCore.getSolrConfig().getOverlay().getVersion();
-        if (managedSchmaResourcePath != null) {
+        if (managedSchemaResourcePath != null) {
           managedSchemaVersion =
               ((ManagedIndexSchema) solrCore.getLatestSchema()).getSchemaZkVersion();
         }
@@ -3439,8 +3450,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
         cfg.refreshRequestParams();
       }
       if (checkStale(zkClient, overlayPath, overlayVersion)
-          || checkStale(zkClient, solrConfigPath, solrConfigversion)
-          || checkStale(zkClient, managedSchmaResourcePath, managedSchemaVersion)) {
+          || checkStale(zkClient, solrConfigPath, solrConfigVersion)
+          || checkStale(zkClient, managedSchemaResourcePath, managedSchemaVersion)) {
         log.info("core reload {}", coreName);
         SolrConfigHandler configHandler = ((SolrConfigHandler) core.getRequestHandler("/config"));
         if (configHandler.getReloadLock().tryLock()) {
@@ -3601,19 +3612,19 @@ public class SolrCore implements SolrInfoBean, Closeable {
   }
 
   /**
-   * Run an arbitrary task in it's own thread. This is an expert option and is a method you should
+   * Run an arbitrary task in its own thread. This is an expert option and is a method you should
    * use with great care. It would be bad to run something that never stopped or run something that
-   * took a very long time. Typically this is intended for actions that take a few seconds, and
-   * therefore would be bad to wait for within a request, but but would not pose a significant
-   * hindrance to server shut down times. It is not intended for long running tasks and if you are
-   * using a Runnable with a loop in it, you are almost certainly doing it wrong.
+   * took a very long time. Typically, this is intended for actions that take a few seconds, and
+   * therefore would be bad to wait for within a request, but would not pose a significant hindrance
+   * to server shut down times. It is not intended for long-running tasks and if you are using a
+   * Runnable with a loop in it, you are almost certainly doing it wrong.
    *
    * <p>WARNING: Solr wil not be able to shut down gracefully until this task completes!
    *
    * <p>A significant upside of using this method vs creating your own ExecutorService is that your
    * code does not have to properly shutdown executors which typically is risky from a unit testing
    * perspective since the test framework will complain if you don't carefully ensure the executor
-   * shuts down before the end of the test. Also the threads running this task are sure to have a
+   * shuts down before the end of the test. Also, the threads running this task are sure to have a
    * proper MDC for logging.
    *
    * @param r the task to run

@@ -162,8 +162,8 @@ public class JWTAuthPluginIntegrationTest extends SolrCloudAuthTestCase {
     assertEquals(
         "{\n"
             + "\"tokenEndpoint\":\"http://acmepaymentscorp/oauth/oauth20/token\",\n"
-            + "  \"authorization_flow\":\"code_pkce\",\n"
-            + "  \"scope\":\"solr:admin\",\n"
+            + "\"authorization_flow\":\"code_pkce\",\n"
+            + "\"scope\":\"solr:admin\",\n"
             + "\"redirect_uris\":[],\n"
             + "\"authorizationEndpoint\":\"http://acmepaymentscorp/oauth/auz/authorize\",\n"
             + "\"client_id\":\"solr-cluster\"}",
@@ -186,8 +186,8 @@ public class JWTAuthPluginIntegrationTest extends SolrCloudAuthTestCase {
     assertEquals(
         "{\n"
             + "\"tokenEndpoint\":\"http://acmepaymentscorp/oauth/oauth20/token\",\n"
-            + "  \"authorization_flow\":\"code_pkce\",\n"
-            + "  \"scope\":\"solr:admin\",\n"
+            + "\"authorization_flow\":\"code_pkce\",\n"
+            + "\"scope\":\"solr:admin\",\n"
             + "\"redirect_uris\":[],\n"
             + "\"authorizationEndpoint\":\"http://acmepaymentscorp/oauth/auz/authorize\",\n"
             + "\"client_id\":\"solr-cluster\"}",

@@ -103,6 +103,7 @@ public class AnalyticsHandler extends RequestHandlerBase
     } catch (ExitableDirectoryReader.ExitingReaderException e) {
       rsp.addResponse(new AnalyticsResponse(new TimeExceededStubException(e)));
     } finally {
+      BloomUtils.clear();
       SolrQueryTimeoutImpl.reset();
     }
   }

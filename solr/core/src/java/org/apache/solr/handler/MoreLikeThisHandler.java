@@ -270,6 +270,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase {
     } catch (ExitableDirectoryReader.ExitingReaderException ex) {
       log.warn("Query: {}; ", req.getParamString(), ex);
     } finally {
+      BloomUtils.clear();
       SolrQueryTimeoutImpl.reset();
     }
   }

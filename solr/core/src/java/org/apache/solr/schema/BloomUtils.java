@@ -19,6 +19,7 @@ package org.apache.solr.schema;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.Function;
 import org.apache.lucene.analysis.Analyzer;
@@ -128,6 +129,8 @@ public final class BloomUtils {
         }
       };
 
+  private static final ThreadLocal<Set<String>> COLLATED_POSTINGS_FIELDS = new ThreadLocal<>();
+
   public static void init(SolrQueryRequest req) {
     String spec = req.getParams().get("enableNgrams");
     boolean enableNgrams;
@@ -160,10 +163,28 @@ public final class BloomUtils {
       }
     }
     COLLATED_POSTINGS_LIMIT.set(postingsLimit);
+    spec = req.getParams().get("collatePostingsFields");
+    Set<String> collatePostingsFields;
+    if (spec == null) {
+      collatePostingsFields = null;
+    } else if (spec.isEmpty()) {
+      collatePostingsFields = Set.of();
+    } else {
+      collatePostingsFields = Set.of(spec.split("\\w,\\w"));
+    }
+    COLLATED_POSTINGS_FIELDS.set(collatePostingsFields);
+  }
+
+  public static void clear() {
+    COLLATED_POSTINGS_FIELDS.set(null);
   }
 
   public static int collatedPostingsLimit() {
     return COLLATED_POSTINGS_LIMIT.get();
+  }
+
+  public static Set<String> collatedPostingsFields() {
+    return COLLATED_POSTINGS_FIELDS.get();
   }
 
   public static boolean enableNgrams() {

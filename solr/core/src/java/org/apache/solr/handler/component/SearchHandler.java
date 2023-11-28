@@ -522,6 +522,7 @@ public class SearchHandler extends RequestHandlerBase
         // the lucene level
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, ex);
       } finally {
+        BloomUtils.clear();
         SolrQueryTimeoutImpl.reset();
       }
     } else {

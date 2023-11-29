@@ -404,7 +404,7 @@ public class SearchHandler extends RequestHandlerBase
     rb.isDistrib = isDistrib(req);
     tagRequestWithRequestId(rb);
 
-    if (req.getPath().contains("select")) {
+    if (req.getPath() != null && req.getPath().contains("select")) {
       if (isShard) {
         // log a simple message on start
         log.info("Start Forwarded Search Query");

@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 public class SurroundQParserPlugin extends QParserPlugin {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   public static final String NAME = "surround";
+  private static final String MAX_BASIC_QUERIES_SYSTEM_PROP = "solr.absoluteMaxBasicQueries";
 
   @Override
   public QParser createParser(
@@ -77,6 +78,21 @@ public class SurroundQParserPlugin extends QParserPlugin {
           this.maxBasicQueries = DEFMAXBASICQUERIES;
         }
       }
+      String maxBasicQueriesSystemProp = System.getProperty(MAX_BASIC_QUERIES_SYSTEM_PROP);
+      if (maxBasicQueriesSystemProp != null) {
+        try {
+          int absoluteMaxBasicQueries = Integer.parseInt(maxBasicQueriesSystemProp);
+          if (absoluteMaxBasicQueries > 0) {
+            log.info("Overriding maxBasicQueries with system property {} with value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+            this.maxBasicQueries = absoluteMaxBasicQueries;
+          } else {
+            log.info("Ignoring system property {} value {} since it is non-positive", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+          }
+        } catch (NumberFormatException e) {
+          log.warn("Invalid system property {} value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+        }
+      }
+
       // ugh .. colliding ParseExceptions
       try {
         sq = org.apache.lucene.queryparser.surround.parser.QueryParser.parse(qstr);

@@ -49,17 +49,25 @@ public class SurroundQParserPlugin extends QParserPlugin {
       try {
         int absoluteMaxBasicQueries = Integer.parseInt(maxBasicQueriesSystemProp);
         if (absoluteMaxBasicQueries > 0) {
-          log.info("maxBasicQueries with system property {} with value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+          log.info(
+              "maxBasicQueries with system property {} with value {}",
+              MAX_BASIC_QUERIES_SYSTEM_PROP,
+              maxBasicQueriesSystemProp);
           return absoluteMaxBasicQueries;
         } else {
-          log.info("Ignoring system property {} value {} since it is non-positive", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+          log.info(
+              "Ignoring system property {} value {} since it is non-positive",
+              MAX_BASIC_QUERIES_SYSTEM_PROP,
+              maxBasicQueriesSystemProp);
         }
       } catch (NumberFormatException e) {
-        log.warn("Invalid system property {} value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
-
+        log.warn(
+            "Invalid system property {} value {}",
+            MAX_BASIC_QUERIES_SYSTEM_PROP,
+            maxBasicQueriesSystemProp);
       }
     }
-    return -1; //-1 indicates no absolute max basic queries
+    return -1; // -1 indicates no absolute max basic queries
   }
 
   @Override
@@ -100,7 +108,11 @@ public class SurroundQParserPlugin extends QParserPlugin {
       }
 
       if (ABSOLUTE_MAX_BASIC_QUERIES > 0 && this.maxBasicQueries > ABSOLUTE_MAX_BASIC_QUERIES) {
-        log.info("Overriding maxBasicQueries from query {} with system property {} value {}", this.maxBasicQueries, MAX_BASIC_QUERIES_SYSTEM_PROP, ABSOLUTE_MAX_BASIC_QUERIES);
+        log.info(
+            "Overriding maxBasicQueries from query {} with system property {} value {}",
+            this.maxBasicQueries,
+            MAX_BASIC_QUERIES_SYSTEM_PROP,
+            ABSOLUTE_MAX_BASIC_QUERIES);
         this.maxBasicQueries = ABSOLUTE_MAX_BASIC_QUERIES;
       }
 

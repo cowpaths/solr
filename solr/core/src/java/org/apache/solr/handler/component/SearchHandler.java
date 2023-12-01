@@ -404,26 +404,23 @@ public class SearchHandler extends RequestHandlerBase
     rb.isDistrib = isDistrib(req);
     tagRequestWithRequestId(rb);
 
-    if (req.getPath() != null && req.getPath().contains("select")) {
-      if (isShard) {
-        // log a simple message on start
-        log.info("Start Forwarded Search Query");
-        SolrParams filteredParams = removeVerboseParams(req.getParams());
-        rsp.getToLog()
-            .asShallowMap(false)
-            .put(
-                "params", "{" + filteredParams + "}"); // replace "params" with the filtered version
-      } else {
-        // Then it is the first time this req hitting Solr - not a req distributed by another higher
-        // level req.
-        // We have to log the query here as
-        // 1. It's useful to know the query before the processing start in case if the query stalls
-        // 2. The existing logging in SolrCore does not contain the query as query construction
-        // happens after the log
-        //    entries are added to rsp.toLog
-        if (log.isInfoEnabled()) {
-          log.info("Start External Search Query: {}", req.getParamString());
-        }
+    if (isShard) {
+      // log a simple message on start
+      log.info("Start Forwarded Search Query");
+      SolrParams filteredParams = removeVerboseParams(req.getParams());
+      rsp.getToLog()
+          .asShallowMap(false)
+          .put("params", "{" + filteredParams + "}"); // replace "params" with the filtered version
+    } else if (rb.isDistrib) {
+      // Then it is the first time this req hitting Solr - not a req distributed by another higher
+      // level req.
+      // We have to log the query here as
+      // 1. It's useful to know the query before the processing start in case if the query stalls
+      // 2. The existing logging in SolrCore does not contain the query as query construction
+      // happens after the log
+      //    entries are added to rsp.toLog
+      if (log.isInfoEnabled()) {
+        log.info("Start External Search Query: {}", req.getParamString());
       }
     }
 

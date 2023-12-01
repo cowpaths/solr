@@ -88,7 +88,10 @@ public final class BloomUtils {
 
   private static final boolean DEFAULT_ENABLE_NGRAMS = !"false".equals(System.getProperty("enableNgrams"));
 
-  private static final int DEFAULT_DEFAULT_POSTINGS_LIMIT = 16;
+  /**
+   * Special default value -- not valid as an actual limit
+   */
+  private static final int DEFAULT_DEFAULT_POSTINGS_LIMIT = 0;
   private static final int DEFAULT_POSTINGS_LIMIT;
 
   static {
@@ -170,7 +173,7 @@ public final class BloomUtils {
     } else if (spec.isEmpty()) {
       collatePostingsFields = Set.of();
     } else {
-      collatePostingsFields = Set.of(spec.split("\\w,\\w"));
+      collatePostingsFields = Set.of(spec.split("\\s*,\\s*"));
     }
     COLLATED_POSTINGS_FIELDS.set(collatePostingsFields);
   }
@@ -179,8 +182,9 @@ public final class BloomUtils {
     COLLATED_POSTINGS_FIELDS.set(null);
   }
 
-  public static int collatedPostingsLimit() {
-    return COLLATED_POSTINGS_LIMIT.get();
+  public static int collatedPostingsLimit(int defaultLimit) {
+    int configured = COLLATED_POSTINGS_LIMIT.get();
+    return configured == DEFAULT_DEFAULT_POSTINGS_LIMIT ? defaultLimit : configured;
   }
 
   public static Set<String> collatedPostingsFields() {

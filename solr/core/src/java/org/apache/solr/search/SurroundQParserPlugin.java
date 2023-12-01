@@ -41,6 +41,26 @@ public class SurroundQParserPlugin extends QParserPlugin {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   public static final String NAME = "surround";
   private static final String MAX_BASIC_QUERIES_SYSTEM_PROP = "solr.absoluteMaxBasicQueries";
+  private static final int ABSOLUTE_MAX_BASIC_QUERIES = readAbsolutionMaxBasicQueries();
+
+  private static int readAbsolutionMaxBasicQueries() {
+    String maxBasicQueriesSystemProp = System.getProperty(MAX_BASIC_QUERIES_SYSTEM_PROP);
+    if (maxBasicQueriesSystemProp != null) {
+      try {
+        int absoluteMaxBasicQueries = Integer.parseInt(maxBasicQueriesSystemProp);
+        if (absoluteMaxBasicQueries > 0) {
+          log.info("maxBasicQueries with system property {} with value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+          return absoluteMaxBasicQueries;
+        } else {
+          log.info("Ignoring system property {} value {} since it is non-positive", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+        }
+      } catch (NumberFormatException e) {
+        log.warn("Invalid system property {} value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+
+      }
+    }
+    return -1; //-1 indicates no absolute max basic queries
+  }
 
   @Override
   public QParser createParser(
@@ -78,19 +98,10 @@ public class SurroundQParserPlugin extends QParserPlugin {
           this.maxBasicQueries = DEFMAXBASICQUERIES;
         }
       }
-      String maxBasicQueriesSystemProp = System.getProperty(MAX_BASIC_QUERIES_SYSTEM_PROP);
-      if (maxBasicQueriesSystemProp != null) {
-        try {
-          int absoluteMaxBasicQueries = Integer.parseInt(maxBasicQueriesSystemProp);
-          if (absoluteMaxBasicQueries > 0) {
-            log.info("Overriding maxBasicQueries with system property {} with value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
-            this.maxBasicQueries = absoluteMaxBasicQueries;
-          } else {
-            log.info("Ignoring system property {} value {} since it is non-positive", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
-          }
-        } catch (NumberFormatException e) {
-          log.warn("Invalid system property {} value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
-        }
+
+      if (ABSOLUTE_MAX_BASIC_QUERIES > 0 && this.maxBasicQueries > ABSOLUTE_MAX_BASIC_QUERIES) {
+        log.info("Overriding maxBasicQueries from query {} with system property {} value {}", this.maxBasicQueries, MAX_BASIC_QUERIES_SYSTEM_PROP, ABSOLUTE_MAX_BASIC_QUERIES);
+        this.maxBasicQueries = ABSOLUTE_MAX_BASIC_QUERIES;
       }
 
       // ugh .. colliding ParseExceptions

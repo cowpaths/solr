@@ -95,7 +95,7 @@ public final class BloomUtils {
   private static final int DEFAULT_POSTINGS_LIMIT;
 
   static {
-    String spec = System.getProperty("collatedPostingsLimit");
+    String spec = System.getProperty("pooledPostingsLimit");
     if (spec == null) {
       DEFAULT_POSTINGS_LIMIT = DEFAULT_DEFAULT_POSTINGS_LIMIT;
     } else {
@@ -124,7 +124,7 @@ public final class BloomUtils {
         }
       };
 
-  private static final ThreadLocal<Integer> COLLATED_POSTINGS_LIMIT =
+  private static final ThreadLocal<Integer> POOLED_POSTINGS_LIMIT =
       new ThreadLocal<>() {
         @Override
         protected Integer initialValue() {
@@ -132,7 +132,7 @@ public final class BloomUtils {
         }
       };
 
-  private static final ThreadLocal<Set<String>> COLLATED_POSTINGS_FIELDS = new ThreadLocal<>();
+  private static final ThreadLocal<Set<String>> POOL_POSTINGS_FIELDS = new ThreadLocal<>();
 
   public static void init(SolrQueryRequest req) {
     String spec = req.getParams().get("enableNgrams");
@@ -148,14 +148,14 @@ public final class BloomUtils {
     }
     ENABLE_NGRAMS.set(enableNgrams);
     int postingsLimit;
-    spec = req.getParams().get("collatedPostingsLimit");
+    spec = req.getParams().get("pooledPostingsLimit");
     if (spec == null) {
       postingsLimit = DEFAULT_POSTINGS_LIMIT;
     } else {
       try {
         postingsLimit = Integer.parseInt(spec);
       } catch (NumberFormatException ex) {
-        throw new IllegalArgumentException("bad collatedPostingsLimit spec: " + spec);
+        throw new IllegalArgumentException("bad pooledPostingsLimit spec: " + spec);
       }
       if (postingsLimit == 0) {
         // explicitly requested default
@@ -165,30 +165,30 @@ public final class BloomUtils {
         postingsLimit = -1;
       }
     }
-    COLLATED_POSTINGS_LIMIT.set(postingsLimit);
-    spec = req.getParams().get("collatePostingsFields");
-    Set<String> collatePostingsFields;
+    POOLED_POSTINGS_LIMIT.set(postingsLimit);
+    spec = req.getParams().get("poolPostingsFields");
+    Set<String> poolPostingsFields;
     if (spec == null) {
-      collatePostingsFields = null;
+      poolPostingsFields = null;
     } else if (spec.isEmpty()) {
-      collatePostingsFields = Set.of();
+      poolPostingsFields = Set.of();
     } else {
-      collatePostingsFields = Set.of(spec.split("\\s*,\\s*"));
+      poolPostingsFields = Set.of(spec.split("\\s*,\\s*"));
     }
-    COLLATED_POSTINGS_FIELDS.set(collatePostingsFields);
+    POOL_POSTINGS_FIELDS.set(poolPostingsFields);
   }
 
   public static void clear() {
-    COLLATED_POSTINGS_FIELDS.set(null);
+    POOL_POSTINGS_FIELDS.set(null);
   }
 
-  public static int collatedPostingsLimit(int defaultLimit) {
-    int configured = COLLATED_POSTINGS_LIMIT.get();
+  public static int pooledPostingsLimit(int defaultLimit) {
+    int configured = POOLED_POSTINGS_LIMIT.get();
     return configured == DEFAULT_DEFAULT_POSTINGS_LIMIT ? defaultLimit : configured;
   }
 
-  public static Set<String> collatedPostingsFields() {
-    return COLLATED_POSTINGS_FIELDS.get();
+  public static Set<String> poolPostingsFields() {
+    return POOL_POSTINGS_FIELDS.get();
   }
 
   public static boolean enableNgrams() {

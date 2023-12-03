@@ -1,6 +1,5 @@
 package org.apache.solr.servlet;
 
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,7 +21,7 @@ import org.apache.solr.metrics.SolrMetricsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class BucketedQueryRateLimiter extends RequestRateLimiter implements SolrMetricProducer {
+public class BucketedQueryRateLimiter extends QueryRateLimiter implements SolrMetricProducer {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private static final Map<String, Class<? extends Condition>> conditionImpls =
@@ -94,7 +93,7 @@ public class BucketedQueryRateLimiter extends RequestRateLimiter implements Solr
         ew.put("available", guaranteedSlotsPool.availablePermits());
         ew.put("tries", tries.longValue());
         ew.put("success", success.longValue());
-        ew.put("fails", fails);
+        ew.put("fails", fails.longValue());
         ew.put("tryWaitAverage", tryWait.getMeanRate());
       };
     }

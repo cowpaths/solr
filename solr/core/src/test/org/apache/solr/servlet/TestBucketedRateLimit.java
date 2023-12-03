@@ -1,19 +1,80 @@
 package org.apache.solr.servlet;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
+import org.apache.solr.client.solrj.request.CollectionAdminRequest;
+import org.apache.solr.client.solrj.request.GenericSolrRequest;
 import org.apache.solr.cloud.SolrCloudTestCase;
+import org.apache.solr.common.NavigableObject;
 import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.params.MapSolrParams;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.embedded.JettySolrRunner;
 import org.apache.zookeeper.data.Stat;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
+import org.junit.Test;
 
 public class TestBucketedRateLimit extends SolrCloudTestCase {
   private static final String FIRST_COLLECTION = "c1";
 
   @BeforeClass
-  public static void setupCluster() throws Exception {
-    configureCluster(1).addConfig(FIRST_COLLECTION, configset("cloud-minimal")).configure();
+  public static void setupCluster() throws Exception {System.setProperty("metricsEnabled", "true");
+    configureCluster(1).addConfig("conf", configset("cloud-minimal")).
+            configure();
   }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testPerf() throws Exception {
+      String config = "{\n" +
+              "  \"rate-limiters\": {\n" +
+              "    \"readBuckets\": [\n" +
+              "      {\n" +
+              "        \"name\": \"test-bucket\",\n" +
+              "        \"conditions\": [{\n" +
+              "          \"queryParamPattern\": {\n" +
+              "            \"q-bucket\": \"test-bucket\"\n" +
+              "          }\n" +
+              "        }],\n" +
+              "        \"allowedRequests\": 2,\n" +
+              "        \"slotAcquisitionTimeoutInMS\": 100\n" +
+              "      }\n" +
+              "\n" +
+              "    ]\n" +
+              "  }\n" +
+              "}";
+
+      SolrZkClient zkClient = cluster.getZkClient();
+      zkClient.atomicUpdate(ZkStateReader.CLUSTER_PROPS,
+              bytes -> config.getBytes()
+      );
+      JettySolrRunner jetty = cluster.getJettySolrRunners().get(0);
+      jetty.stop();
+      jetty.start(true);
+      String COLLECTION_NAME = "rateLimitTest";
+      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 2, 2)
+              .process(cluster.getSolrClient());
+      cluster.getSolrClient().query(COLLECTION_NAME, new SolrQuery("*:*"). add("q-bucket","test-bucket" ));
+      NavigableObject rsp = cluster.getSolrClient().request(new GenericSolrRequest(SolrRequest.METHOD.GET, "/admin/metrics",
+              new MapSolrParams(Map.of("key","solr.node:CONTAINER.bucketedQueryRateLimiter"))));
+
+      assertEquals("0", rsp._getStr(List.of("metrics","solr.node:CONTAINER.bucketedQueryRateLimiter", "test-bucket","queueLength"), null));
+      assertEquals("2", rsp._getStr(List.of("metrics","solr.node:CONTAINER.bucketedQueryRateLimiter", "test-bucket","available"), null));
+      assertEquals("1", rsp._getStr(List.of("metrics","solr.node:CONTAINER.bucketedQueryRateLimiter", "test-bucket","tries"), null));
+      assertEquals("1", rsp._getStr(List.of("metrics","solr.node:CONTAINER.bucketedQueryRateLimiter", "test-bucket","success"), null));
+      assertEquals("0", rsp._getStr(List.of("metrics","solr.node:CONTAINER.bucketedQueryRateLimiter", "test-bucket","fails"), null));
+
+
+
+  }
+
 
   public void testConfig() throws Exception {
     String config =

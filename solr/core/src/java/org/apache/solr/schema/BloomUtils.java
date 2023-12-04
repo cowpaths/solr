@@ -86,12 +86,12 @@ public final class BloomUtils {
     return null;
   }
 
-  private static final boolean DEFAULT_ENABLE_NGRAMS = !"false".equals(System.getProperty("enableNgrams"));
+  private static final boolean DEFAULT_ENABLE_NGRAMS =
+      !"false".equals(System.getProperty("enableNgrams"));
 
-  /**
-   * Special default value -- not valid as an actual limit
-   */
+  /** Special default value -- not valid as an actual limit */
   private static final int DEFAULT_DEFAULT_POSTINGS_LIMIT = 0;
+
   private static final int DEFAULT_POSTINGS_LIMIT;
 
   static {

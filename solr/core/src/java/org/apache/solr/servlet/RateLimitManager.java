@@ -159,8 +159,8 @@ public class RateLimitManager implements ClusterPropertiesListener {
     String typeOfRequest = request.getHeader(SOLR_REQUEST_TYPE_PARAM);
 
     if (typeOfRequest == null) {
-      // Cannot determine if this request should be throttled
-      return true;
+      typeOfRequest = "QUERY"; //nocommit: for testing purposes only
+      log.info("Type of request was unknown, assuming QUERY");
     }
 
     // Do not throttle internal requests

@@ -47,10 +47,10 @@ public class SurroundQParserPlugin extends QParserPlugin {
     String maxBasicQueriesSystemProp = System.getProperty(MAX_BASIC_QUERIES_SYSTEM_PROP);
     if (maxBasicQueriesSystemProp != null) {
       try {
-        int absoluteMaxBasicQueries = Integer.parseInt(maxBasicQueriesSystemProp);
-        if (absoluteMaxBasicQueries > 0) {
+        int maxBasicQueriesOverride = Integer.parseInt(maxBasicQueriesSystemProp);
+        if (maxBasicQueriesOverride > 0) {
           log.info("maxBasicQueries with system property {} with value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
-          return absoluteMaxBasicQueries;
+          return maxBasicQueriesOverride;
         } else {
           log.info("Ignoring system property {} value {} since it is non-positive", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
         }

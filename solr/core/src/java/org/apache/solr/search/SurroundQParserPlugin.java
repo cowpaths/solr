@@ -40,10 +40,10 @@ import org.slf4j.LoggerFactory;
 public class SurroundQParserPlugin extends QParserPlugin {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   public static final String NAME = "surround";
-  private static final String MAX_BASIC_QUERIES_SYSTEM_PROP = "solr.absoluteMaxBasicQueries";
-  private static final int ABSOLUTE_MAX_BASIC_QUERIES = readAbsolutionMaxBasicQueries();
+  private static final String MAX_BASIC_QUERIES_SYSTEM_PROP = "solr.maxBasicQueriesOverride";
+  private static final int MAX_BASIC_QUERIES_OVERRIDE = readMaxBasicQueriesOverride();
 
-  private static int readAbsolutionMaxBasicQueries() {
+  private static int readMaxBasicQueriesOverride() {
     String maxBasicQueriesSystemProp = System.getProperty(MAX_BASIC_QUERIES_SYSTEM_PROP);
     if (maxBasicQueriesSystemProp != null) {
       try {
@@ -59,7 +59,7 @@ public class SurroundQParserPlugin extends QParserPlugin {
 
       }
     }
-    return -1; //-1 indicates no absolute max basic queries
+    return -1; //-1 indicates no max basic queries override
   }
 
   @Override
@@ -99,9 +99,8 @@ public class SurroundQParserPlugin extends QParserPlugin {
         }
       }
 
-      if (ABSOLUTE_MAX_BASIC_QUERIES > 0 && this.maxBasicQueries > ABSOLUTE_MAX_BASIC_QUERIES) {
-        log.info("Overriding maxBasicQueries from query {} with system property {} value {}", this.maxBasicQueries, MAX_BASIC_QUERIES_SYSTEM_PROP, ABSOLUTE_MAX_BASIC_QUERIES);
-        this.maxBasicQueries = ABSOLUTE_MAX_BASIC_QUERIES;
+      if (MAX_BASIC_QUERIES_OVERRIDE > 0) {
+        this.maxBasicQueries = MAX_BASIC_QUERIES_OVERRIDE;
       }
 
       // ugh .. colliding ParseExceptions

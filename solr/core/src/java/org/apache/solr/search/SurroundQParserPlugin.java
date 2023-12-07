@@ -49,17 +49,25 @@ public class SurroundQParserPlugin extends QParserPlugin {
       try {
         int maxBasicQueriesOverride = Integer.parseInt(maxBasicQueriesSystemProp);
         if (maxBasicQueriesOverride > 0) {
-          log.info("maxBasicQueries with system property {} with value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+          log.info(
+              "maxBasicQueries with system property {} with value {}",
+              MAX_BASIC_QUERIES_SYSTEM_PROP,
+              maxBasicQueriesSystemProp);
           return maxBasicQueriesOverride;
         } else {
-          log.info("Ignoring system property {} value {} since it is non-positive", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
+          log.info(
+              "Ignoring system property {} value {} since it is non-positive",
+              MAX_BASIC_QUERIES_SYSTEM_PROP,
+              maxBasicQueriesSystemProp);
         }
       } catch (NumberFormatException e) {
-        log.warn("Invalid system property {} value {}", MAX_BASIC_QUERIES_SYSTEM_PROP, maxBasicQueriesSystemProp);
-
+        log.warn(
+            "Invalid system property {} value {}",
+            MAX_BASIC_QUERIES_SYSTEM_PROP,
+            maxBasicQueriesSystemProp);
       }
     }
-    return -1; //-1 indicates no max basic queries override
+    return -1; // -1 indicates no max basic queries override
   }
 
   @Override

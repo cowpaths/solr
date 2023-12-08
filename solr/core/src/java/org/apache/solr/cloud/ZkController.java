@@ -21,7 +21,6 @@ import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.CORE_NAME_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.CORE_NODE_NAME_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.ELECTION_NODE_PROP;
-import static org.apache.solr.common.cloud.ZkStateReader.HTTPS_PORT_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.NODE_NAME_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.REJOIN_AT_HEAD_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
@@ -408,11 +407,7 @@ public class ZkController implements Closeable {
 
       // note: Can't read cluster properties until createClusterState ^ is called
       final String urlSchemeFromClusterProp =
-          zkStateReader.getClusterProperty(
-              ZkStateReader.URL_SCHEME,
-              StrUtils.isNotNullOrEmpty(System.getProperty(HTTPS_PORT_PROP))
-                  ? ZkStateReader.HTTPS
-                  : ZkStateReader.HTTP);
+          zkStateReader.getClusterProperty(ZkStateReader.URL_SCHEME, ZkStateReader.HTTP);
 
       this.nodeName =
           generateNodeName(

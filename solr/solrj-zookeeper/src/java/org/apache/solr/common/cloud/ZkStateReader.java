@@ -58,6 +58,7 @@ import org.apache.solr.common.util.CommonTestInjection;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.ObjectReleaseTracker;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.Utils;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.NoNodeException;
@@ -1148,6 +1149,12 @@ public class ZkStateReader implements SolrCloseable {
           this.clusterProperties =
               ClusterProperties.convertCollectionDefaultsToNestedFormat(properties);
           log.debug("Loaded cluster properties: {}", this.clusterProperties);
+
+          if (!this.clusterProperties.containsKey(URL_SCHEME)) {
+            if (StrUtils.isNotNullOrEmpty(System.getProperty(HTTPS_PORT_PROP))) {
+              this.clusterProperties.put(URL_SCHEME, "https");
+            }
+          }
 
           for (ClusterPropertiesListener listener : clusterPropertiesListeners) {
             listener.onChange(getClusterProperties());

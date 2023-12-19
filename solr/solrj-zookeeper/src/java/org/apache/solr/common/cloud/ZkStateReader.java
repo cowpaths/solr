@@ -1157,28 +1157,30 @@ public class ZkStateReader implements SolrCloseable {
               ClusterProperties.convertCollectionDefaultsToNestedFormat(properties);
           log.info("Loaded cluster properties: {}", this.clusterProperties);
 
-          if (!this.clusterProperties.containsKey(URL_SCHEME)) {
-            if (StrUtils.isNotNullOrEmpty(System.getProperty(HTTPS_PORT_PROP))) {
-              this.clusterProperties.put(URL_SCHEME, "https");
-            }
-          }
-          log.info("Loaded cluster properties: {}", this.clusterProperties);
           for (ClusterPropertiesListener listener : clusterPropertiesListeners) {
             listener.onChange(getClusterProperties());
           }
           return;
         } catch (KeeperException.NoNodeException e) {
           this.clusterProperties = Collections.emptyMap();
-          log.debug("Loaded empty cluster properties");
+          log.info("Loaded empty cluster properties");
           // set an exists watch, and if the node has been created since the last call,
           // read the data again
-          if (zkClient.exists(ZkStateReader.CLUSTER_PROPS, clusterPropertiesWatcher, true) == null)
-            return;
+          if (zkClient.exists(ZkStateReader.CLUSTER_PROPS, clusterPropertiesWatcher, true)
+              == null) {
+            break;
+          }
         }
       }
     } catch (KeeperException | InterruptedException e) {
       log.error(
           "Error reading cluster properties from zookeeper", SolrZkClient.checkInterrupted(e));
+    }
+    if (!this.clusterProperties.containsKey(URL_SCHEME)) {
+      if (StrUtils.isNotNullOrEmpty(System.getProperty(HTTPS_PORT_PROP))) {
+        this.clusterProperties.put(URL_SCHEME, "https");
+        log.info("Setting  url scheme explicity: {}", this.clusterProperties);
+      }
     }
   }
 

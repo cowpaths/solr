@@ -1155,14 +1155,14 @@ public class ZkStateReader implements SolrCloseable {
           Map<String, Object> properties = (Map<String, Object>) Utils.fromJSON(data);
           this.clusterProperties =
               ClusterProperties.convertCollectionDefaultsToNestedFormat(properties);
-          log.debug("Loaded cluster properties: {}", this.clusterProperties);
+          log.info("Loaded cluster properties: {}", this.clusterProperties);
 
           if (!this.clusterProperties.containsKey(URL_SCHEME)) {
             if (StrUtils.isNotNullOrEmpty(System.getProperty(HTTPS_PORT_PROP))) {
               this.clusterProperties.put(URL_SCHEME, "https");
             }
           }
-
+          log.info("Loaded cluster properties: {}", this.clusterProperties);
           for (ClusterPropertiesListener listener : clusterPropertiesListeners) {
             listener.onChange(getClusterProperties());
           }

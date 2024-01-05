@@ -1172,7 +1172,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
       this.updateHandler = initUpdateHandler(updateHandler);
 
-      initSearcher(prev);
+      //initSearcher(prev);
 
       // Initialize the RestManager
       restManager = initRestManager();
@@ -2303,6 +2303,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
    */
   public RefCounted<SolrIndexSearcher> openNewSearcher(
       boolean updateHandlerReopens, boolean realtime) {
+    log.info("hitesh openNewSearcher call");
     if (isClosed()) { // catch some errors quicker
       throw new SolrCoreState.CoreIsClosedException();
     }
@@ -2522,6 +2523,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       boolean returnSearcher,
       final Future<Void>[] waitSearcher,
       boolean updateHandlerReopens) {
+    log.info("hitesh getSearcher call");
     // it may take some time to open an index.... we may need to make
     // sure that two threads aren't trying to open one at the same time
     // if it isn't necessary.

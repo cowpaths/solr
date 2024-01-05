@@ -3018,6 +3018,9 @@ public class ZkController implements Closeable {
    * registered
    */
   private static void ensureRegisteredSearcher(SolrCore core) throws InterruptedException {
+    if (Boolean.getBoolean ("solr.core.lazyload")) {
+      return;
+    }
     if (!core.getSolrConfig().useColdSearcher) {
       RefCounted<SolrIndexSearcher> registeredSearcher = core.getRegisteredSearcher();
       if (registeredSearcher != null) {

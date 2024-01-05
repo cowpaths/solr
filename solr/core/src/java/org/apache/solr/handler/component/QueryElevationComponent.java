@@ -276,7 +276,7 @@ public class QueryElevationComponent extends SearchComponent implements SolrCore
         if (searchHolder != null) searchHolder.decref();
       }
 
-      assert false : "No Searcher; does this happen?"; // probably okay; lazy load
+      //assert false : "No Searcher; does this happen?"; // probably okay; lazy load
       return 0;
     }
   }

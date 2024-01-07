@@ -1286,12 +1286,12 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       boolean backupOnCommit = backup.contains("commit");
       boolean backupOnOptimize = !backupOnCommit && backup.contains("optimize");
       List<?> replicateAfter = leader.getAll(REPLICATE_AFTER);
-      replicateOnCommit = replicateAfter.contains("commit");
+        replicateOnCommit = replicateAfter.contains("commit");
       replicateOnOptimize = !replicateOnCommit && replicateAfter.contains("optimize");
 
-      if (!replicateOnCommit && !replicateOnOptimize) {
+      /*if (!replicateOnCommit && !replicateOnOptimize) {
         replicateOnCommit = true;
-      }
+      }*/
 
       // if we only want to replicate on optimize, we need the deletion policy to
       // save the last optimized commit point.

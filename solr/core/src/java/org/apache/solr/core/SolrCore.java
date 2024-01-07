@@ -62,6 +62,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -226,6 +227,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
   private final NamedList<?> configSetProperties;
   private final String dataDir;
   private final UpdateHandler updateHandler;
+
+  private AtomicBoolean isVersionBucketSeeded = new AtomicBoolean();
   private final SolrCoreState solrCoreState;
 
   private final Date startTime = new Date();
@@ -1200,7 +1203,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
       // seed version buckets with max from index during core initialization ... requires a
       // searcher!
-      seedVersionBuckets();
+      // seedVersionBuckets();
 
       bufferUpdatesIfConstructing(coreDescriptor);
 
@@ -1238,12 +1241,11 @@ public class SolrCore implements SolrInfoBean, Closeable {
   }
 
   public void seedVersionBuckets() {
-    UpdateHandler uh = getUpdateHandler();
-    if (uh != null && uh.getUpdateLog() != null) {
+    if (updateHandler != null && updateHandler.getUpdateLog() != null) {
       RefCounted<SolrIndexSearcher> newestSearcher = getRealtimeSearcher();
       if (newestSearcher != null) {
         try {
-          uh.getUpdateLog().seedBucketsWithHighestVersion(newestSearcher.get());
+          updateHandler.getUpdateLog().seedBucketsWithHighestVersion(newestSearcher.get());
         } finally {
           newestSearcher.decref();
         }
@@ -2062,6 +2064,14 @@ public class SolrCore implements SolrInfoBean, Closeable {
    * RequestHandlers need access to the updateHandler so they can all talk to the same RAM indexer.
    */
   public UpdateHandler getUpdateHandler() {
+    // hitesh
+    if (!isVersionBucketSeeded.get()) {
+      synchronized (isVersionBucketSeeded) {
+        seedVersionBuckets();
+        isVersionBucketSeeded.set(true);
+      }
+    }
+
     return updateHandler;
   }
 
@@ -2303,7 +2313,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
    */
   public RefCounted<SolrIndexSearcher> openNewSearcher(
       boolean updateHandlerReopens, boolean realtime) {
-    log.info("hitesh openNewSearcher call");
+    log.info("hitesh openNewSearcher call ", new RuntimeException("opening searcher"));
     if (isClosed()) { // catch some errors quicker
       throw new SolrCoreState.CoreIsClosedException();
     }

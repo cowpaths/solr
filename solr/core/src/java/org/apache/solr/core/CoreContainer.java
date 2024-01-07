@@ -753,6 +753,7 @@ public class CoreContainer {
       loadInternal();
     } finally {
       Thread.currentThread().setContextClassLoader(originalContextClassLoader);
+      log.info("Solr CorContainer load completed status: " + status);
     }
   }
 
@@ -1459,6 +1460,7 @@ public class CoreContainer {
       if (log.isDebugEnabled()) {
         log.debug("replacing core: {}", cd.getName());
       }
+
       old.close();
       if (registerInZk) {
         zkSys.registerInZk(core, false, skipRecovery);

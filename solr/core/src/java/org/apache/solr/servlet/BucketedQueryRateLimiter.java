@@ -82,7 +82,7 @@ public class BucketedQueryRateLimiter extends QueryRateLimiter implements SolrMe
     public boolean test(RequestWrapper req) {
       boolean isPass = true;
       for (Condition condition : conditions) {
-        if (!condition.test(req)) isPass = false;
+        if (!condition.test(req)) return false;
       }
       return isPass;
     }

@@ -133,10 +133,6 @@ public class GCSBackupRepository implements BackupRepository {
   public URI createDirectoryURI(String location) {
     Objects.requireNonNull(location);
 
-    if (!location.endsWith("/")) {
-      location += "/";
-    }
-
     return createURI(location);
   }
 

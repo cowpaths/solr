@@ -45,6 +45,7 @@ import org.apache.solr.common.util.ObjectReleaseTracker;
 import org.apache.solr.common.util.ReflectMapWriter;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.common.util.ZLibCompressor;
+import org.apache.zookeeper.AddWatchMode;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.NoAuthException;
@@ -460,6 +461,26 @@ public class SolrZkClient implements Closeable {
       metrics.bytesWritten.add(data.length);
     }
     return result;
+  }
+
+  public Watcher addPersistentWatch(final String basePath, final Watcher watcher, final AddWatchMode watchMode) {
+    Watcher wrappedWatcher = wrapWatcher(watcher);
+    try {
+      keeper.addWatch(basePath, wrappedWatcher, watchMode);
+    } catch (KeeperException | InterruptedException e) {
+      throw new SolrException(
+              SolrException.ErrorCode.SERVER_ERROR, "Failed to add persistent watch on " + basePath, e);
+    }
+    return wrappedWatcher;
+  }
+
+  public void removePersistentWatch(final String basePath, Watcher watcher) {
+    try {
+      keeper.removeWatches(basePath, watcher, Watcher.WatcherType.Any, true);
+    } catch (KeeperException | InterruptedException e) {
+      throw new SolrException(
+              SolrException.ErrorCode.SERVER_ERROR, "Failed to remove persistent watch from " + basePath, e);
+    }
   }
 
   public void atomicUpdate(String path, Function<byte[], byte[]> editor)

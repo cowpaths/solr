@@ -38,11 +38,14 @@ public class PerReplicaStatesFetcher {
     try {
       assert CommonTestInjection.injectBreakpoint(
           PerReplicaStatesFetcher.class.getName() + "/beforePrsFetch");
-      if (current != null) {
-        Stat stat = zkClient.exists(current.path, null, true);
-        if (stat == null) return new PerReplicaStates(path, 0, Collections.emptyList());
-        if (current.cversion == stat.getCversion()) return current; // not modifiedZkStateReaderTest
-      }
+//      if (current != null) {
+//        Stat stat = zkClient.exists(current.path, null, true);
+//        if (stat == null) return new PerReplicaStates(path, 0, Collections.emptyList());
+//        if (current.cversion == stat.getCversion()) return current; // not modifiedZkStateReaderTest
+//      }
+
+      //TODO for tests, let's just always fetch it for now (since we don't have cversion info).
+      // We can limit whoever calls this
       Stat stat = new Stat();
       List<String> children = zkClient.getChildren(path, null, stat, true);
       return new PerReplicaStates(path, stat.getCversion(), Collections.unmodifiableList(children));

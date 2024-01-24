@@ -211,6 +211,7 @@ public class CaffeineCache<K, V> extends SolrCacheBase
       try {
         // Another thread is already working on this computation, wait for them to finish
         V value = result.join();
+        if (value == null) return null;
         hits.increment();
         return value;
       } catch (CompletionException e) {
@@ -232,6 +233,7 @@ public class CaffeineCache<K, V> extends SolrCacheBase
       // We reserved the slot, so we do the work
       V value = mappingFunction.apply(key);
       future.complete(value); // This will update the weight and expiration
+      if (value == null) return null;
       recordRamBytes(key, null, value);
       inserts.increment();
       return value;

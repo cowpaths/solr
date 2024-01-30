@@ -34,6 +34,7 @@ public class JettyConfig {
   public final Map<Class<? extends Filter>, String> extraFilters;
   public final SSLConfig sslConfig;
   public final boolean enableV2;
+  public final Long connectorIdleTimeout;
 
   private JettyConfig(
       boolean onlyHttp1,
@@ -44,7 +45,8 @@ public class JettyConfig {
       Map<ServletHolder, String> extraServlets,
       Map<Class<? extends Filter>, String> extraFilters,
       SSLConfig sslConfig,
-      boolean enableV2) {
+      boolean enableV2,
+      Long connectorIdleTimeout) {
     this.onlyHttp1 = onlyHttp1;
     this.port = port;
     this.portRetryTime = portRetryTime;
@@ -54,6 +56,7 @@ public class JettyConfig {
     this.extraFilters = extraFilters;
     this.sslConfig = sslConfig;
     this.enableV2 = enableV2;
+    this.connectorIdleTimeout = connectorIdleTimeout;
   }
 
   public static Builder builder() {
@@ -72,6 +75,7 @@ public class JettyConfig {
     builder.extraFilters = other.extraFilters;
     builder.sslConfig = other.sslConfig;
     builder.enableV2 = other.enableV2;
+    builder.connectorIdleTimeout = other.connectorIdleTimeout;
     return builder;
   }
 
@@ -80,6 +84,7 @@ public class JettyConfig {
     boolean onlyHttp1 = false;
     int port = 0;
     boolean enableV2 = true;
+    Long connectorIdleTimeout;
     boolean stopAtShutdown = true;
     Long waitForLoadingCoresToFinishMs = 300000L;
     Map<ServletHolder, String> extraServlets = new TreeMap<>();
@@ -142,6 +147,11 @@ public class JettyConfig {
       return this;
     }
 
+    public Builder withConnectorIdleTimeout(long timeout) {
+      this.connectorIdleTimeout = timeout;
+      return this;
+    }
+
     public JettyConfig build() {
       return new JettyConfig(
           onlyHttp1,
@@ -152,7 +162,8 @@ public class JettyConfig {
           extraServlets,
           extraFilters,
           sslConfig,
-          enableV2);
+          enableV2,
+          connectorIdleTimeout);
     }
   }
 }

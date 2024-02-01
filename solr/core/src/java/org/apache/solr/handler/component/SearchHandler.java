@@ -581,7 +581,8 @@ public class SearchHandler extends RequestHandlerBase
               responsesWithException.forEach(r -> log.warn("Shard request failed : {}", r));
 
               // If things are not tolerant, abort everything and rethrow
-              Throwable nonTolerableException = findNonTolerableException(tolerant, responsesWithException);
+              Throwable nonTolerableException =
+                  findNonTolerableException(tolerant, responsesWithException);
               if (nonTolerableException != null) {
                 shardHandler1.cancelAll();
                 if (nonTolerableException instanceof SolrException) {
@@ -652,28 +653,37 @@ public class SearchHandler extends RequestHandlerBase
   }
 
   static List<ShardResponse> findResponsesWithException(ShardResponse response) {
-    //a single response instance can contain multiple responses
+    // a single response instance can contain multiple responses
     Set<ShardResponse> allResponses = new LinkedHashSet<>();
     if (response.getShardRequest() != null) {
       allResponses.addAll(response.getShardRequest().responses);
     }
 
-    //the original response might or might not be a part of response.getShardRequest().responses...
+    // the original response might or might not be a part of response.getShardRequest().responses...
     allResponses.add(response);
     return allResponses.stream().filter(r -> r.getException() != null).collect(Collectors.toList());
   }
 
   static Throwable findNonTolerableException(boolean tolerant, List<ShardResponse> responses) {
-    if (tolerant) { //if tolerant, see if there are any responses with non-tolerant error codes
-      Optional<ShardResponse> nonTolerableResponse = responses.stream().filter(r -> NONTOLERANT_ERROR_CODES.contains(SolrException.ErrorCode.getErrorCode(r.getRspCode()))).findFirst();
+    if (tolerant) { // if tolerant, see if there are any responses with non-tolerant error codes
+      Optional<ShardResponse> nonTolerableResponse =
+          responses.stream()
+              .filter(
+                  r ->
+                      NONTOLERANT_ERROR_CODES.contains(
+                          SolrException.ErrorCode.getErrorCode(r.getRspCode())))
+              .findFirst();
       return nonTolerableResponse.map(ShardResponse::getException).orElse(null);
-    } else { //cannot tolerate any exception
-      return responses.stream().filter(r -> r.getException() != null).findFirst().map(ShardResponse::getException).orElse(null);
+    } else { // cannot tolerate any exception
+      return responses.stream()
+          .filter(r -> r.getException() != null)
+          .findFirst()
+          .map(ShardResponse::getException)
+          .orElse(null);
     }
   }
 
   private static final List<String> VERBOSE_LOGGING_PARAMS = Arrays.asList("fq", "json");
-
 
   private SolrParams removeVerboseParams(final SolrParams params) {
     // Filter params by removing kv of VERBOSE_LOGGING_PARAMS, so that we can then call toString

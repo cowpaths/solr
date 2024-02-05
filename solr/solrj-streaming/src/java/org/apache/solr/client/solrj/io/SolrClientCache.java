@@ -26,6 +26,10 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.propagation.TextMapPropagator;
 import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.impl.CloudHttp2SolrClient;
@@ -33,6 +37,7 @@ import org.apache.solr.client.solrj.impl.CloudLegacySolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.Http2SolrClient;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
+import org.apache.solr.client.solrj.impl.HttpListenerFactory;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.impl.SolrClientBuilder;
 import org.apache.solr.common.AlreadyClosedException;
@@ -57,6 +62,30 @@ public class SolrClientCache implements Closeable {
   private final Map<String, SolrClient> solrClients = new HashMap<>();
   private final HttpClient apacheHttpClient;
   private final Http2SolrClient http2SolrClient;
+  private final HttpListenerFactory traceContextPropagatorFactory = new HttpListenerFactory() {
+    private TextMapPropagator propagator = GlobalOpenTelemetry.getPropagators().getTextMapPropagator();
+//    W3CTraceContextPropagator
+    @Override
+    public RequestResponseListener get() {
+      return new RequestResponseListener() {
+        @Override
+        public void onBegin(org.eclipse.jetty.client.api.Request request) {
+          super.onBegin(request);
+        }
+
+        @Override
+        public void onQueued(org.eclipse.jetty.client.api.Request request) {
+          propagator.inject(Context.current(), request, (req, k, v) -> req.headers(httpFields -> httpFields.put(k, v)));
+          super.onQueued(request);
+        }
+
+        @Override
+        public void onComplete(org.eclipse.jetty.client.api.Result result) {
+          super.onComplete(result);
+        }
+      };
+    }
+  };
   private final AtomicBoolean isClosed = new AtomicBoolean(false);
   private final AtomicReference<String> defaultZkHost = new AtomicReference<>();
 
@@ -154,7 +183,9 @@ public class SolrClientCache implements Closeable {
     if (apacheHttpClient != null) {
       client = newHttpSolrClient(baseUrl, apacheHttpClient);
     } else {
-      client = newHttp2SolrClientBuilder(baseUrl, http2SolrClient).build();
+      var newClient = newHttp2SolrClientBuilder(baseUrl, http2SolrClient).build();
+      newClient.addListenerFactory(traceContextPropagatorFactory);
+      client = newClient;
     }
     solrClients.put(baseUrl, client);
     return client;

@@ -35,12 +35,12 @@ public class WatchedClusterProperties implements ClusterPropertiesListener {
       String newVal = newData.get(k);
       if (Objects.equals(oldVal, newVal)) continue;
       isModified = true;
-      invokeListener(k, oldVal, newVal);
+      invokeListener(k,  newVal);
     }
     for (String k : newData.keySet()) {
       if (knownData.containsKey(k)) continue;
       isModified = true;
-      invokeListener(k, null, newData.get(k));
+      invokeListener(k,  newData.get(k));
     }
 
     if (isModified) {
@@ -48,7 +48,7 @@ public class WatchedClusterProperties implements ClusterPropertiesListener {
     }
   }
 
-  private void invokeListener(String key, String oldVal, String newVal) {
+  private void invokeListener(String key, String newVal) {
     List<BiConsumer<String, String>> listeners = propertiesListeners.get(key);
     if (listeners != null) {
       for (BiConsumer<String, String> l : listeners) {

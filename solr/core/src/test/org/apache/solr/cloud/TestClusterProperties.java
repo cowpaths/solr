@@ -22,6 +22,7 @@ import java.util.Map;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterProperties;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.Utils;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -60,12 +61,12 @@ public class TestClusterProperties extends SolrCloudTestCase {
   @SuppressWarnings("unchecked")
   public void testWatchedClusterProperties() {
     WatchedClusterProperties wcp = new WatchedClusterProperties();
-    HashMap<String, String> listener1 = new HashMap<>();
-    HashMap<String, String> listener2 = new HashMap<>();
-    HashMap<String, String> listener3 = new HashMap<>();
-    wcp.watchProperty("p1", (key, value) -> listener1.put(key, value));
-    wcp.watchProperty(null, (key, value) -> listener2.put(key, value));
-    wcp.watchProperty("p3", (key, value) -> listener3.put(key, value));
+    NamedList<String> listener1 = new NamedList<>();
+    NamedList<String> listener2 = new NamedList<>();
+    NamedList<String> listener3 = new NamedList<>();
+    wcp.watchProperty("p1", (key, value) -> listener1.add(key, value));
+    wcp.watchProperty(null, (key, value) -> listener2.add(key, value));
+    wcp.watchProperty("p3", (key, value) -> listener3.add(key, value));
 
     wcp.onChange(
         (Map<String, Object>)

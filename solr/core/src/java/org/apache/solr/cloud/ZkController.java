@@ -160,7 +160,7 @@ public class ZkController implements Closeable {
   private final DistributedMap overseerFailureMap;
   private final DistributedMap asyncIdsMap;
 
-  private final WatchedClusterProperties watchedClusterProperties = new WatchedClusterProperties();
+  private final WatchedClusterProperties watchedClusterProperties;
 
   public static final String COLLECTION_PARAM_PREFIX = "collection.";
   public static final String CONFIGNAME_PROP = "configName";
@@ -423,6 +423,7 @@ public class ZkController implements Closeable {
 
       // this must happen after zkStateReader has initialized the cluster props
       this.baseURL = Utils.getBaseUrlForNodeName(this.nodeName, urlSchemeFromClusterProp);
+      watchedClusterProperties = new WatchedClusterProperties(nodeName);
     } catch (KeeperException e) {
       // Convert checked exception to one acceptable by the caller (see also init() further down)
       log.error("", e);

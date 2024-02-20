@@ -17,8 +17,8 @@
 
 package org.apache.solr.cloud;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterProperties;
@@ -60,13 +60,14 @@ public class TestClusterProperties extends SolrCloudTestCase {
   @Test
   @SuppressWarnings("unchecked")
   public void testWatchedClusterProperties() {
-    WatchedClusterProperties wcp = new WatchedClusterProperties();
+    WatchedClusterProperties wcp = new WatchedClusterProperties("node1");
     NamedList<String> listener1 = new NamedList<>();
     NamedList<String> listener2 = new NamedList<>();
     NamedList<String> listener3 = new NamedList<>();
     wcp.watchProperty("p1", (key, value) -> listener1.add(key, value));
     wcp.watchProperty(null, (key, value) -> listener2.add(key, value));
-    wcp.watchProperty("p3", (key, value) -> listener3.add(key, value));
+    BiConsumer<String, String> p3Listener = (key, value) -> listener3.add(key, value);
+    wcp.watchProperty("p3", p3Listener);
 
     wcp.onChange(
         (Map<String, Object>)

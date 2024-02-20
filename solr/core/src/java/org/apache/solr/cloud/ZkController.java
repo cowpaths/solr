@@ -160,6 +160,8 @@ public class ZkController implements Closeable {
   private final DistributedMap overseerFailureMap;
   private final DistributedMap asyncIdsMap;
 
+  private final WatchedClusterProperties watchedClusterProperties = new WatchedClusterProperties();
+
   public static final String COLLECTION_PARAM_PREFIX = "collection.";
   public static final String CONFIGNAME_PROP = "configName";
 
@@ -434,6 +436,7 @@ public class ZkController implements Closeable {
     } else {
       this.overseerJobQueue = overseer.getStateUpdateQueue();
     }
+    zkStateReader.registerClusterPropertiesListener(watchedClusterProperties);
     this.overseerCollectionQueue = overseer.getCollectionQueue(zkClient);
     this.overseerConfigSetQueue = overseer.getConfigSetQueue(zkClient);
     this.sysPropsCacher =
@@ -3011,6 +3014,10 @@ public class ZkController implements Closeable {
         log.warn("Could not publish node as down: ", e);
       }
     }
+  }
+
+  public WatchedClusterProperties getWatchedClusterProperties() {
+    return watchedClusterProperties;
   }
 
   /**

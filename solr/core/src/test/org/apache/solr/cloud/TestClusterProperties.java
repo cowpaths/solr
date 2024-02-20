@@ -17,9 +17,12 @@
 
 package org.apache.solr.cloud;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterProperties;
+import org.apache.solr.common.util.Utils;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -51,5 +54,57 @@ public class TestClusterProperties extends SolrCloudTestCase {
     String propertyName = "pluginA.propertyA";
     CollectionAdminRequest.setClusterProperty(propertyName, "valueA")
         .process(cluster.getSolrClient());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testWatchedClusterProperties() {
+    WatchedClusterProperties wcp = new WatchedClusterProperties();
+    HashMap<String, String> listener1 = new HashMap<>();
+    HashMap<String, String> listener2 = new HashMap<>();
+    HashMap<String, String> listener3 = new HashMap<>();
+    wcp.watchProperty("p1", (key, value) -> listener1.put(key, value));
+    wcp.watchProperty(null, (key, value) -> listener2.put(key, value));
+    wcp.watchProperty("p3", (key, value) -> listener3.put(key, value));
+
+    wcp.onChange(
+        (Map<String, Object>)
+            Utils.fromJSONString(
+                "{\n"
+                    + "  \"watched-properties\": {\n"
+                    + "    \"p1\": \"v1\",\n"
+                    + "    \"p2\": \"v2\"\n"
+                    + "  }\n"
+                    + "}"));
+    assertEquals(1, listener1.size());
+    assertEquals("v1", listener1.get("p1"));
+    assertEquals(2, listener2.size());
+    assertEquals("v1", listener2.get("p1"));
+    assertEquals("v2", listener2.get("p2"));
+    assertEquals(0, listener3.size());
+    listener1.clear();
+    listener2.clear();
+    listener3.clear();
+    wcp.onChange(
+        (Map<String, Object>)
+            Utils.fromJSONString(
+                "{\n"
+                    + "  \"watched-properties\": {\n"
+                    + "    \"p1\": \"v1\",\n"
+                    + "    \"p2\": \"v2\"\n"
+                    + "  }\n"
+                    + "}"));
+    assertEquals(0, listener1.size());
+    assertEquals(0, listener2.size());
+    assertEquals(0, listener3.size());
+    wcp.onChange(
+        (Map<String, Object>)
+            Utils.fromJSONString(
+                "{\n" + "  \"watched-properties\": {\n" + "    \"p3\": \"v3\"\n" + "  }\n" + "}"));
+    assertEquals(1, listener1.size());
+    assertEquals(null, listener1.get("p1"));
+    assertEquals(3, listener2.size());
+    assertEquals(1, listener3.size());
+    assertEquals("v3", listener3.get("p3"));
   }
 }

@@ -366,16 +366,14 @@ public class AccessDirectory extends MMapDirectory {
           lazyMapSize.decrement();
           lazyMapDiskUsage.add(-e.input.length());
         } catch (Exception ex) {
-          log.warn("exception closing lazy input for {}" + e.canonicalName, ex);
+          log.warn("exception closing lazy input for {}", e.canonicalName, ex);
         }
       }
     } finally {
       if (!activeLazy.isEmpty()) {
         log.error(
-            "found residual lazy input after close: "
-                + activeLazy.values().stream()
-                    .map((e) -> e.canonicalName)
-                    .collect(Collectors.toList()));
+            "found residual lazy input after close: {}",
+            activeLazy.values().stream().map((e) -> e.canonicalName).collect(Collectors.toList()));
         activeLazy.clear();
       }
       super.close();

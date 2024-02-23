@@ -135,7 +135,8 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
                     return null;
                   } catch (IOException ex) {
                     lazyEntry = null;
-                    log.warn("swallowed exception while activating input: {}", ex.toString());
+                    String logMsg = ex.toString();
+                    log.warn("swallowed exception while activating input: {}", logMsg);
                   } catch (Throwable ex) {
                     lazyEntry = null;
                     log.warn("swallowed unexpected exception while activating input", ex);

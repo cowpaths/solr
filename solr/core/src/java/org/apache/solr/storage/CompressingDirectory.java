@@ -27,7 +27,6 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
-import java.util.logging.Logger;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.FSDirectory;
@@ -39,8 +38,6 @@ import org.apache.lucene.store.OutputStreamDataOutput;
 import org.apache.lucene.util.compress.LZ4;
 
 public class CompressingDirectory extends FSDirectory {
-
-  private static final Logger LOG = Logger.getLogger(CompressingDirectory.class.getName());
 
   /**
    * Reference to {@code com.sun.nio.file.ExtendedOpenOption.DIRECT} by reflective class and enum

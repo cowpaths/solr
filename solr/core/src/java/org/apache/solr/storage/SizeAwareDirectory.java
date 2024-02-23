@@ -151,14 +151,16 @@ public class SizeAwareDirectory extends FilterDirectory
       boolean initializing = !initialized;
       if (!initializing && Math.abs(diff) < reconcileThreshold) {
         double ratio = (double) extant / ret;
-        log.info(
-            "no need to reconcile (diff {}; ratio {}; overhead {}; sizes {}/{}/{})",
-            humanReadableByteDiff(diff),
-            ratio,
-            RamUsageEstimator.humanReadableUnits(ramBytesUsed()),
-            liveOutputs.size(),
-            fileSizeMap.size(),
-            files.length);
+        if (log.isInfoEnabled()) {
+          log.info(
+              "no need to reconcile (diff {}; ratio {}; overhead {}; sizes {}/{}/{})",
+              humanReadableByteDiff(diff),
+              ratio,
+              RamUsageEstimator.humanReadableUnits(ramBytesUsed()),
+              liveOutputs.size(),
+              fileSizeMap.size(),
+              files.length);
+        }
         ret = extant;
       } else {
         // swap the new objects into place
@@ -171,10 +173,12 @@ public class SizeAwareDirectory extends FilterDirectory
         reconciledTimeNanos = System.nanoTime();
         if (initializing) {
           initialized = true;
-          log.info(
-              "initialized heap-tracked size {} (overhead: {})",
-              RamUsageEstimator.humanReadableUnits(ret),
-              RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
+          if (log.isInfoEnabled()) {
+            log.info(
+                "initialized heap-tracked size {} (overhead: {})",
+                RamUsageEstimator.humanReadableUnits(ret),
+                RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
+          }
         } else {
           double ratio = (double) extant / ret;
           log.warn(

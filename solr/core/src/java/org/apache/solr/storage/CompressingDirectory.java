@@ -1,15 +1,5 @@
 package org.apache.solr.storage;
 
-import org.apache.lucene.store.DataInput;
-import org.apache.lucene.store.DataOutput;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.FSLockFactory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.store.OutputStreamDataOutput;
-import org.apache.lucene.util.compress.LZ4;
-
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -21,6 +11,15 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Logger;
+import org.apache.lucene.store.DataInput;
+import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.FSLockFactory;
+import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.OutputStreamDataOutput;
+import org.apache.lucene.util.compress.LZ4;
 
 public class CompressingDirectory extends FSDirectory {
 
@@ -79,7 +78,9 @@ public class CompressingDirectory extends FSDirectory {
   private final boolean useAsyncIO;
   private final boolean useDirectIO;
 
-  public CompressingDirectory(Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO) throws IOException {
+  public CompressingDirectory(
+      Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
+      throws IOException {
     super(path, FSLockFactory.getDefault());
     this.blockSize = (int) (Files.getFileStore(path).getBlockSize());
     this.ioExec = ioExec;
@@ -103,21 +104,20 @@ public class CompressingDirectory extends FSDirectory {
     }
   }
 
-  /**
-   * From DirectIODirectory
-   */
+  /** From DirectIODirectory */
   public static final int DEFAULT_MERGE_BUFFER_SIZE = 256 * 1024;
 
   /**
-   * <p>We will have 2 alternating read buffers of this size. Each buffer is quite large (8M), but this
-   * is off-heap memory, and recall that we are hereby entirely skipping the page cache, through which
-   * all of this data would otherwise be churned.
+   * We will have 2 alternating read buffers of this size. Each buffer is quite large (8M), but this
+   * is off-heap memory, and recall that we are hereby entirely skipping the page cache, through
+   * which all of this data would otherwise be churned.
    *
-   * <p>The main reason for the large size is because iowait is quite bursty; the larger the reads, the
-   * more diffusely the iowait is spread out, reducing the risk that an individual hiccup will block the
-   * processing (i.e. decompressing) thread.
+   * <p>The main reason for the large size is because iowait is quite bursty; the larger the reads,
+   * the more diffusely the iowait is spread out, reducing the risk that an individual hiccup will
+   * block the processing (i.e. decompressing) thread.
    */
-  public static final int DEFAULT_DISK_READ_BUFFER_SIZE = DEFAULT_MERGE_BUFFER_SIZE << 5; // 8M buffer (large) seems optimal
+  public static final int DEFAULT_DISK_READ_BUFFER_SIZE =
+      DEFAULT_MERGE_BUFFER_SIZE << 5; // 8M buffer (large) seems optimal
 
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
@@ -126,11 +126,20 @@ public class CompressingDirectory extends FSDirectory {
 
   @Override
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
-    return new DirectIOIndexOutput(directoryPath.resolve(name), name, blockSize, DEFAULT_MERGE_BUFFER_SIZE, ioExec, Integer.MAX_VALUE, useAsyncIO, useDirectIO);
+    return new DirectIOIndexOutput(
+        directoryPath.resolve(name),
+        name,
+        blockSize,
+        DEFAULT_MERGE_BUFFER_SIZE,
+        ioExec,
+        Integer.MAX_VALUE,
+        useAsyncIO,
+        useDirectIO);
   }
 
   @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
+  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context)
+      throws IOException {
     throw new UnsupportedOperationException("CompressingDirectory does not create temp outputs");
   }
 
@@ -143,13 +152,16 @@ public class CompressingDirectory extends FSDirectory {
 
   private static class BytesOut extends OutputStreamDataOutput {
     private final AccessibleBAOS baos;
+
     public BytesOut() {
       this(new AccessibleBAOS());
     }
+
     private BytesOut(AccessibleBAOS baos) {
       super(baos);
       this.baos = baos;
     }
+
     public int transferTo(DataOutput out) throws IOException {
       return baos.transferTo(out);
     }
@@ -177,7 +189,15 @@ public class CompressingDirectory extends FSDirectory {
      * @throws IOException if the operating system or filesystem does not support support Direct I/O
      *     or a sufficient equivalent.
      */
-    public DirectIOIndexOutput(Path path, String name, int blockSize, int bufferSize, ExecutorService ioExec, int expectLength, boolean useAsyncIO, boolean useDirectIO)
+    public DirectIOIndexOutput(
+        Path path,
+        String name,
+        int blockSize,
+        int bufferSize,
+        ExecutorService ioExec,
+        int expectLength,
+        boolean useAsyncIO,
+        boolean useDirectIO)
         throws IOException {
       super("DirectIOIndexOutput(path=\"" + path.toString() + "\")", name);
 
@@ -343,15 +363,17 @@ public class CompressingDirectory extends FSDirectory {
   public static final int COMPRESSION_BLOCK_SHIFT = 18;
   public static final int COMPRESSION_BLOCK_SIZE = 1 << COMPRESSION_BLOCK_SHIFT; // 256k
   public static final int COMPRESSION_BLOCK_MASK_LOW = COMPRESSION_BLOCK_SIZE - 1;
-  public static final int BLOCK_SIZE_ESTIMATE = COMPRESSION_BLOCK_SIZE >> 1; // estimate 50% compression;
+  public static final int BLOCK_SIZE_ESTIMATE =
+      COMPRESSION_BLOCK_SIZE >> 1; // estimate 50% compression;
 
   private static final int MIN_MATCH = 4;
 
   /**
-   * Copied from {@link LZ4#decompress(DataInput, int, byte[], int)} because it's faster decompressing
-   * from byte[] than from {@link DataInput}.
+   * Copied from {@link LZ4#decompress(DataInput, int, byte[], int)} because it's faster
+   * decompressing from byte[] than from {@link DataInput}.
    */
-  public static int decompress(final byte[] compressed, int srcPos, final int decompressedLen, final byte[] dest, int dOff)
+  public static int decompress(
+      final byte[] compressed, int srcPos, final int decompressedLen, final byte[] dest, int dOff)
       throws IOException {
     final int destEnd = dOff + decompressedLen;
 

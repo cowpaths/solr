@@ -1,6 +1,14 @@
 package org.apache.solr.storage;
 
 import com.carrotsearch.hppc.procedures.LongObjectProcedure;
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.LongAdder;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
@@ -11,19 +19,15 @@ import org.apache.solr.core.DirectoryFactory;
 import org.apache.solr.handler.admin.CoreAdminHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.LongAdder;
 
-public class SizeAwareDirectory extends FilterDirectory implements DirectoryFactory.SizeAware, Accountable {
+public class SizeAwareDirectory extends FilterDirectory
+    implements DirectoryFactory.SizeAware, Accountable {
   @SuppressWarnings("rawtypes")
-  private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(SizeAwareDirectory.class)
-      + RamUsageEstimator.shallowSizeOfInstance(LongAdder.class) + RamUsageEstimator.shallowSizeOf(new Future[1]);
+  private static final long BASE_RAM_BYTES_USED =
+      RamUsageEstimator.shallowSizeOfInstance(SizeAwareDirectory.class)
+          + RamUsageEstimator.shallowSizeOfInstance(LongAdder.class)
+          + RamUsageEstimator.shallowSizeOf(new Future[1]);
+
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private final long reconcileTTLNanos;
   private boolean initialized = false;
@@ -33,7 +37,8 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
 
   private final ConcurrentHashMap<String, Long> fileSizeMap = new ConcurrentHashMap<>();
 
-  private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs =
+      new ConcurrentHashMap<>();
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   private final Future<Long>[] computingSize = new Future[1];
@@ -50,13 +55,17 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
 
   @Override
   public long ramBytesUsed() {
-    return BASE_RAM_BYTES_USED + RamUsageEstimator.sizeOfMap(fileSizeMap) + RamUsageEstimator.sizeOfMap(liveOutputs);
+    return BASE_RAM_BYTES_USED
+        + RamUsageEstimator.sizeOfMap(fileSizeMap)
+        + RamUsageEstimator.sizeOfMap(liveOutputs);
   }
 
   @Override
   public long size() throws IOException {
     Integer reconcileThreshold = CoreAdminHandler.getReconcileThreshold();
-    if (initialized && (reconcileThreshold == null || System.nanoTime() - reconciledTimeNanos < reconcileTTLNanos)) {
+    if (initialized
+        && (reconcileThreshold == null
+            || System.nanoTime() - reconciledTimeNanos < reconcileTTLNanos)) {
       return size.sum();
     }
     CompletableFuture<Long> weCompute;
@@ -82,14 +91,15 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
 
       LongAdder recomputeSize = new LongAdder();
       Set<String> recomputed = ConcurrentHashMap.newKeySet();
-      LongObjectProcedure<String> dualSizeWriter =  (fileSize, name) -> {
-        size.add(fileSize);
-        if (fileSize >= 0 || recomputed.remove(name)) {
-          // if it's a removal, we only want to adjust if we've already
-          // incorporated this file in our count!
-          recomputeSize.add(fileSize);
-        }
-      };
+      LongObjectProcedure<String> dualSizeWriter =
+          (fileSize, name) -> {
+            size.add(fileSize);
+            if (fileSize >= 0 || recomputed.remove(name)) {
+              // if it's a removal, we only want to adjust if we've already
+              // incorporated this file in our count!
+              recomputeSize.add(fileSize);
+            }
+          };
       sizeWriter = dualSizeWriter;
       for (final String file : files) {
         long fileSize;
@@ -113,9 +123,9 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
         }
         recomputeSize.add(fileSize);
         // TODO: do we really need to check for overflow here?
-//        if (recomputeSize < 0) {
-//          break;
-//        }
+        //        if (recomputeSize < 0) {
+        //          break;
+        //        }
       }
 
       long ret = recomputeSize.sum();
@@ -124,9 +134,14 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
       boolean initializing = !initialized;
       if (!initializing && Math.abs(diff) < reconcileThreshold) {
         double ratio = (double) extant / ret;
-        log.info("no need to reconcile (diff {}; ratio {}; overhead {}; sizes {}/{}/{})",
-            humanReadableByteDiff(diff), ratio, RamUsageEstimator.humanReadableUnits(ramBytesUsed()),
-            liveOutputs.size(), fileSizeMap.size(), files.length);
+        log.info(
+            "no need to reconcile (diff {}; ratio {}; overhead {}; sizes {}/{}/{})",
+            humanReadableByteDiff(diff),
+            ratio,
+            RamUsageEstimator.humanReadableUnits(ramBytesUsed()),
+            liveOutputs.size(),
+            fileSizeMap.size(),
+            files.length);
         ret = extant;
       } else {
         // swap the new objects into place
@@ -139,10 +154,19 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
         reconciledTimeNanos = System.nanoTime();
         if (initializing) {
           initialized = true;
-          log.info("initialized heap-tracked size {} (overhead: {})", RamUsageEstimator.humanReadableUnits(ret), RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
+          log.info(
+              "initialized heap-tracked size {} (overhead: {})",
+              RamUsageEstimator.humanReadableUnits(ret),
+              RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
         } else {
           double ratio = (double) extant / ret;
-          log.warn("reconcile size {} => {}  (diff {}; ratio {}; overhead {})", extant, ret, humanReadableByteDiff(diff), ratio, RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
+          log.warn(
+              "reconcile size {} => {}  (diff {}; ratio {}; overhead {})",
+              extant,
+              ret,
+              humanReadableByteDiff(diff),
+              ratio,
+              RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
         }
       }
 
@@ -159,7 +183,7 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
   private static String humanReadableByteDiff(long diff) {
     if (diff >= 0) {
       return RamUsageEstimator.humanReadableUnits(diff);
-      } else {
+    } else {
       return "-".concat(RamUsageEstimator.humanReadableUnits(-diff));
     }
   }
@@ -178,23 +202,28 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
 
   @Override
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
-    SizeAccountingIndexOutput ret = new SizeAccountingIndexOutput(name, in.createOutput(name, context), fileSizeMap, liveOutputs, sizeWriter);
+    SizeAccountingIndexOutput ret =
+        new SizeAccountingIndexOutput(
+            name, in.createOutput(name, context), fileSizeMap, liveOutputs, sizeWriter);
     liveOutputs.put(name, ret);
     return ret;
   }
 
   @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
+  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context)
+      throws IOException {
     IndexOutput backing = in.createTempOutput(prefix, suffix, context);
     String name = backing.getName();
-    SizeAccountingIndexOutput ret = new SizeAccountingIndexOutput(name, backing, fileSizeMap, liveOutputs, sizeWriter);
+    SizeAccountingIndexOutput ret =
+        new SizeAccountingIndexOutput(name, backing, fileSizeMap, liveOutputs, sizeWriter);
     liveOutputs.put(name, ret);
     return ret;
   }
 
   private static final class SizeAccountingIndexOutput extends IndexOutput implements Accountable {
 
-    private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(SizeAccountingIndexOutput.class);
+    private static final long BASE_RAM_BYTES_USED =
+        RamUsageEstimator.shallowSizeOfInstance(SizeAccountingIndexOutput.class);
 
     private final String name;
 
@@ -206,7 +235,12 @@ public class SizeAwareDirectory extends FilterDirectory implements DirectoryFact
 
     private volatile LongObjectProcedure<String> sizeWriter;
 
-    private SizeAccountingIndexOutput(String name, IndexOutput backing, ConcurrentHashMap<String, Long> fileSizeMap, ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs, LongObjectProcedure<String> sizeWriter) {
+    private SizeAccountingIndexOutput(
+        String name,
+        IndexOutput backing,
+        ConcurrentHashMap<String, Long> fileSizeMap,
+        ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs,
+        LongObjectProcedure<String> sizeWriter) {
       super("byteSize(" + name + ")", name);
       this.name = name;
       this.backing = backing;

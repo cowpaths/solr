@@ -1,21 +1,9 @@
 package org.apache.solr.storage;
 
-import org.apache.lucene.store.AlreadyClosedException;
-import org.apache.lucene.store.ByteArrayDataInput;
-import org.apache.lucene.store.ByteBufferGuard;
-import org.apache.lucene.store.ByteBufferIndexInput;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.store.LockFactory;
-import org.apache.lucene.store.MMapDirectory;
-import org.apache.lucene.store.MappedByteBufferIndexInputProvider;
-import org.apache.lucene.store.RandomAccessInput;
-import org.apache.lucene.util.BitUtil;
-import org.apache.lucene.util.CollectionUtil;
-import org.apache.lucene.util.IOUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.apache.solr.storage.CompressingDirectory.BLOCK_SIZE_ESTIMATE;
+import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_MASK_LOW;
+import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SHIFT;
+import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SIZE;
 
 import java.io.Closeable;
 import java.io.EOFException;
@@ -50,20 +38,32 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.IntUnaryOperator;
 import java.util.stream.Collectors;
-
-import static org.apache.solr.storage.CompressingDirectory.BLOCK_SIZE_ESTIMATE;
-import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_MASK_LOW;
-import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SHIFT;
-import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SIZE;
+import org.apache.lucene.store.AlreadyClosedException;
+import org.apache.lucene.store.ByteArrayDataInput;
+import org.apache.lucene.store.ByteBufferGuard;
+import org.apache.lucene.store.ByteBufferIndexInput;
+import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.LockFactory;
+import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.store.MappedByteBufferIndexInputProvider;
+import org.apache.lucene.store.RandomAccessInput;
+import org.apache.lucene.util.BitUtil;
+import org.apache.lucene.util.CollectionUtil;
+import org.apache.lucene.util.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AccessDirectory extends MMapDirectory {
 
   /**
-   * Determines chunk size for mmapping files. `1` yields 1g chunks, but this may be set higher to stress
-   * test buffer boundaries (as low as 15, which yields the min chunk size of 64k, equal to
+   * Determines chunk size for mmapping files. `1` yields 1g chunks, but this may be set higher to
+   * stress test buffer boundaries (as low as 15, which yields the min chunk size of 64k, equal to
    * {@link CompressingDirectory#COMPRESSION_BLOCK_SIZE}).
    */
   private static final int MAP_BUF_DIVIDE_SHIFT = 1;
+
   public static final int MAX_MAP_SIZE = Integer.MIN_VALUE >>> MAP_BUF_DIVIDE_SHIFT;
   public static final int MAX_MAP_MASK = MAX_MAP_SIZE - 1;
   public static final int MAX_MAP_SHIFT = Integer.numberOfTrailingZeros(MAX_MAP_SIZE);
@@ -83,7 +83,12 @@ public class AccessDirectory extends MMapDirectory {
   private final LongAdder lazyMapDiskUsage;
   private final LongAdder lazyLoadedBlockBytes;
 
-  public AccessDirectory(Path path, LockFactory lockFactory, Path compressedPath, TeeDirectoryFactory.NodeLevelTeeDirectoryState s) throws IOException {
+  public AccessDirectory(
+      Path path,
+      LockFactory lockFactory,
+      Path compressedPath,
+      TeeDirectoryFactory.NodeLevelTeeDirectoryState s)
+      throws IOException {
     super(path, lockFactory);
     this.path = path;
     this.compressedPath = compressedPath;
@@ -126,7 +131,8 @@ public class AccessDirectory extends MMapDirectory {
       }
       LazyEntry extant = activeLazy.putIfAbsent(dest, lazy);
       if (extant != null) {
-        throw new IllegalStateException("already have a mapping for " + dest + " => " + extant.lazyName);
+        throw new IllegalStateException(
+            "already have a mapping for " + dest + " => " + extant.lazyName);
       }
       if (!activeLazy.remove(source, lazy)) {
         activeLazy.remove(dest);
@@ -200,7 +206,8 @@ public class AccessDirectory extends MMapDirectory {
     private final WeakReference<AccessDirectory> dir;
     private final int[] from = new int[1];
 
-    private LazyEntry(String canonicalName, String lazyName, LazyLoadInput input, AccessDirectory dir) {
+    private LazyEntry(
+        String canonicalName, String lazyName, LazyLoadInput input, AccessDirectory dir) {
       this.canonicalName = canonicalName;
       this.lazyName = lazyName;
       this.input = input;
@@ -232,37 +239,53 @@ public class AccessDirectory extends MMapDirectory {
     LazyEntry lazyEntry;
     try {
       boolean[] weComputed = new boolean[1];
-      lazyEntry = activeLazy.computeIfAbsent(name, (k) -> {
-        String lazyName = null;
-        LazyEntry ret = null;
-        try (IndexOutput out = super.createTempOutput(name, "lazy", IOContext.DEFAULT)) {
-          // create a stub
-          lazyName = out.getName();
-          ret = new LazyEntry(name, lazyName, new LazyLoadInput(compressedPath.resolve(name), path.resolve(lazyName), rawCt, loadedCt, populatedCt, lazyCt, priorityActivate, lazyLoadedBlockBytes), this);
-          weComputed[0] = true;
-          lazyMapDiskUsage.add(ret.input.length());
-          lazyMapSize.increment();
-          if (isClosed) {
-            try (ret.input) {
-              lazyMapDiskUsage.add(-ret.input.length());
-              lazyMapSize.decrement();
-            }
-            ret = null;
-            throw new AlreadyClosedException("Directory already closed");
-          }
-          return ret;
-        } catch (IOException e) {
-          throw new UncheckedIOException(e);
-        } finally {
-          if (ret == null && lazyName != null) {
-            try {
-              super.deleteFile(lazyName);
-            } catch (IOException e) {
-              // another exception has been thrown; we can ignore this one
-            }
-          }
-        }
-      });
+      lazyEntry =
+          activeLazy.computeIfAbsent(
+              name,
+              (k) -> {
+                String lazyName = null;
+                LazyEntry ret = null;
+                try (IndexOutput out = super.createTempOutput(name, "lazy", IOContext.DEFAULT)) {
+                  // create a stub
+                  lazyName = out.getName();
+                  ret =
+                      new LazyEntry(
+                          name,
+                          lazyName,
+                          new LazyLoadInput(
+                              compressedPath.resolve(name),
+                              path.resolve(lazyName),
+                              rawCt,
+                              loadedCt,
+                              populatedCt,
+                              lazyCt,
+                              priorityActivate,
+                              lazyLoadedBlockBytes),
+                          this);
+                  weComputed[0] = true;
+                  lazyMapDiskUsage.add(ret.input.length());
+                  lazyMapSize.increment();
+                  if (isClosed) {
+                    try (ret.input) {
+                      lazyMapDiskUsage.add(-ret.input.length());
+                      lazyMapSize.decrement();
+                    }
+                    ret = null;
+                    throw new AlreadyClosedException("Directory already closed");
+                  }
+                  return ret;
+                } catch (IOException e) {
+                  throw new UncheckedIOException(e);
+                } finally {
+                  if (ret == null && lazyName != null) {
+                    try {
+                      super.deleteFile(lazyName);
+                    } catch (IOException e) {
+                      // another exception has been thrown; we can ignore this one
+                    }
+                  }
+                }
+              });
       if (weComputed[0]) {
         activationQueue.add(lazyEntry);
       }
@@ -331,7 +354,11 @@ public class AccessDirectory extends MMapDirectory {
       }
     } finally {
       if (!activeLazy.isEmpty()) {
-        log.error("found residual lazy input after close: " + activeLazy.values().stream().map((e) -> e.canonicalName).collect(Collectors.toList()));
+        log.error(
+            "found residual lazy input after close: "
+                + activeLazy.values().stream()
+                    .map((e) -> e.canonicalName)
+                    .collect(Collectors.toList()));
         activeLazy.clear();
       }
       super.close();
@@ -340,10 +367,11 @@ public class AccessDirectory extends MMapDirectory {
 
   private static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
 
-  private static final int COMPRESSION_TO_MAP_TRANSLATE_SHIFT = MAX_MAP_SHIFT - COMPRESSION_BLOCK_SHIFT;
+  private static final int COMPRESSION_TO_MAP_TRANSLATE_SHIFT =
+      MAX_MAP_SHIFT - COMPRESSION_BLOCK_SHIFT;
 
-
-  static class ConcurrentIntSet implements Comparable<ConcurrentIntSet>, Callable<Integer>, AutoCloseable {
+  static class ConcurrentIntSet
+      implements Comparable<ConcurrentIntSet>, Callable<Integer>, AutoCloseable {
     private volatile boolean closed = false;
     private final String tmpPath;
     private final int lastIdx;
@@ -352,7 +380,12 @@ public class AccessDirectory extends MMapDirectory {
     private final ConcurrentHashMap<ConcurrentIntSet, Boolean> priorityActivate;
     private LazyLoadInput in;
 
-    ConcurrentIntSet(String tmpPath, int size, int blocksSize, LazyLoadInput in, ConcurrentHashMap<ConcurrentIntSet, Boolean> priorityActivate) {
+    ConcurrentIntSet(
+        String tmpPath,
+        int size,
+        int blocksSize,
+        LazyLoadInput in,
+        ConcurrentHashMap<ConcurrentIntSet, Boolean> priorityActivate) {
       this.tmpPath = tmpPath;
       this.lastIdx = size - 1;
       this.blocksSize = ((blocksSize - 1) / Integer.SIZE) + 1;
@@ -388,13 +421,16 @@ public class AccessDirectory extends MMapDirectory {
           // keep advancing
         }
         int mask = Integer.MIN_VALUE;
-        int blockIdxBaseline = blockIdx << RESERVE_SHIFT; // the first of group of indexes into `complete` array
+        int blockIdxBaseline =
+            blockIdx << RESERVE_SHIFT; // the first of group of indexes into `complete` array
         int i = 0;
         do {
           if ((blockVal & mask) != 0) {
             // get the actual base compressed block idx
             int compressedBlockBaseline = (blockIdxBaseline + i) << RESERVE_SHIFT;
-            for (int idx = compressedBlockBaseline, lim = compressedBlockBaseline + Integer.SIZE; idx < lim; idx++) {
+            for (int idx = compressedBlockBaseline, lim = compressedBlockBaseline + Integer.SIZE;
+                idx < lim;
+                idx++) {
               int decompressedLen;
               if (idx < lastIdx) {
                 decompressedLen = COMPRESSION_BLOCK_SIZE;
@@ -509,7 +545,8 @@ public class AccessDirectory extends MMapDirectory {
     private final LongAdder lazyCt;
     private final LongAdder lazyLoadedBlockBytes;
 
-    private LazyLoadInput(String resourceDescription, LazyLoadInput parent, long offset, long length) {
+    private LazyLoadInput(
+        String resourceDescription, LazyLoadInput parent, long offset, long length) {
       super(resourceDescription);
       this.lazyLoadedBlockBytes = parent.lazyLoadedBlockBytes;
       this.populatedUpTo = parent.populatedUpTo;
@@ -548,7 +585,16 @@ public class AccessDirectory extends MMapDirectory {
       this.lazyCt = parent.lazyCt;
     }
 
-    private LazyLoadInput(Path source, Path lazy, LongAdder rawCt, LongAdder loadedCt, LongAdder populatedCt, LongAdder lazyCt, ConcurrentHashMap<ConcurrentIntSet, Boolean> priorityActivate, LongAdder lazyLoadedBlockBytes) throws IOException {
+    private LazyLoadInput(
+        Path source,
+        Path lazy,
+        LongAdder rawCt,
+        LongAdder loadedCt,
+        LongAdder populatedCt,
+        LongAdder lazyCt,
+        ConcurrentHashMap<ConcurrentIntSet, Boolean> priorityActivate,
+        LongAdder lazyLoadedBlockBytes)
+        throws IOException {
       super("lazy");
       this.lazyLoadedBlockBytes = lazyLoadedBlockBytes;
       this.rawCt = rawCt;
@@ -560,7 +606,8 @@ public class AccessDirectory extends MMapDirectory {
       compressedGuard = new ByteBufferGuard("compressedGuard", unmapHack());
       try (FileChannel channel = FileChannel.open(source, StandardOpenOption.READ)) {
         long compressedFileSize = channel.size();
-        mapped = new MappedByteBuffer[Math.toIntExact(((compressedFileSize - 1) >> MAX_MAP_SHIFT) + 1)];
+        mapped =
+            new MappedByteBuffer[Math.toIntExact(((compressedFileSize - 1) >> MAX_MAP_SHIFT) + 1)];
         long pos = 0;
         long limit = MAX_MAP_SIZE;
         for (int i = 0, lim = mapped.length; i < lim; i++) {
@@ -586,12 +633,15 @@ public class AccessDirectory extends MMapDirectory {
           ByteBuffer initial = mapped[0];
           length = guard.getLong(initial, 0);
           if (length >> COMPRESSION_BLOCK_SHIFT > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("file too long " + Long.toHexString(length) + ", " + source);
+            throw new IllegalArgumentException(
+                "file too long " + Long.toHexString(length) + ", " + source);
           }
           int blockDeltaFooterSize = guard.getInt(initial, Long.BYTES);
           byte[] footer = new byte[blockDeltaFooterSize];
           long blockDeltaFooterOffset = size - blockDeltaFooterSize;
-          channel.read(ByteBuffer.wrap(footer), blockDeltaFooterOffset); // TODO: read this from mapped instead?
+          channel.read(
+              ByteBuffer.wrap(footer),
+              blockDeltaFooterOffset); // TODO: read this from mapped instead?
           ByteArrayDataInput in = new ByteArrayDataInput(footer);
           long blockOffset = Long.BYTES + Integer.BYTES;
           int lastBlockSize = BLOCK_SIZE_ESTIMATE;
@@ -611,7 +661,9 @@ public class AccessDirectory extends MMapDirectory {
           int reserveSize = ((blockCount - 1) / Integer.SIZE) + 1;
           reserve = new AtomicIntegerArray(reserveSize);
           complete = new AtomicIntegerArray(reserveSize);
-          priorityLoad = new ConcurrentIntSet(lazy.toString(), blockCount, reserveSize, this, priorityActivate);
+          priorityLoad =
+              new ConcurrentIntSet(
+                  lazy.toString(), blockCount, reserveSize, this, priorityActivate);
           populatedUpTo = new AtomicIntegerArray(reserveSize);
           populatedUpTo.set(0, -1); // every index must initially have a value less than itself.
         }
@@ -658,7 +710,8 @@ public class AccessDirectory extends MMapDirectory {
       for (int i = accessMapped.length - 1; i >= 0; i--) {
         copy[i] = accessMapped[i].duplicate().order(ByteOrder.LITTLE_ENDIAN);
       }
-      this.accessPopulated = ByteBufferIndexInput.newInstance("accessPopulated", copy, length, MAX_MAP_SHIFT, guard);
+      this.accessPopulated =
+          ByteBufferIndexInput.newInstance("accessPopulated", copy, length, MAX_MAP_SHIFT, guard);
     }
 
     private boolean acquireWrite(int blockIdx) {
@@ -716,7 +769,10 @@ public class AccessDirectory extends MMapDirectory {
         } else {
           // the first block is not populated
           final int startCompleteBlockVal = complete.get(startCompleteBlockIdx);
-          registerRun = startCompleteBlockVal == -1 || (blockCount <= Integer.SIZE && Integer.bitCount(startCompleteBlockVal) == blockCount);
+          registerRun =
+              startCompleteBlockVal == -1
+                  || (blockCount <= Integer.SIZE
+                      && Integer.bitCount(startCompleteBlockVal) == blockCount);
           if (!registerRun) {
             priorityLoad.add(startCompleteBlockIdx);
             final int startMask = -1 >>> (startBlockIdx & RESERVE_MASK); // not sign-extended
@@ -725,7 +781,9 @@ public class AccessDirectory extends MMapDirectory {
             }
           }
         }
-        for (int i = Math.max(startCompleteBlockIdx + 1, firstSubsequentPartialBlock); i < lastCompleteBlockIdx; i++) {
+        for (int i = Math.max(startCompleteBlockIdx + 1, firstSubsequentPartialBlock);
+            i < lastCompleteBlockIdx;
+            i++) {
           if (complete.get(i) != -1) {
             priorityLoad.add(i);
             if (registerRun) {
@@ -750,7 +808,9 @@ public class AccessDirectory extends MMapDirectory {
     private void registerRun(int startCompleteBlockIdx, int upTo) {
       int expected = populatedUpTo.get(startCompleteBlockIdx);
       int witnessUpTo;
-      while (upTo > expected && (witnessUpTo = populatedUpTo.compareAndExchange(startCompleteBlockIdx, expected, upTo)) != expected) {
+      while (upTo > expected
+          && (witnessUpTo = populatedUpTo.compareAndExchange(startCompleteBlockIdx, expected, upTo))
+              != expected) {
         expected = witnessUpTo;
       }
     }
@@ -786,7 +846,8 @@ public class AccessDirectory extends MMapDirectory {
 
     private ByteBuffer supply(long pos, int compressedLen, int decompressedLen) throws IOException {
       final byte[] preBuffer = new byte[compressedLen];
-      final byte[] decompressBuffer = new byte[decompressedLen + 7]; // +7 overhead for optimal decompression
+      final byte[] decompressBuffer =
+          new byte[decompressedLen + 7]; // +7 overhead for optimal decompression
       ByteBuffer bb = mapped[(int) (pos >> MAX_MAP_SHIFT)].position((int) (pos & MAX_MAP_MASK));
       int offset = 0;
       int left = bb.remaining();
@@ -807,9 +868,11 @@ public class AccessDirectory extends MMapDirectory {
       }
       CompressingDirectory.decompress(preBuffer, 0, decompressedLen, decompressBuffer, 0);
       lazyLoadedBlockBytes.add(decompressedLen);
-      return ByteBuffer.wrap(decompressBuffer, 0, decompressedLen); // usually decompressedLen == COMPRESSION_BLOCK_SIZE
+      return ByteBuffer.wrap(
+          decompressBuffer,
+          0,
+          decompressedLen); // usually decompressedLen == COMPRESSION_BLOCK_SIZE
     }
-
 
     private boolean loadBlock(int blockIdx, int decompressedLen) throws IOException {
       if (!acquireWrite(blockIdx)) {
@@ -849,7 +912,8 @@ public class AccessDirectory extends MMapDirectory {
       for (int blockIdx = from[0]; blockIdx <= lastBlockIdx; blockIdx++) {
         do {
           boolean isLastBlock = blockIdx == lastBlockIdx;
-          if (loadBlock(blockIdx, isLastBlock ? lastBlockDecompressedLen : COMPRESSION_BLOCK_SIZE)) {
+          if (loadBlock(
+              blockIdx, isLastBlock ? lastBlockDecompressedLen : COMPRESSION_BLOCK_SIZE)) {
             if (++ret >= Integer.SIZE) {
               from[0] = blockIdx + 1;
               return isLastBlock ? ~ret : ret;
@@ -860,8 +924,10 @@ public class AccessDirectory extends MMapDirectory {
       return ~ret;
     }
 
-    private void refill(final long pos, final int compressedLen, final int blockIdx) throws IOException {
-      final int decompressedLen = blockIdx == lastBlockIdx ? lastBlockDecompressedLen : COMPRESSION_BLOCK_SIZE;
+    private void refill(final long pos, final int compressedLen, final int blockIdx)
+        throws IOException {
+      final int decompressedLen =
+          blockIdx == lastBlockIdx ? lastBlockDecompressedLen : COMPRESSION_BLOCK_SIZE;
       if (acquireWrite(blockIdx)) {
         try {
           ByteBuffer supply = supply(pos, compressedLen, decompressedLen);
@@ -889,7 +955,9 @@ public class AccessDirectory extends MMapDirectory {
         postBufferBaseline = postBuffer.position();
         postBuffer.order(ByteOrder.LITTLE_ENDIAN);
       }
-      if (currentBlockIdx != -1 && currentBlockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT != blockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT) {
+      if (currentBlockIdx != -1
+          && currentBlockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT
+              != blockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT) {
         // views have gone out of scope
         floatViews = null;
         intViews = null;
@@ -994,7 +1062,8 @@ public class AccessDirectory extends MMapDirectory {
       }
     }
 
-    private void slowReadBytes(final byte[] dst, int offset, int toRead, int left) throws IOException {
+    private void slowReadBytes(final byte[] dst, int offset, int toRead, int left)
+        throws IOException {
       do {
         postBuffer.get(dst, offset, left);
         toRead -= left;
@@ -1106,7 +1175,8 @@ public class AccessDirectory extends MMapDirectory {
       }
       final int remaining = postBuffer.remaining();
       if (remaining < Long.BYTES) {
-        return (_readInt(remaining) & 0xFFFFFFFFL) | (((long) _readInt(postBuffer.remaining())) << 32);
+        return (_readInt(remaining) & 0xFFFFFFFFL)
+            | (((long) _readInt(postBuffer.remaining())) << 32);
       } else {
         filePointer += Long.BYTES;
         return postBuffer.getLong();
@@ -1115,7 +1185,8 @@ public class AccessDirectory extends MMapDirectory {
 
     public long _readLong(final int remaining) throws IOException {
       if (remaining < Long.BYTES) {
-        return (_readInt(remaining) & 0xFFFFFFFFL) | (((long) _readInt(postBuffer.remaining())) << 32);
+        return (_readInt(remaining) & 0xFFFFFFFFL)
+            | (((long) _readInt(postBuffer.remaining())) << 32);
       } else {
         filePointer += Long.BYTES;
         return postBuffer.getLong();
@@ -1344,7 +1415,8 @@ public class AccessDirectory extends MMapDirectory {
     }
 
     @Override
-    public void readFloats(final float[] dst, final int offset, final int length) throws IOException {
+    public void readFloats(final float[] dst, final int offset, final int length)
+        throws IOException {
       final long pos = seekPos;
       if (pos != -1) {
         seekPos = -1;
@@ -1370,7 +1442,8 @@ public class AccessDirectory extends MMapDirectory {
 
     private LongBuffer[] initLongViews() {
       if (postBuffer.isDirect()) {
-        LongBuffer[] template = multiLongViews[currentBlockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT];
+        LongBuffer[] template =
+            multiLongViews[currentBlockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT];
         LongBuffer[] ret = new LongBuffer[Long.BYTES];
         for (int i = Long.BYTES - 1; i >= 0; i--) {
           ret[i] = template[i].duplicate();
@@ -1416,7 +1489,8 @@ public class AccessDirectory extends MMapDirectory {
 
     private FloatBuffer[] initFloatViews() {
       if (postBuffer.isDirect()) {
-        FloatBuffer[] template = multiFloatViews[currentBlockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT];
+        FloatBuffer[] template =
+            multiFloatViews[currentBlockIdx >> COMPRESSION_TO_MAP_TRANSLATE_SHIFT];
         FloatBuffer[] ret = new FloatBuffer[Float.BYTES];
         for (int i = Float.BYTES - 1; i >= 0; i--) {
           ret[i] = template[i].duplicate();
@@ -1474,7 +1548,8 @@ public class AccessDirectory extends MMapDirectory {
         case 1:
           return Collections.singletonMap(_readString(), _readString());
         default:
-          final Map<String, String> map = count > 10 ? CollectionUtil.newHashMap(count) : new TreeMap<>();
+          final Map<String, String> map =
+              count > 10 ? CollectionUtil.newHashMap(count) : new TreeMap<>();
           for (int i = count; i > 0; i--) {
             map.put(_readString(), _readString());
           }
@@ -1518,7 +1593,8 @@ public class AccessDirectory extends MMapDirectory {
         if (isClone) return;
 
         // tell the guard to invalidate and later unmap the bytebuffers (if supported):
-        try (priorityLoad; IndexInput fullyLoaded = loaded.get()) {
+        try (priorityLoad;
+            IndexInput fullyLoaded = loaded.get()) {
           compressedGuard.invalidateAndUnmap(bufs);
         } finally {
           guard.invalidateAndUnmap(accessBufs);
@@ -1582,7 +1658,7 @@ public class AccessDirectory extends MMapDirectory {
       if (fullyLoaded != null) {
         loadedCt.increment();
         return fullyLoaded.slice("slice", absoluteOffset, length);
-      } else if (populated(absoluteOffset, length)){
+      } else if (populated(absoluteOffset, length)) {
         populatedCt.increment();
         return accessPopulated.slice("slice", absoluteOffset, length);
       } else {

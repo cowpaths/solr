@@ -1,18 +1,5 @@
 package org.apache.solr.storage;
 
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.store.BaseDirectory;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.store.Lock;
-import org.apache.lucene.store.LockFactory;
-import org.apache.commons.io.file.PathUtils;
-import org.apache.lucene.store.MMapDirectory;
-import org.apache.solr.util.IOFunction;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
@@ -27,6 +14,18 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import org.apache.commons.io.file.PathUtils;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.store.BaseDirectory;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.Lock;
+import org.apache.lucene.store.LockFactory;
+import org.apache.lucene.store.MMapDirectory;
+import org.apache.solr.util.IOFunction;
 
 public class TeeDirectory extends BaseDirectory {
 
@@ -38,37 +37,50 @@ public class TeeDirectory extends BaseDirectory {
   private Directory persistent;
 
   /**
-   * This ctor (with default inline config) exists to be invoked during testing, via MockDirectoryFactory.
+   * This ctor (with default inline config) exists to be invoked during testing, via
+   * MockDirectoryFactory.
    */
   public TeeDirectory(Path path, LockFactory lockFactory) throws IOException {
     super(TEE_LOCK_FACTORY);
-    TeeDirectoryFactory.NodeLevelTeeDirectoryState ownState = new TeeDirectoryFactory.NodeLevelTeeDirectoryState();
+    TeeDirectoryFactory.NodeLevelTeeDirectoryState ownState =
+        new TeeDirectoryFactory.NodeLevelTeeDirectoryState();
     this.ioExec = ownState.ioExec;
     Directory naive = new MMapDirectory(path, lockFactory, MMapDirectory.DEFAULT_MAX_CHUNK_SIZE);
     this.access = naive;
     Path compressedPath = path;
     String accessDir = System.getProperty("java.io.tmpdir");
     String pathS = path.toString();
-    String scope = pathS.endsWith("/index") ? TeeDirectoryFactory.getCoreName(pathS) : pathS.substring(pathS.lastIndexOf('/'));
+    String scope =
+        pathS.endsWith("/index")
+            ? TeeDirectoryFactory.getCoreName(pathS)
+            : pathS.substring(pathS.lastIndexOf('/'));
     String accessPath = accessDir + scope + "-" + Long.toUnsignedString(System.nanoTime(), 16);
-    this.closeLocal = () -> {
-      try (ownState) {
-        PathUtils.delete(Path.of(accessPath));
-      }
-    };
-    accessFunction = unused -> {
-      Directory dir = new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, ownState);
-      return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
-    };
-    persistentFunction = content -> {
-      assert content == naive;
-      content.close();
-      content = new CompressingDirectory(compressedPath, ownState.ioExec, true, true);
-      return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
-    };
+    this.closeLocal =
+        () -> {
+          try (ownState) {
+            PathUtils.delete(Path.of(accessPath));
+          }
+        };
+    accessFunction =
+        unused -> {
+          Directory dir =
+              new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, ownState);
+          return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
+        };
+    persistentFunction =
+        content -> {
+          assert content == naive;
+          content.close();
+          content = new CompressingDirectory(compressedPath, ownState.ioExec, true, true);
+          return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
+        };
   }
 
-  public TeeDirectory(Directory naive, IOFunction<Void, Map.Entry<String, Directory>> accessFunction, IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction, ExecutorService ioExec) {
+  public TeeDirectory(
+      Directory naive,
+      IOFunction<Void, Map.Entry<String, Directory>> accessFunction,
+      IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction,
+      ExecutorService ioExec) {
     super(TEE_LOCK_FACTORY);
     this.accessFunction = accessFunction;
     this.persistentFunction = persistentFunction;
@@ -95,31 +107,32 @@ public class TeeDirectory extends BaseDirectory {
     }
   }
 
-  private static final LockFactory TEE_LOCK_FACTORY = new LockFactory() {
-    @Override
-    public Lock obtainLock(Directory dir, String lockName) throws IOException {
-      if (!(dir instanceof TeeDirectory)) {
-        throw new IllegalArgumentException();
-      }
-      TeeDirectory teeDir = (TeeDirectory) dir;
-      if (IndexWriter.WRITE_LOCK_NAME.equals(lockName)) {
-        teeDir.init();
-      }
-      Lock primary = teeDir.access.obtainLock(lockName);
-      if (teeDir.persistent == null) {
-        return primary;
-      } else {
-        Lock secondary;
-        try {
-          secondary = teeDir.persistent.obtainLock(lockName);
-        } catch (Exception e) {
-          primary.close();
-          throw e;
+  private static final LockFactory TEE_LOCK_FACTORY =
+      new LockFactory() {
+        @Override
+        public Lock obtainLock(Directory dir, String lockName) throws IOException {
+          if (!(dir instanceof TeeDirectory)) {
+            throw new IllegalArgumentException();
+          }
+          TeeDirectory teeDir = (TeeDirectory) dir;
+          if (IndexWriter.WRITE_LOCK_NAME.equals(lockName)) {
+            teeDir.init();
+          }
+          Lock primary = teeDir.access.obtainLock(lockName);
+          if (teeDir.persistent == null) {
+            return primary;
+          } else {
+            Lock secondary;
+            try {
+              secondary = teeDir.persistent.obtainLock(lockName);
+            } catch (Exception e) {
+              primary.close();
+              throw e;
+            }
+            return new TeeLock(primary, secondary);
+          }
         }
-        return new TeeLock(primary, secondary);
-      }
-    }
-  };
+      };
 
   private static final class TeeLock extends Lock {
 
@@ -176,7 +189,8 @@ public class TeeDirectory extends BaseDirectory {
   public void deleteFile(String name) throws IOException {
     try {
       if (persistent != null && !name.endsWith(".tmp")) {
-        // persistent directory should never have tmp files; skip files with this reserved extension.
+        // persistent directory should never have tmp files; skip files with this reserved
+        // extension.
         persistent.deleteFile(name);
       }
     } finally {
@@ -259,7 +273,8 @@ public class TeeDirectory extends BaseDirectory {
   }
 
   @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
+  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context)
+      throws IOException {
     return access.createTempOutput(prefix, suffix, context);
   }
 
@@ -269,10 +284,12 @@ public class TeeDirectory extends BaseDirectory {
     if (persistent == null) {
       persistentFuture = null;
     } else {
-      persistentFuture = ioExec.submit(() -> {
-        persistent.sync(names);
-        return null;
-      });
+      persistentFuture =
+          ioExec.submit(
+              () -> {
+                persistent.sync(names);
+                return null;
+              });
     }
     boolean success = false;
     try {
@@ -327,7 +344,8 @@ public class TeeDirectory extends BaseDirectory {
   @Override
   @SuppressWarnings("try")
   public void close() throws IOException {
-    try (closeLocal; Closeable a = access) {
+    try (closeLocal;
+        Closeable a = access) {
       if (persistent != null) {
         persistent.close();
       }

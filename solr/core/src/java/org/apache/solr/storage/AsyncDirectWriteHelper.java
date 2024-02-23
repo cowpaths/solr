@@ -1,7 +1,5 @@
 package org.apache.solr.storage;
 
-import org.apache.solr.util.IOFunction;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -15,6 +13,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import org.apache.solr.util.IOFunction;
 
 public class AsyncDirectWriteHelper implements Closeable {
 
@@ -24,7 +23,14 @@ public class AsyncDirectWriteHelper implements Closeable {
   private final boolean useDirectIO;
   private final Struct[] buffers = new Struct[2];
   private final AtomicReference<Future<?>> future = new AtomicReference<>();
-  private enum Status {SYNC, ASYNC, FINISHED, FLUSH_ASYNC}
+
+  private enum Status {
+    SYNC,
+    ASYNC,
+    FINISHED,
+    FLUSH_ASYNC
+  }
+
   private volatile Status status = Status.SYNC;
   private volatile int flushBufferIdx = -1;
   private static final Future<?> CLOSED = new CompletableFuture<>();
@@ -36,12 +42,13 @@ public class AsyncDirectWriteHelper implements Closeable {
     this.blockSize = blockSize;
     this.path = path;
     this.useDirectIO = useDirectIO;
-    Function<ByteBuffer, IOFunction<long[], long[]>> writeFunctionSupplier = (buffer) -> {
-      return (writePos) -> {
-        writePos[0] += channel[0].write(buffer, writePos[0]);
-        return writePos;
-      };
-    };
+    Function<ByteBuffer, IOFunction<long[], long[]>> writeFunctionSupplier =
+        (buffer) -> {
+          return (writePos) -> {
+            writePos[0] += channel[0].write(buffer, writePos[0]);
+            return writePos;
+          };
+        };
     for (int i = 1; i >= 0; i--) {
       buffers[i] = new Struct(blockSize, bufferSize, writeFunctionSupplier);
     }
@@ -90,55 +97,59 @@ public class AsyncDirectWriteHelper implements Closeable {
   }
 
   private Future<?> startWrite(ExecutorService exec) {
-    return exec.submit(() -> {
-      initChannel();
-      IOFunction<long[], long[]> ioFunction = swapConsume();
-      while (status == Status.ASYNC) {
-        ioFunction.apply(writePos);
-        ioFunction = swapConsume();
-      }
-      int adjust;
-      if (consumingBuffer != flushBufferIdx) {
-        // we've broken out of the loop. If we (consumer) were blocking waiting for input on the
-        // final `flushBufferIdx`, then we do nothing. But if we (consumingBuffer idx) is _not_
-        // the final flush buffer, we need to write our output and place our entry back in write
-        // phase to signal the flush thread that it may proceed.
-        ioFunction.apply(writePos);
-        switch (status) {
-          case FINISHED:
-            buffers[consumingBuffer].write.arrive();
-            return null;
-          case FLUSH_ASYNC:
-            status = Status.FINISHED;
+    return exec.submit(
+        () -> {
+          initChannel();
+          IOFunction<long[], long[]> ioFunction = swapConsume();
+          while (status == Status.ASYNC) {
+            ioFunction.apply(writePos);
             ioFunction = swapConsume();
+          }
+          int adjust;
+          if (consumingBuffer != flushBufferIdx) {
+            // we've broken out of the loop. If we (consumer) were blocking waiting for input on the
+            // final `flushBufferIdx`, then we do nothing. But if we (consumingBuffer idx) is _not_
+            // the final flush buffer, we need to write our output and place our entry back in write
+            // phase to signal the flush thread that it may proceed.
+            ioFunction.apply(writePos);
+            switch (status) {
+              case FINISHED:
+                buffers[consumingBuffer].write.arrive();
+                return null;
+              case FLUSH_ASYNC:
+                status = Status.FINISHED;
+                ioFunction = swapConsume();
+                adjust = adjustFinalBuffer(buffers[consumingBuffer].buffer);
+                break;
+              default:
+                throw new IllegalStateException();
+            }
+          } else if (status == Status.FLUSH_ASYNC) {
+            status = Status.FINISHED;
             adjust = adjustFinalBuffer(buffers[consumingBuffer].buffer);
-            break;
-          default:
-            throw new IllegalStateException();
-        }
-      } else if (status == Status.FLUSH_ASYNC) {
-        status = Status.FINISHED;
-        adjust = adjustFinalBuffer(buffers[consumingBuffer].buffer);
-      } else {
-        return null;
-      }
-      if (adjust != -1) {
-        ioFunction.apply(writePos);
-        if (adjust != 0) {
-          channel[0].truncate(writePos[0] - adjust);
-        }
-      }
-      return null;
-    });
+          } else {
+            return null;
+          }
+          if (adjust != -1) {
+            ioFunction.apply(writePos);
+            if (adjust != 0) {
+              channel[0].truncate(writePos[0] - adjust);
+            }
+          }
+          return null;
+        });
   }
 
   private void initChannel() throws IOException {
     if (useDirectIO) {
-      channel[0] = FileChannel.open(
-          path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, CompressingDirectory.getDirectOpenOption());
+      channel[0] =
+          FileChannel.open(
+              path,
+              StandardOpenOption.WRITE,
+              StandardOpenOption.CREATE_NEW,
+              CompressingDirectory.getDirectOpenOption());
     } else {
-      channel[0] = FileChannel.open(
-          path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
+      channel[0] = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
     }
   }
 
@@ -255,7 +266,10 @@ public class AsyncDirectWriteHelper implements Closeable {
     private final Phaser write = new Phaser(2);
     private final IOFunction<long[], long[]> writeFunction;
 
-    private Struct(int blockSize, int bufferSize, Function<ByteBuffer, IOFunction<long[], long[]>> writeFunctionSupplier) {
+    private Struct(
+        int blockSize,
+        int bufferSize,
+        Function<ByteBuffer, IOFunction<long[], long[]>> writeFunctionSupplier) {
       this.buffer = ByteBuffer.allocateDirect(bufferSize + blockSize - 1).alignedSlice(blockSize);
       this.writeFunction = writeFunctionSupplier.apply(this.buffer);
     }

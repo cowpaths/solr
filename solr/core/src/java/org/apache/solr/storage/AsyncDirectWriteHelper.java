@@ -97,6 +97,7 @@ public class AsyncDirectWriteHelper implements Closeable {
   public ByteBuffer write(ByteBuffer populated) throws IOException {
     switch (status) {
       case FINISHED:
+      case FLUSH_ASYNC:
         throw new IllegalStateException();
       case SYNC:
         return syncSwap(populated);
@@ -186,6 +187,7 @@ public class AsyncDirectWriteHelper implements Closeable {
   public void flush(ByteBuffer populated, boolean synchronous) throws IOException {
     switch (status) {
       case FINISHED:
+      case FLUSH_ASYNC:
         throw new IllegalStateException("flushed multiple times");
       case SYNC:
         status = Status.FINISHED;

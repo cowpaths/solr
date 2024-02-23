@@ -252,6 +252,7 @@ public class AccessDirectory extends MMapDirectory {
     }
   }
 
+  @SuppressWarnings("try")
   private LazyEntry open(String name) throws IOException {
     LazyEntry lazyEntry;
     try {
@@ -283,7 +284,7 @@ public class AccessDirectory extends MMapDirectory {
                   lazyMapDiskUsage.add(ret.input.length());
                   lazyMapSize.increment();
                   if (isClosed) {
-                    try (ret.input) {
+                    try (Closeable c = ret.input) {
                       lazyMapDiskUsage.add(-ret.input.length());
                       lazyMapSize.decrement();
                     }

@@ -154,6 +154,7 @@ import org.apache.solr.search.facet.FacetParser;
 import org.apache.solr.search.facet.FacetParserFactory;
 import org.apache.solr.search.stats.LocalStatsCache;
 import org.apache.solr.search.stats.StatsCache;
+import org.apache.solr.servlet.CoordinatorHttpSolrCall;
 import org.apache.solr.update.DefaultSolrCoreState;
 import org.apache.solr.update.DirectUpdateHandler2;
 import org.apache.solr.update.IndexFingerprint;
@@ -1053,7 +1054,9 @@ public class SolrCore implements SolrInfoBean, Closeable {
     return coreContainer;
   }
 
-  SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {
+
+  //TODO was protected. a proper way will likely be creating a SolrCoreProxy class
+  public SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {
     this(coreContainer, cd, configSet, null, null, null, null, false);
   }
 
@@ -1176,7 +1179,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       initSearcher(prev);
 
       // Initialize the RestManager
-      restManager = initRestManager();
+      restManager = isSynthetic() ? new RestManager() : initRestManager();
 
       // Finally tell anyone who wants to know
       resourceLoader.inform(resourceLoader);
@@ -1203,7 +1206,9 @@ public class SolrCore implements SolrInfoBean, Closeable {
       // searcher!
       seedVersionBuckets();
 
-      bufferUpdatesIfConstructing(coreDescriptor);
+      if (!isSynthetic()) {
+        bufferUpdatesIfConstructing(coreDescriptor);
+      }
 
       this.ruleExpiryLock = new ReentrantLock();
       this.snapshotDelLock = new ReentrantLock();
@@ -3094,6 +3099,10 @@ public class SolrCore implements SolrInfoBean, Closeable {
   public void fetchLatestSchema() {
     IndexSchema schema = configSet.getIndexSchema(true);
     setLatestSchema(schema);
+  }
+
+  public final boolean isSynthetic() {
+    return coreDescriptor.getCollectionName() != null && coreDescriptor.getCollectionName().startsWith(CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX);
   }
 
   public interface RawWriter {

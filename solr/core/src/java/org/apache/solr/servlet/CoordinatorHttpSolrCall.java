@@ -89,8 +89,8 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       ZkStateReader zkStateReader = solrCall.cores.getZkController().getZkStateReader();
       ClusterState clusterState = zkStateReader.getClusterState();
       DocCollection coll = clusterState.getCollectionOrNull(collectionName, true);
-      SolrCore core = null;
-      if (coll != null) {
+
+      synchronized (CoordinatorHttpSolrCall.class) {
         String confName = coll.getConfigName();
         String syntheticCollectionName = getSyntheticCollectionName(confName);
 
@@ -113,118 +113,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
 
         //after this point the sync core should be available in the container. Double check
         if (coreContainer.getCore(syntheticCore.getName()) != null) {
-          factory.collectionVsCoreNameMapping.put(collectionName, core.getName());
+          factory.collectionVsCoreNameMapping.put(collectionName, syntheticCore.getName());
           return syntheticCore;
         }
-
-
-        DocCollection syntheticColl = clusterState.getCollectionOrNull(syntheticCollectionName);
-        synchronized (CoordinatorHttpSolrCall.class) {
-          if (syntheticColl == null) {
-            // no synthetic collection for this config, let's create one
-            if (log.isInfoEnabled()) {
-              log.info(
-                  "synthetic collection: {} does not exist, creating.. ", syntheticCollectionName);
-            }
-
-            SolrException createException = null;
-            try {
-              createColl(syntheticCollectionName, solrCall.cores, confName);
-            } catch (SolrException exception) {
-              // concurrent requests could have created the collection hence causing collection
-              // exists
-              // exception
-              createException = exception;
-            } finally {
-              syntheticColl =
-                  zkStateReader.getClusterState().getCollectionOrNull(syntheticCollectionName);
-            }
-
-            // then indeed the collection was not created properly, either by this or other
-            // concurrent
-            // requests
-            if (syntheticColl == null) {
-              if (createException != null) {
-                throw createException; // rethrow the exception since such collection was not
-                // created
-              } else {
-                throw new SolrException(
-                    SolrException.ErrorCode.SERVER_ERROR,
-                    "Could not locate synthetic collection ["
-                        + syntheticCollectionName
-                        + "] after creation!");
-              }
-            }
-          }
-
-          // get docCollection again to ensure we get the fresh state
-          syntheticColl =
-              zkStateReader.getClusterState().getCollectionOrNull(syntheticCollectionName);
-          List<Replica> nodeNameSyntheticReplicas =
-              syntheticColl.getReplicas(solrCall.cores.getZkController().getNodeName());
-          if (nodeNameSyntheticReplicas == null || nodeNameSyntheticReplicas.isEmpty()) {
-            // this node does not have a replica. add one
-            if (log.isInfoEnabled()) {
-              log.info(
-                  "this node does not have a replica of the synthetic collection: {} , adding replica ",
-                  syntheticCollectionName);
-            }
-
-            addReplica(syntheticCollectionName, solrCall.cores);
-          }
-
-          // still have to ensure that it's active, otherwise super.getCoreByCollection
-          // will return null and then CoordinatorHttpSolrCall will call getCore again
-          // hence creating a calling loop
-          try {
-            zkStateReader.waitForState(
-                syntheticCollectionName,
-                10,
-                TimeUnit.SECONDS,
-                docCollection -> {
-                  for (Replica nodeNameSyntheticReplica :
-                      docCollection.getReplicas(solrCall.cores.getZkController().getNodeName())) {
-                    if (nodeNameSyntheticReplica.getState() == Replica.State.ACTIVE) {
-                      return true;
-                    }
-                  }
-                  return false;
-                });
-          } catch (Exception e) {
-            throw new SolrException(
-                SolrException.ErrorCode.SERVER_ERROR,
-                "Failed to wait for active replica for synthetic collection ["
-                    + syntheticCollectionName
-                    + "]",
-                e);
-          }
-        }
-
-        core = solrCall.getCoreByCollection(syntheticCollectionName, isPreferLeader);
-        if (core != null) {
-          factory.collectionVsCoreNameMapping.put(collectionName, core.getName());
-          // for the watcher, only remove on collection deletion (ie collection == null), since
-          // watch from coordinator is collection specific
-          solrCall
-              .cores
-              .getZkController()
-              .getZkStateReader()
-              .registerDocCollectionWatcher(
-                  collectionName,
-                  collection -> {
-                    if (collection == null) {
-                      factory.collectionVsCoreNameMapping.remove(collectionName);
-                      return true;
-                    } else {
-                      return false;
-                    }
-                  });
-          if (log.isDebugEnabled()) {
-            log.debug("coordinator node, returns synthetic core: {}", core.getName());
-          }
-        }
-        setMDCLoggingContext(collectionName);
-        return core;
       }
       return null;
     }
@@ -308,7 +199,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
   public static SolrQueryRequest wrappedReq(
       SolrQueryRequest delegate, String collectionName, HttpSolrCall httpSolrCall) {
     Properties p = new Properties();
-    p.put(CoreDescriptor.CORE_COLLECTION, collectionName);
+    if (collectionName != null) {
+      p.put(CoreDescriptor.CORE_COLLECTION, collectionName);
+    }
     p.put(CloudDescriptor.REPLICA_TYPE, Replica.Type.PULL.toString());
     p.put(CoreDescriptor.CORE_SHARD, "_");
 

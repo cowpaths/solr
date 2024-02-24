@@ -244,15 +244,19 @@ public abstract class ConfigSetService {
     return (flags == null || flags.get("trusted") == null || flags.getBooleanArg("trusted"));
   }
 
+  public final ConfigSet loadConfigSet(CoreDescriptor dcore) {
+    return loadConfigSet(dcore, null);
+  }
+
   /**
    * Load the ConfigSet for a core
    *
    * @param dcore the core's CoreDescriptor
    * @return a ConfigSet
    */
-  public final ConfigSet loadConfigSet(CoreDescriptor dcore) {
+  public final ConfigSet loadConfigSet(CoreDescriptor dcore, String configSetName) {
 
-    SolrResourceLoader coreLoader = createCoreResourceLoader(dcore);
+    SolrResourceLoader coreLoader = configSetName != null ? createConfigSetResourceLoader(dcore, configSetName) : createCoreResourceLoader(dcore);
 
     try {
       // ConfigSet properties are loaded from ConfigSetProperties.DEFAULT_FILENAME file.
@@ -391,6 +395,9 @@ public abstract class ConfigSetService {
    */
   protected abstract SolrResourceLoader createCoreResourceLoader(CoreDescriptor cd);
 
+  protected SolrResourceLoader createConfigSetResourceLoader(CoreDescriptor cd, String configSetName) {
+    throw new UnsupportedOperationException("Not supported");
+  }
   /**
    * Return a name for the ConfigSet for a core to be used for printing/diagnostic purposes.
    *

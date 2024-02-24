@@ -39,6 +39,7 @@ import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.core.ConfigSet;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.SolrCore;
@@ -103,7 +104,12 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
                 Paths.get(coreContainer.getSolrHome() + "/" + collectionName),
                 coreProps, coreContainer.getContainerProperties(), coreContainer.getZkController());
 
-        SolrCore syntheticCore = coreContainer.createFromDescriptor(syntheticCoreDescriptor, false, false);
+
+        ConfigSet coreConfig = coreContainer.getConfigSetService().loadConfigSet(syntheticCoreDescriptor, confName);
+        syntheticCoreDescriptor.setConfigSetTrusted(coreConfig.isTrusted());
+        SolrCore syntheticCore = new SolrCore(coreContainer, syntheticCoreDescriptor, coreConfig);
+
+        coreContainer.registerCore(syntheticCoreDescriptor, syntheticCore, false, false);
 
         //after this point the sync core should be available in the container. Double check
         if (coreContainer.getCore(syntheticCore.getName()) != null) {

@@ -18,6 +18,8 @@
 package org.apache.solr.servlet;
 
 import java.lang.invoke.MethodHandles;
+import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -34,6 +36,7 @@ import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.CoreContainer;
@@ -89,6 +92,25 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       if (coll != null) {
         String confName = coll.getConfigName();
         String syntheticCollectionName = getSyntheticCollectionName(confName);
+
+        CoreContainer coreContainer = solrCall.cores;
+        Map<String, String> coreProps = new HashMap<>();
+        coreProps.put(CoreAdminParams.CORE_NODE_NAME, coreContainer.getHostName());
+        coreProps.put(CoreAdminParams.COLLECTION, syntheticCollectionName);
+
+        CoreDescriptor syntheticCoreDescriptor = new CoreDescriptor(
+                collectionName,
+                Paths.get(coreContainer.getSolrHome() + "/" + collectionName),
+                coreProps, coreContainer.getContainerProperties(), coreContainer.getZkController());
+
+        SolrCore syntheticCore = coreContainer.createFromDescriptor(syntheticCoreDescriptor, false, false);
+
+        //after this point the sync core should be available in the container. Double check
+        if (coreContainer.getCore(syntheticCore.getName()) != null) {
+          factory.collectionVsCoreNameMapping.put(collectionName, core.getName());
+          return syntheticCore;
+        }
+
 
         DocCollection syntheticColl = clusterState.getCollectionOrNull(syntheticCollectionName);
         synchronized (CoordinatorHttpSolrCall.class) {

@@ -26,26 +26,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.apache.solr.api.CoordinatorV2HttpSolrCall;
-import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.cloud.api.collections.Assign;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CoreAdminParams;
-import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.ConfigSet;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.request.DelegatingSolrQueryRequest;
-import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.response.SolrQueryResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,9 +73,7 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       Factory factory, HttpSolrCall solrCall, String collectionName, boolean isPreferLeader) {
     String syntheticCoreName = factory.collectionVsCoreNameMapping.get(collectionName);
     if (syntheticCoreName != null) {
-      SolrCore syntheticCore = solrCall.cores.getCore(syntheticCoreName);
-      setMDCLoggingContext(collectionName);
-      return syntheticCore;
+      return solrCall.cores.getCore(syntheticCoreName);
     } else {
       ZkStateReader zkStateReader = solrCall.cores.getZkController().getZkStateReader();
       ClusterState clusterState = zkStateReader.getClusterState();
@@ -115,6 +106,26 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         // after this point the sync core should be available in the container. Double check
         if (coreContainer.getCore(syntheticCore.getName()) != null) {
           factory.collectionVsCoreNameMapping.put(collectionName, syntheticCore.getName());
+
+          // for the watcher, only remove on collection deletion (ie collection == null), since
+          // watch from coordinator is collection specific
+          solrCall
+              .cores
+              .getZkController()
+              .getZkStateReader()
+              .registerDocCollectionWatcher(
+                  collectionName,
+                  collection -> {
+                    if (collection == null) {
+                      factory.collectionVsCoreNameMapping.remove(collectionName);
+                      return true;
+                    } else {
+                      return false;
+                    }
+                  });
+          if (log.isDebugEnabled()) {
+            log.debug("coordinator node, returns synthetic core: {}", syntheticCore.getName());
+          }
           return syntheticCore;
         }
       }
@@ -124,69 +135,6 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
 
   public static String getSyntheticCollectionName(String configName) {
     return SYNTHETIC_COLL_PREFIX + configName;
-  }
-
-  /**
-   * Overrides the MDC context as the core set was synthetic core, which does not reflect the
-   * collection being operated on
-   */
-  private static void setMDCLoggingContext(String collectionName) {
-    MDCLoggingContext.setCollection(collectionName);
-
-    // below is irrelevant for call to coordinator
-    MDCLoggingContext.setCoreName(null);
-    MDCLoggingContext.setShard(null);
-    MDCLoggingContext.setCoreName(null);
-  }
-
-  private static void addReplica(String syntheticCollectionName, CoreContainer cores) {
-    SolrQueryResponse rsp = new SolrQueryResponse();
-    try {
-      CollectionAdminRequest.AddReplica addReplicaRequest =
-          CollectionAdminRequest.addReplicaToShard(syntheticCollectionName, "shard1")
-              // we are fixing the name, so that no two replicas are created in the same node
-              .setNode(cores.getZkController().getNodeName());
-      addReplicaRequest.setWaitForFinalState(true);
-      cores
-          .getCollectionsHandler()
-          .handleRequestBody(new LocalSolrQueryRequest(null, addReplicaRequest.getParams()), rsp);
-      if (rsp.getValues().get("success") == null) {
-        throw new SolrException(
-            SolrException.ErrorCode.SERVER_ERROR,
-            "Could not auto-create collection: " + Utils.toJSONString(rsp.getValues()));
-      }
-    } catch (Exception e) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
-    }
-  }
-
-  private static void createColl(
-      String syntheticCollectionName, CoreContainer cores, String confName) {
-    SolrQueryResponse rsp = new SolrQueryResponse();
-    try {
-      CollectionAdminRequest.Create collCreationRequest =
-          CollectionAdminRequest.createCollection(syntheticCollectionName, confName, 1, 1)
-              .setCreateNodeSet(cores.getZkController().getNodeName());
-      collCreationRequest.setWaitForFinalState(true);
-      SolrParams params = collCreationRequest.getParams();
-      if (log.isInfoEnabled()) {
-        log.info("sending collection admin command : {}", Utils.toJSONString(params));
-      }
-      cores.getCollectionsHandler().handleRequestBody(new LocalSolrQueryRequest(null, params), rsp);
-      if (rsp.getValues().get("success") == null) {
-        throw new SolrException(
-            SolrException.ErrorCode.SERVER_ERROR,
-            "Could not create :"
-                + syntheticCollectionName
-                + " collection: "
-                + Utils.toJSONString(rsp.getValues()));
-      }
-    } catch (SolrException e) {
-      throw e;
-
-    } catch (Exception e) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
-    }
   }
 
   @Override

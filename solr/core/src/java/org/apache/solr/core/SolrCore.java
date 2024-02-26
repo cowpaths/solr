@@ -1054,8 +1054,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
     return coreContainer;
   }
 
-
-  //TODO was protected. a proper way will likely be creating a SolrCoreProxy class
+  // TODO was protected. a proper way will likely be creating a SolrCoreProxy class
   public SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {
     this(coreContainer, cd, configSet, null, null, null, null, false);
   }
@@ -3102,7 +3101,10 @@ public class SolrCore implements SolrInfoBean, Closeable {
   }
 
   public final boolean isSynthetic() {
-    return coreDescriptor.getCollectionName() != null && coreDescriptor.getCollectionName().startsWith(CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX);
+    return coreDescriptor.getCollectionName() != null
+        && coreDescriptor
+            .getCollectionName()
+            .startsWith(CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX);
   }
 
   public interface RawWriter {

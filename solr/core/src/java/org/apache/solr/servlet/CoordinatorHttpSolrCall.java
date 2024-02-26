@@ -20,11 +20,9 @@ package org.apache.solr.servlet;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.apache.solr.api.CoordinatorV2HttpSolrCall;
@@ -99,19 +97,22 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         coreProps.put(CoreAdminParams.CORE_NODE_NAME, coreContainer.getHostName());
         coreProps.put(CoreAdminParams.COLLECTION, syntheticCollectionName);
 
-        CoreDescriptor syntheticCoreDescriptor = new CoreDescriptor(
+        CoreDescriptor syntheticCoreDescriptor =
+            new CoreDescriptor(
                 collectionName,
                 Paths.get(coreContainer.getSolrHome() + "/" + collectionName),
-                coreProps, coreContainer.getContainerProperties(), coreContainer.getZkController());
+                coreProps,
+                coreContainer.getContainerProperties(),
+                coreContainer.getZkController());
 
-
-        ConfigSet coreConfig = coreContainer.getConfigSetService().loadConfigSet(syntheticCoreDescriptor, confName);
+        ConfigSet coreConfig =
+            coreContainer.getConfigSetService().loadConfigSet(syntheticCoreDescriptor, confName);
         syntheticCoreDescriptor.setConfigSetTrusted(coreConfig.isTrusted());
         SolrCore syntheticCore = new SolrCore(coreContainer, syntheticCoreDescriptor, coreConfig);
 
         coreContainer.registerCore(syntheticCoreDescriptor, syntheticCore, false, false);
 
-        //after this point the sync core should be available in the container. Double check
+        // after this point the sync core should be available in the container. Double check
         if (coreContainer.getCore(syntheticCore.getName()) != null) {
           factory.collectionVsCoreNameMapping.put(collectionName, syntheticCore.getName());
           return syntheticCore;

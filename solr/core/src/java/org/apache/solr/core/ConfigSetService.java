@@ -256,7 +256,10 @@ public abstract class ConfigSetService {
    */
   public final ConfigSet loadConfigSet(CoreDescriptor dcore, String configSetName) {
 
-    SolrResourceLoader coreLoader = configSetName != null ? createConfigSetResourceLoader(dcore, configSetName) : createCoreResourceLoader(dcore);
+    SolrResourceLoader coreLoader =
+        configSetName != null
+            ? createConfigSetResourceLoader(dcore, configSetName)
+            : createCoreResourceLoader(dcore);
 
     try {
       // ConfigSet properties are loaded from ConfigSetProperties.DEFAULT_FILENAME file.
@@ -395,7 +398,8 @@ public abstract class ConfigSetService {
    */
   protected abstract SolrResourceLoader createCoreResourceLoader(CoreDescriptor cd);
 
-  protected SolrResourceLoader createConfigSetResourceLoader(CoreDescriptor cd, String configSetName) {
+  protected SolrResourceLoader createConfigSetResourceLoader(
+      CoreDescriptor cd, String configSetName) {
     throw new UnsupportedOperationException("Not supported");
   }
   /**

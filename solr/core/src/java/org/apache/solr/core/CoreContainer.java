@@ -1433,7 +1433,7 @@ public class CoreContainer {
     return coresLocator;
   }
 
-  //TODO was protected, should go with new class approach
+  // TODO was protected, should go with new class approach
   public SolrCore registerCore(
       CoreDescriptor cd, SolrCore core, boolean registerInZk, boolean skipRecovery) {
     if (core == null) {

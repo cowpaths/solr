@@ -1433,8 +1433,7 @@ public class CoreContainer {
     return coresLocator;
   }
 
-  // TODO was protected, should go with new class approach
-  public SolrCore registerCore(
+  protected SolrCore registerCore(
       CoreDescriptor cd, SolrCore core, boolean registerInZk, boolean skipRecovery) {
     if (core == null) {
       throw new RuntimeException("Can not register a null core.");

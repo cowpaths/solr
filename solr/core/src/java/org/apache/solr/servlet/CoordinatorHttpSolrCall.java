@@ -18,8 +18,6 @@
 package org.apache.solr.servlet;
 
 import java.lang.invoke.MethodHandles;
-import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,11 +30,10 @@ import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.ZkStateReader;
-import org.apache.solr.common.params.CoreAdminParams;
-import org.apache.solr.core.ConfigSet;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.core.SolrCoreProxy;
 import org.apache.solr.request.DelegatingSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.slf4j.Logger;
@@ -79,29 +76,20 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       ClusterState clusterState = zkStateReader.getClusterState();
       DocCollection coll = clusterState.getCollectionOrNull(collectionName, true);
 
+      if (coll == null) { // querying on a non-existent collection, it could have been removed
+        log.info(
+            "Cannot find collection {} to proxy call to, it could have been deleted",
+            collectionName);
+        return null;
+      }
       synchronized (CoordinatorHttpSolrCall.class) {
         String confName = coll.getConfigName();
         String syntheticCollectionName = getSyntheticCollectionName(confName);
 
         CoreContainer coreContainer = solrCall.cores;
-        Map<String, String> coreProps = new HashMap<>();
-        coreProps.put(CoreAdminParams.CORE_NODE_NAME, coreContainer.getHostName());
-        coreProps.put(CoreAdminParams.COLLECTION, syntheticCollectionName);
-
-        CoreDescriptor syntheticCoreDescriptor =
-            new CoreDescriptor(
-                collectionName,
-                Paths.get(coreContainer.getSolrHome() + "/" + collectionName),
-                coreProps,
-                coreContainer.getContainerProperties(),
-                coreContainer.getZkController());
-
-        ConfigSet coreConfig =
-            coreContainer.getConfigSetService().loadConfigSet(syntheticCoreDescriptor, confName);
-        syntheticCoreDescriptor.setConfigSetTrusted(coreConfig.isTrusted());
-        SolrCore syntheticCore = new SolrCore(coreContainer, syntheticCoreDescriptor, coreConfig);
-
-        coreContainer.registerCore(syntheticCoreDescriptor, syntheticCore, false, false);
+        SolrCoreProxy syntheticCore =
+            SolrCoreProxy.createAndRegisterProxy(
+                coreContainer, syntheticCollectionName, coll.getConfigName(), collectionName);
 
         // after this point the sync core should be available in the container. Double check
         if (coreContainer.getCore(syntheticCore.getName()) != null) {

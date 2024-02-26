@@ -532,7 +532,7 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
       // ensure querying throws exception
       assertExceptionThrownWithMessageContaining(
           SolrException.class,
-          List.of("Could not find collection"),
+          List.of("Collection not found"),
           () ->
               new QueryRequest(new SolrQuery("*:*"))
                   .setPreferredNodes(List.of(coordinatorJetty.getNodeName()))

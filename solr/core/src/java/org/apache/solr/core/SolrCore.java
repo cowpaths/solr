@@ -154,7 +154,6 @@ import org.apache.solr.search.facet.FacetParser;
 import org.apache.solr.search.facet.FacetParserFactory;
 import org.apache.solr.search.stats.LocalStatsCache;
 import org.apache.solr.search.stats.StatsCache;
-import org.apache.solr.servlet.CoordinatorHttpSolrCall;
 import org.apache.solr.update.DefaultSolrCoreState;
 import org.apache.solr.update.DirectUpdateHandler2;
 import org.apache.solr.update.IndexFingerprint;
@@ -207,6 +206,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
   private static final Logger slowLog =
       LoggerFactory.getLogger(
           MethodHandles.lookup().lookupClass().getName() + ".SlowRequest"); // nowarn
+  private final boolean isSynthetic;
 
   private String name;
 
@@ -792,7 +792,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
                 updateHandler,
                 solrDelPolicy,
                 currentCore,
-                true);
+                true,
+                isSynthetic);
 
         // we open a new IndexWriter to pick up the latest config
         core.getUpdateHandler().getSolrCoreState().newIndexWriter(core, false);
@@ -1054,9 +1055,13 @@ public class SolrCore implements SolrInfoBean, Closeable {
     return coreContainer;
   }
 
-  // TODO was protected. a proper way will likely be creating a SolrCoreProxy class
-  public SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {
-    this(coreContainer, cd, configSet, null, null, null, null, false);
+  protected SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {
+    this(coreContainer, cd, configSet, false);
+  }
+
+  protected SolrCore(
+      CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet, boolean isSynthetic) {
+    this(coreContainer, cd, configSet, null, null, null, null, false, isSynthetic);
   }
 
   private SolrCore(
@@ -1067,7 +1072,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
       UpdateHandler updateHandler,
       IndexDeletionPolicyWrapper delPolicy,
       SolrCore prev,
-      boolean reload) {
+      boolean reload,
+      boolean isSynthetic) {
 
     // ensure that in unclean shutdown tests we still close this
     assert ObjectReleaseTracker.track(searcherExecutor);
@@ -1177,8 +1183,10 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
       initSearcher(prev);
 
+      this.isSynthetic = isSynthetic;
+
       // Initialize the RestManager
-      restManager = isSynthetic() ? new RestManager() : initRestManager();
+      restManager = isSynthetic ? new RestManager() : initRestManager();
 
       // Finally tell anyone who wants to know
       resourceLoader.inform(resourceLoader);
@@ -1205,7 +1213,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       // searcher!
       seedVersionBuckets();
 
-      if (!isSynthetic()) {
+      if (!isSynthetic) {
         bufferUpdatesIfConstructing(coreDescriptor);
       }
 
@@ -3098,13 +3106,6 @@ public class SolrCore implements SolrInfoBean, Closeable {
   public void fetchLatestSchema() {
     IndexSchema schema = configSet.getIndexSchema(true);
     setLatestSchema(schema);
-  }
-
-  public final boolean isSynthetic() {
-    return coreDescriptor.getCollectionName() != null
-        && coreDescriptor
-            .getCollectionName()
-            .startsWith(CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX);
   }
 
   public interface RawWriter {

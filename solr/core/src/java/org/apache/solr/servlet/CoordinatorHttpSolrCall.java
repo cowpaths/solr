@@ -89,7 +89,7 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         CoreContainer coreContainer = solrCall.cores;
         SolrCoreProxy syntheticCore =
             SolrCoreProxy.createAndRegisterProxy(
-                coreContainer, syntheticCollectionName, coll.getConfigName(), collectionName);
+                coreContainer, syntheticCollectionName, coll.getConfigName());
 
         // after this point the sync core should be available in the container. Double check
         if (coreContainer.getCore(syntheticCore.getName()) != null) {

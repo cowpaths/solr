@@ -11,10 +11,7 @@ public class SolrCoreProxy extends SolrCore {
   }
 
   public static SolrCoreProxy createAndRegisterProxy(
-      CoreContainer coreContainer,
-      String syntheticCollectionName,
-      String configSetName,
-      String todo) {
+      CoreContainer coreContainer, String syntheticCollectionName, String configSetName) {
     Map<String, String> coreProps = new HashMap<>();
     coreProps.put(CoreAdminParams.CORE_NODE_NAME, coreContainer.getHostName());
     coreProps.put(CoreAdminParams.COLLECTION, syntheticCollectionName);
@@ -22,9 +19,7 @@ public class SolrCoreProxy extends SolrCore {
     CoreDescriptor syntheticCoreDescriptor =
         new CoreDescriptor(
             syntheticCollectionName,
-            //                    todo,
             Paths.get(coreContainer.getSolrHome() + "/" + syntheticCollectionName),
-            //                    Paths.get(coreContainer.getSolrHome() + "/" + todo),
             coreProps,
             coreContainer.getContainerProperties(),
             coreContainer.getZkController());

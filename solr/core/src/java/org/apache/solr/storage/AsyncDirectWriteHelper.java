@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -79,7 +80,7 @@ public class AsyncDirectWriteHelper implements Closeable {
 
   private ByteBuffer syncSwap(ByteBuffer populated) throws IOException {
     Struct sync = buffers[populatingBuffer];
-    assert sync.buffer == populated;
+    assert Objects.equals(sync.buffer, populated);
     sync.writeFunction.apply(writePos);
     return populated.clear();
   }
@@ -106,7 +107,7 @@ public class AsyncDirectWriteHelper implements Closeable {
     }
     Struct releasing = buffers[populatingBuffer];
     Struct acquiring = buffers[populatingBuffer ^= 1];
-    assert releasing.buffer == populated;
+    assert Objects.equals(releasing.buffer, populated);
     // mark previous buffer as ready to be read from
     releasing.read.arrive();
     // block on reaching the write phase for the new buffer
@@ -205,7 +206,7 @@ public class AsyncDirectWriteHelper implements Closeable {
         break; // proceed
     }
     Struct last = buffers[populatingBuffer];
-    assert last.buffer == populated;
+    assert Objects.equals(last.buffer, populated);
     // first mark status as finished so that write thread may exit
     // mark the final buffer has ready to have its content read. The only practical reason
     // we must do this here is to unblock the write thread if it's waiting on this condition

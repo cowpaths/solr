@@ -420,6 +420,7 @@ public class AccessDirectory extends MMapDirectory {
       }
     }
 
+    @Override
     public Integer call() throws IOException {
       LazyLoadInput in = this.in;
       if (in == null) {

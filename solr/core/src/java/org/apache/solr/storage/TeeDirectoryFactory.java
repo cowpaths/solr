@@ -239,11 +239,22 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     useAsyncIO = params.getBool("useAsyncIO", useDirectIO);
   }
 
-  static String getCoreName(String path) {
-    assert path.endsWith("/index");
-    int end = path.lastIndexOf('/', path.length() - "/index".length() - 1);
+  static String getScopeName(String path) {
+    int lastPathDelimIdx = path.lastIndexOf('/');
+    if (lastPathDelimIdx == -1) {
+      throw new IllegalArgumentException("unexpected path: " + path);
+    }
+    String dirName = path.substring(path.lastIndexOf('/'));
+    int end = path.lastIndexOf('/', lastPathDelimIdx - 1);
     int start = path.lastIndexOf('/', end - 1);
-    return path.substring(start, end);
+    if ("/index".equals(dirName)) {
+      return path.substring(start, end);
+    } else if (dirName.startsWith("/index.")) {
+      // append the suffix identifier; this is a snapshot or temp index dir
+      return path.substring(start, end).concat(dirName.substring("/index".length()));
+    } else {
+      throw new IllegalArgumentException("unexpected path: " + path);
+    }
   }
 
   @Override
@@ -253,7 +264,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     Path compressedPath = Path.of(path);
     IOFunction<Void, Map.Entry<String, Directory>> accessFunction =
         unused -> {
-          String accessPath = accessDir.concat(getCoreName(path));
+          String accessPath = accessDir.concat(getScopeName(path));
           Directory dir =
               new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, nodeLevelState);
           return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);

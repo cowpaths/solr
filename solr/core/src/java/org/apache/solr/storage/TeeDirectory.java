@@ -69,7 +69,7 @@ public class TeeDirectory extends BaseDirectory {
     String pathS = path.toString();
     String scope =
         pathS.endsWith("/index")
-            ? TeeDirectoryFactory.getCoreName(pathS)
+            ? TeeDirectoryFactory.getScopeName(pathS)
             : pathS.substring(pathS.lastIndexOf('/'));
     String accessPath = accessDir + scope + "-" + Long.toUnsignedString(System.nanoTime(), 16);
     this.closeLocal =

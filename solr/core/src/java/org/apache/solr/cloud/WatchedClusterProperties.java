@@ -40,7 +40,7 @@ public class WatchedClusterProperties implements ClusterPropertiesListener {
 
     newData =
         ((Map<String, Map<String, String>>)
-                properties.getOrDefault(WATCHED_PROPERTIES, Collections.EMPTY_MAP))
+                properties.getOrDefault(WATCHED_NODE_PROPERTIES, Collections.EMPTY_MAP))
             .getOrDefault(nodeName, Collections.EMPTY_MAP);
     modified = compareAndInvokeListeners(newData, knownNodeData, nodePropertiesListeners);
     if (modified != null) knownNodeData = modified;

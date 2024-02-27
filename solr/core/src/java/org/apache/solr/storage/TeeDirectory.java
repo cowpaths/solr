@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -42,6 +43,7 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.Lock;
 import org.apache.lucene.store.LockFactory;
 import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.util.IOUtils;
 import org.apache.solr.util.IOFunction;
 
 public class TeeDirectory extends BaseDirectory {
@@ -163,19 +165,29 @@ public class TeeDirectory extends BaseDirectory {
 
     @Override
     public void close() throws IOException {
-      try {
+      try (primary) {
         secondary.close();
-      } finally {
-        primary.close();
       }
     }
 
     @Override
     public void ensureValid() throws IOException {
+      Throwable th = null;
       try {
         secondary.ensureValid();
+      } catch (Throwable t) {
+        th = t;
       } finally {
-        primary.ensureValid();
+        if (th == null) {
+          try {
+            primary.ensureValid();
+          } catch (Throwable t) {
+            th = t;
+          }
+        }
+      }
+      if (th != null) {
+        throw IOUtils.rethrowAlways(th);
       }
     }
   }
@@ -183,12 +195,7 @@ public class TeeDirectory extends BaseDirectory {
   public void removeAssociated() throws IOException {
     synchronized (persistentFunction) {
       if (associatedPaths != null) {
-        for (String path : associatedPaths) {
-          Path dirPath = Path.of(path);
-          if (dirPath.toFile().exists()) {
-            PathUtils.deleteDirectory(dirPath);
-          }
-        }
+        IOUtils.rm(associatedPaths.stream().map(Path::of).toArray(Path[]::new));
       }
     }
   }
@@ -204,12 +211,15 @@ public class TeeDirectory extends BaseDirectory {
 
   @Override
   public void deleteFile(String name) throws IOException {
+    Throwable th = null;
     try {
       if (persistent != null && !name.endsWith(".tmp")) {
         // persistent directory should never have tmp files; skip files with this reserved
         // extension.
         persistent.deleteFile(name);
       }
+    } catch (Throwable t) {
+      th = t;
     } finally {
       try {
         access.deleteFile(name);
@@ -217,9 +227,14 @@ public class TeeDirectory extends BaseDirectory {
         // when `persistent != null`, `access` is a special case. Since access may be on ephemeral
         // storage, we should be ok with files being already absent if we're asked to delete them.
         if (persistent == null) {
-          throw ex;
+          th = IOUtils.useOrSuppress(th, ex);
         }
+      } catch (Throwable t) {
+        th = IOUtils.useOrSuppress(th, t);
       }
+    }
+    if (th != null) {
+      throw IOUtils.rethrowAlways(th);
     }
   }
 
@@ -229,6 +244,7 @@ public class TeeDirectory extends BaseDirectory {
   }
 
   @Override
+  @SuppressWarnings("try")
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
     if (name.startsWith("pending_segments_")) {
       init();
@@ -236,13 +252,30 @@ public class TeeDirectory extends BaseDirectory {
     if (persistent == null) {
       return access.createOutput(name, context);
     }
-    IndexOutput a;
-    IndexOutput b;
+    IndexOutput a = null;
+    IndexOutput b = null;
+    Throwable th = null;
     try {
       b = persistent.createOutput(name, context);
+    } catch (Throwable t) {
+      th = t;
     } finally {
-      a = access.createOutput(name, context);
+      if (b != null) {
+        try {
+          a = access.createOutput(name, context);
+        } catch (Throwable t) {
+          try (IndexOutput closeB = b) {
+            th = IOUtils.useOrSuppress(th, t);
+          } catch (Throwable t1) {
+            th = IOUtils.useOrSuppress(th, t1);
+          }
+        }
+      }
     }
+    if (th != null) {
+      throw IOUtils.rethrowAlways(th);
+    }
+    assert a != null;
     return new TeeIndexOutput(a, b);
   }
 
@@ -308,48 +341,91 @@ public class TeeDirectory extends BaseDirectory {
                 return null;
               });
     }
-    boolean success = false;
+    Throwable th = null;
     try {
       access.sync(names);
-      success = true;
+    } catch (Throwable t) {
+      th = t;
     } finally {
       if (persistentFuture != null) {
-        if (success || !persistentFuture.cancel(true)) {
+        if (th == null || !persistentFuture.cancel(true)) {
           try {
             persistentFuture.get();
           } catch (InterruptedException e) {
+            // we don't throw InterruptedException, so at least we should reset the
+            // current thread's interrupt status
             Thread.currentThread().interrupt();
-          } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof IOException) {
-              throw (IOException) cause;
+            if (th == null) {
+              // make sure this completes exceptionally, but don't add it as
+              // a cause, because we've re-interrupted the thread
+              th = new RuntimeException("interrupted");
             }
-            throw new RuntimeException(e);
+            th.addSuppressed(e);
+          } catch (CancellationException e) {
+            assert th != null;
+            // we are the only ones who could have cancelled this
+          } catch (ExecutionException e) {
+            th = IOUtils.useOrSuppress(th, e.getCause());
+          } catch (Throwable t) {
+            th = IOUtils.useOrSuppress(th, t);
           }
         }
       }
+    }
+    if (th != null) {
+      throw IOUtils.rethrowAlways(th);
     }
   }
 
   @Override
   public void syncMetaData() throws IOException {
+    Throwable th = null;
     try {
       if (persistent != null) {
         persistent.syncMetaData();
       }
+    } catch (Throwable t) {
+      th = t;
     } finally {
-      access.syncMetaData();
+      try {
+        access.syncMetaData();
+      } catch (Throwable t) {
+        th = IOUtils.useOrSuppress(th, t);
+      }
+    }
+    if (th != null) {
+      throw IOUtils.rethrowAlways(th);
     }
   }
 
   @Override
   public void rename(String source, String dest) throws IOException {
+    Throwable th = null;
     try {
       if (persistent != null) {
         persistent.rename(source, dest);
       }
+    } catch (Throwable t) {
+      th = t;
     } finally {
-      access.rename(source, dest);
+      if (th != null) {
+        try {
+          access.rename(source, dest);
+        } catch (Throwable t) {
+          th = t;
+          if (persistent != null) {
+            try {
+              // best-effort to put it back, so the operation is atomic across both dirs
+              persistent.rename(dest, source);
+            } catch (Throwable t1) {
+              th = IOUtils.useOrSuppress(th, t1);
+            }
+          }
+        }
+      }
+    }
+    if (th != null) {
+      throw IOUtils.rethrowAlways(th);
     }
   }
 
@@ -367,7 +443,7 @@ public class TeeDirectory extends BaseDirectory {
         persistent.close();
       }
     } catch (Exception e) {
-      throw new RuntimeException(e);
+      throw IOUtils.rethrowAlways(e);
     }
   }
 

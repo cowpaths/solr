@@ -29,6 +29,24 @@ import org.junit.Test;
 public class TeeDirectoryTest extends SolrTestCase {
 
   @Test
+  public void testIsLazyTmpFile() {
+    String[] lazyTmp =
+        new String[] {
+          "_lazy_123.tmp", "_lazy_1.tmp", "_lazy_123abcdefghijklmnopqrstuvwxyz0456789.tmp"
+        };
+    String[] notLazyTmp =
+        new String[] {"", "a", "lazy_123.tmp", "_lazy_.tmp", "_lazy_Q.tmp", "_lazy_123.tmpp"};
+    for (String s : lazyTmp) {
+      assertTrue(AccessDirectory.isLazyTmpFile(s));
+      assertTrue(AccessDirectory.isLazyTmpFile("prefix".concat(s)));
+    }
+    for (String s : notLazyTmp) {
+      assertFalse(AccessDirectory.isLazyTmpFile(s));
+      assertFalse(AccessDirectory.isLazyTmpFile("prefix".concat(s)));
+    }
+  }
+
+  @Test
   public void testSortAndMergeArrays() {
     Random r = random();
     Set<String> a = new HashSet<>();
@@ -40,7 +58,11 @@ public class TeeDirectoryTest extends SolrTestCase {
       sorted.clear();
       for (int j = r.nextInt(14); j > 0; j--) {
         String s = Character.toString('a' + r.nextInt(26));
-        sorted.add(s);
+        if (r.nextInt(10) == 0) {
+          s = s.concat("_lazy_1.tmp");
+        } else {
+          sorted.add(s);
+        }
         a.add(s);
       }
       for (int j = r.nextInt(14); j > 0; j--) {

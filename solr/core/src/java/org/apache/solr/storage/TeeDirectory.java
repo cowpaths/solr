@@ -17,6 +17,8 @@
 
 package org.apache.solr.storage;
 
+import static org.apache.solr.storage.AccessDirectory.isLazyTmpFile;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
@@ -207,18 +209,42 @@ public class TeeDirectory extends BaseDirectory {
     if (persistent == null) {
       return accessFiles;
     } else {
+      // in the common case, the access directory will contain all the files. Notably,
+      // temp files will _only_ be present in the access dir. But during initial startup,
+      // there may be files present in `persistent` that are not present in `access`
       return sortAndMergeArrays(accessFiles, persistent.listAll());
     }
   }
 
+  /**
+   * Merges filenames (deduping) from access and persistent copies, skipping any lazy tmp files that
+   * exist in the access copy.
+   */
   static String[] sortAndMergeArrays(String[] accessFiles, String[] persistentFiles) {
-    final int persistentLen = persistentFiles.length;
-    if (persistentLen == 0) {
-      return accessFiles;
-    }
     final int accessLen = accessFiles.length;
     if (accessLen == 0) {
       return persistentFiles;
+    }
+    final int persistentLen = persistentFiles.length;
+    if (persistentLen == 0) {
+      int prunedIdx = 0;
+      for (int i = 0; i < accessLen; i++) {
+        String name = accessFiles[i];
+        if (isLazyTmpFile(name)) {
+          continue;
+        }
+        if (prunedIdx != i) {
+          accessFiles[prunedIdx] = name;
+        }
+        prunedIdx++;
+      }
+      if (prunedIdx == accessLen) {
+        return accessFiles;
+      } else {
+        String[] ret = new String[prunedIdx];
+        System.arraycopy(accessFiles, 0, ret, 0, prunedIdx);
+        return ret;
+      }
     }
     Arrays.sort(accessFiles);
     Arrays.sort(persistentFiles);
@@ -229,6 +255,14 @@ public class TeeDirectory extends BaseDirectory {
     int headUpTo = 0;
     for (int i = 0; i < accessLen; i++) {
       String file = accessFiles[i];
+      if (isLazyTmpFile(file)) {
+        // skip lazy temp files
+        if (tailFiles == null) {
+          tailFiles = new String[accessLen - i + persistentLen - persistentIdx];
+          headUpTo = i;
+        }
+        continue;
+      }
       while (otherFile != null) {
         int cmp = otherFile.compareTo(file);
         if (cmp < 0) {

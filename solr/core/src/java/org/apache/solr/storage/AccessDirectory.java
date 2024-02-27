@@ -69,6 +69,11 @@ import org.apache.lucene.store.RandomAccessInput;
 import org.apache.lucene.util.BitUtil;
 import org.apache.lucene.util.CollectionUtil;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.automaton.Automaton;
+import org.apache.lucene.util.automaton.ByteRunAutomaton;
+import org.apache.lucene.util.automaton.CompiledAutomaton;
+import org.apache.lucene.util.automaton.Operations;
+import org.apache.lucene.util.automaton.RegExp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -252,6 +257,56 @@ public class AccessDirectory extends MMapDirectory {
     }
   }
 
+  private static final String LAZY_TMP_FILE_SUFFIX = "lazy";
+  private static final String LAZY_TMP_FILE_REGEX =
+      ".*_" + LAZY_TMP_FILE_SUFFIX + "_[0-9a-z]+\\.tmp";
+  private static final int PATTERN_LOWEST = '.';
+  private static final int PATTERN_HIGHEST = 'z';
+  private static final ByteRunAutomaton LAZY_TMP_FILE_AUTOMATON;
+  private static final int LAZY_TMP_FILE_AUTOMATON_ACCEPT_STATE;
+
+  static {
+    // reverse the pattern automaton and step through in reverse
+    Automaton a =
+        Operations.reverse(
+            new RegExp(LAZY_TMP_FILE_REGEX).toAutomaton(Operations.DEFAULT_DETERMINIZE_WORK_LIMIT));
+    LAZY_TMP_FILE_AUTOMATON =
+        new CompiledAutomaton(a, null, true, Operations.DEFAULT_DETERMINIZE_WORK_LIMIT, false)
+            .runAutomaton;
+    int s = 0;
+    String matchingFilename = "_lazy_1.tmp";
+    for (int i = matchingFilename.length() - 1; i >= 0; i--) {
+      char c = matchingFilename.charAt(i);
+      s = LAZY_TMP_FILE_AUTOMATON.step(s, c & 0x7f);
+      if (LAZY_TMP_FILE_AUTOMATON.isAccept(s)) {
+        break;
+      }
+    }
+    if (!LAZY_TMP_FILE_AUTOMATON.isAccept(s)) {
+      throw new AssertionError();
+    }
+    // because the pattern is non-branching, we know there is exactly one accept state
+    LAZY_TMP_FILE_AUTOMATON_ACCEPT_STATE = s;
+  }
+
+  static boolean isLazyTmpFile(String filename) {
+    int s = 0;
+    for (int i = filename.length() - 1; i >= 0; i--) {
+      char c = filename.charAt(i);
+      if (c < PATTERN_LOWEST || c > PATTERN_HIGHEST) {
+        // this allows us to use char input with byte-based ByteRunAutomaton
+        return false;
+      }
+      if ((s = LAZY_TMP_FILE_AUTOMATON.step(s, c & 0x7f)) == -1) {
+        return false;
+      }
+      if (s == LAZY_TMP_FILE_AUTOMATON_ACCEPT_STATE) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @SuppressWarnings("try")
   private LazyEntry open(String name) throws IOException {
     LazyEntry lazyEntry;
@@ -263,7 +318,8 @@ public class AccessDirectory extends MMapDirectory {
               (k) -> {
                 String lazyName = null;
                 LazyEntry ret = null;
-                try (IndexOutput out = super.createTempOutput(name, "lazy", IOContext.DEFAULT)) {
+                try (IndexOutput out =
+                    super.createTempOutput(name, LAZY_TMP_FILE_SUFFIX, IOContext.DEFAULT)) {
                   // create a stub
                   lazyName = out.getName();
                   ret =

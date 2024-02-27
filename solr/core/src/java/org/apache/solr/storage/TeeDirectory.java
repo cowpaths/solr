@@ -23,6 +23,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -202,10 +203,65 @@ public class TeeDirectory extends BaseDirectory {
 
   @Override
   public String[] listAll() throws IOException {
-    if (persistent != null) {
-      return persistent.listAll();
+    String[] accessFiles = access.listAll();
+    if (persistent == null) {
+      return accessFiles;
     } else {
-      return access.listAll();
+      return sortAndMergeArrays(accessFiles, persistent.listAll());
+    }
+  }
+
+  static String[] sortAndMergeArrays(String[] accessFiles, String[] persistentFiles) {
+    final int persistentLen = persistentFiles.length;
+    if (persistentLen == 0) {
+      return accessFiles;
+    }
+    final int accessLen = accessFiles.length;
+    if (accessLen == 0) {
+      return persistentFiles;
+    }
+    Arrays.sort(accessFiles);
+    Arrays.sort(persistentFiles);
+    String[] tailFiles = null;
+    String otherFile = persistentFiles[0];
+    int persistentIdx = 0;
+    int idx = 0;
+    int headUpTo = 0;
+    for (int i = 0; i < accessLen; i++) {
+      String file = accessFiles[i];
+      while (otherFile != null) {
+        int cmp = otherFile.compareTo(file);
+        if (cmp < 0) {
+          if (tailFiles == null) {
+            tailFiles = new String[accessLen - i + persistentLen - persistentIdx];
+            headUpTo = i;
+          }
+          tailFiles[idx++] = otherFile;
+        } else if (cmp > 0) {
+          break;
+        }
+        otherFile = ++persistentIdx < persistentLen ? persistentFiles[persistentIdx] : null;
+      }
+      if (tailFiles != null) {
+        tailFiles[idx++] = file;
+      }
+    }
+    if (otherFile != null) {
+      int persistentRemaining = persistentLen - persistentIdx;
+      if (tailFiles == null) {
+        tailFiles = new String[persistentRemaining];
+        headUpTo = accessLen;
+      }
+      System.arraycopy(persistentFiles, persistentIdx, tailFiles, idx, persistentRemaining);
+      idx += persistentRemaining;
+    }
+    if (tailFiles == null) {
+      return accessFiles;
+    } else {
+      String[] ret = new String[headUpTo + idx];
+      System.arraycopy(accessFiles, 0, ret, 0, headUpTo);
+      System.arraycopy(tailFiles, 0, ret, headUpTo, idx);
+      return ret;
     }
   }
 
@@ -449,6 +505,7 @@ public class TeeDirectory extends BaseDirectory {
 
   @Override
   public Set<String> getPendingDeletions() throws IOException {
+    // TODO: is it ok to just delegate to `access` here?
     return access.getPendingDeletions();
   }
 }

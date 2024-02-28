@@ -17,7 +17,7 @@
 
 package org.apache.solr.storage;
 
-import static org.apache.solr.storage.AccessDirectory.isLazyTmpFile;
+import static org.apache.solr.storage.AccessDirectory.lazyTmpFileSuffixStartIdx;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -47,6 +47,7 @@ import org.apache.lucene.store.Lock;
 import org.apache.lucene.store.LockFactory;
 import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.IOUtils;
+import org.apache.solr.common.util.CollectionUtil;
 import org.apache.solr.util.IOFunction;
 
 public class TeeDirectory extends BaseDirectory {
@@ -230,7 +231,7 @@ public class TeeDirectory extends BaseDirectory {
       int prunedIdx = 0;
       for (int i = 0; i < accessLen; i++) {
         String name = accessFiles[i];
-        if (isLazyTmpFile(name)) {
+        if (lazyTmpFileSuffixStartIdx(name) != -1) {
           continue;
         }
         if (prunedIdx != i) {
@@ -255,7 +256,7 @@ public class TeeDirectory extends BaseDirectory {
     int headUpTo = 0;
     for (int i = 0; i < accessLen; i++) {
       String file = accessFiles[i];
-      if (isLazyTmpFile(file)) {
+      if (lazyTmpFileSuffixStartIdx(file) != -1) {
         // skip lazy temp files
         if (tailFiles == null) {
           tailFiles = new String[accessLen - i + persistentLen - persistentIdx];
@@ -539,7 +540,28 @@ public class TeeDirectory extends BaseDirectory {
 
   @Override
   public Set<String> getPendingDeletions() throws IOException {
-    // TODO: is it ok to just delegate to `access` here?
-    return access.getPendingDeletions();
+    Set<String> a = access.getPendingDeletions();
+    if (persistent == null) {
+      return a;
+    }
+    Set<String> p = persistent.getPendingDeletions();
+    if (p.isEmpty()) {
+      return a;
+    } else if (a.isEmpty()) {
+      return p;
+    }
+    Set<String> ret = CollectionUtil.newHashSet(a.size() + p.size());
+    ret.addAll(p);
+    for (String f : a) {
+      int suffixStartIdx = lazyTmpFileSuffixStartIdx(f);
+      if (suffixStartIdx == -1) {
+        ret.add(f);
+      } else {
+        // don't externally expose actual lazy filenames;
+        // instead, map them to the corresponding base filename
+        ret.add(f.substring(0, suffixStartIdx));
+      }
+    }
+    return ret;
   }
 }

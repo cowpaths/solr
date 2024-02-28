@@ -289,22 +289,22 @@ public class AccessDirectory extends MMapDirectory {
     LAZY_TMP_FILE_AUTOMATON_ACCEPT_STATE = s;
   }
 
-  static boolean isLazyTmpFile(String filename) {
+  static int lazyTmpFileSuffixStartIdx(String filename) {
     int s = 0;
     for (int i = filename.length() - 1; i >= 0; i--) {
       char c = filename.charAt(i);
       if (c < PATTERN_LOWEST || c > PATTERN_HIGHEST) {
         // this allows us to use char input with byte-based ByteRunAutomaton
-        return false;
+        return -1;
       }
       if ((s = LAZY_TMP_FILE_AUTOMATON.step(s, c & 0x7f)) == -1) {
-        return false;
+        return -1;
       }
       if (s == LAZY_TMP_FILE_AUTOMATON_ACCEPT_STATE) {
-        return true;
+        return i;
       }
     }
-    return false;
+    return -1;
   }
 
   @SuppressWarnings("try")

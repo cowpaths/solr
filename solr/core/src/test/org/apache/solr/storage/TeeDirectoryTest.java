@@ -36,13 +36,15 @@ public class TeeDirectoryTest extends SolrTestCase {
         };
     String[] notLazyTmp =
         new String[] {"", "a", "lazy_123.tmp", "_lazy_.tmp", "_lazy_Q.tmp", "_lazy_123.tmpp"};
+    String prefix = "prefix";
+    int prefixLen = prefix.length();
     for (String s : lazyTmp) {
-      assertTrue(AccessDirectory.isLazyTmpFile(s));
-      assertTrue(AccessDirectory.isLazyTmpFile("prefix".concat(s)));
+      assertEquals(0, AccessDirectory.lazyTmpFileSuffixStartIdx(s));
+      assertEquals(prefixLen, AccessDirectory.lazyTmpFileSuffixStartIdx(prefix.concat(s)));
     }
     for (String s : notLazyTmp) {
-      assertFalse(AccessDirectory.isLazyTmpFile(s));
-      assertFalse(AccessDirectory.isLazyTmpFile("prefix".concat(s)));
+      assertEquals(-1, AccessDirectory.lazyTmpFileSuffixStartIdx(s));
+      assertEquals(-1, AccessDirectory.lazyTmpFileSuffixStartIdx("prefix".concat(s)));
     }
   }
 

@@ -73,11 +73,8 @@ public class TeeDirectory extends BaseDirectory {
     Path compressedPath = path;
     String accessDir = System.getProperty("java.io.tmpdir");
     String pathS = path.toString();
-    String scope =
-        pathS.endsWith("/index")
-            ? TeeDirectoryFactory.getScopeName(pathS)
-            : pathS.substring(pathS.lastIndexOf('/'));
-    String accessPath = accessDir + scope + "-" + Long.toUnsignedString(System.nanoTime(), 16);
+    String scope = TeeDirectoryFactory.getScopeName(accessDir, pathS);
+    String accessPath = scope + "-" + Long.toUnsignedString(System.nanoTime(), 16);
     this.closeLocal =
         () -> {
           try (ownState) {

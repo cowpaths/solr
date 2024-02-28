@@ -239,7 +239,9 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     useAsyncIO = params.getBool("useAsyncIO", useDirectIO);
   }
 
-  static String getScopeName(String path) {
+  private static final boolean TEST_CONTEXT = System.getProperty("tests.seed") != null;
+
+  static String getScopeName(String accessDir, String path) {
     int lastPathDelimIdx = path.lastIndexOf('/');
     if (lastPathDelimIdx == -1) {
       throw new IllegalArgumentException("unexpected path: " + path);
@@ -247,14 +249,29 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     String dirName = path.substring(path.lastIndexOf('/'));
     int end = path.lastIndexOf('/', lastPathDelimIdx - 1);
     int start = path.lastIndexOf('/', end - 1);
+    String ret;
     if ("/index".equals(dirName)) {
-      return path.substring(start, end);
+      ret = path.substring(start, end);
     } else if (dirName.startsWith("/index.")) {
       // append the suffix identifier; this is a snapshot or temp index dir
-      return path.substring(start, end).concat(dirName.substring("/index".length()));
+      ret = path.substring(start, end).concat(dirName.substring("/index".length()));
+    } else if (TEST_CONTEXT) {
+      ret = path.substring(path.lastIndexOf('/'));
     } else {
       throw new IllegalArgumentException("unexpected path: " + path);
     }
+    if (TEST_CONTEXT) {
+      ret += "-" + Long.toUnsignedString(System.nanoTime(), 16);
+      Path p = Path.of(path);
+      if (p.startsWith(accessDir)) {
+        Path a = Path.of(accessDir);
+        Path relative = a.relativize(p);
+        if (relative.getNameCount() > 0) {
+          accessDir = a.resolve(relative.getName(0)).toString().concat("/TeeDirectoryFactory-access");
+        }
+      }
+    }
+    return accessDir.concat(ret);
   }
 
   @Override
@@ -264,7 +281,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     Path compressedPath = Path.of(path);
     IOFunction<Void, Map.Entry<String, Directory>> accessFunction =
         unused -> {
-          String accessPath = accessDir.concat(getScopeName(path));
+          String accessPath = getScopeName(accessDir, path);
           Directory dir =
               new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, nodeLevelState);
           return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);

@@ -57,7 +57,7 @@ public class TeeDirectory extends BaseDirectory {
   private final AutoCloseable closeLocal;
   private final IOFunction<Void, Map.Entry<String, Directory>> accessFunction;
   private final IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction;
-  private Directory persistent;
+  private volatile Directory persistent;
 
   /**
    * This ctor (with default inline config) exists to be invoked during testing, via
@@ -199,7 +199,7 @@ public class TeeDirectory extends BaseDirectory {
   public void removeAssociated() throws IOException {
     synchronized (persistentFunction) {
       if (associatedPaths != null) {
-        IOUtils.rm(associatedPaths.stream().map(Path::of).toArray(Path[]::new));
+        IOUtils.rm(associatedPaths.stream().map(Path::of).filter(p -> p.toFile().exists()).toArray(Path[]::new));
       }
     }
   }
@@ -359,6 +359,8 @@ public class TeeDirectory extends BaseDirectory {
             th = IOUtils.useOrSuppress(th, t);
           } catch (Throwable t1) {
             th = IOUtils.useOrSuppress(th, t1);
+          } finally {
+            persistent.deleteFile(name);
           }
         }
       }
@@ -499,7 +501,7 @@ public class TeeDirectory extends BaseDirectory {
     } catch (Throwable t) {
       th = t;
     } finally {
-      if (th != null) {
+      if (th == null) {
         try {
           access.rename(source, dest);
         } catch (Throwable t) {

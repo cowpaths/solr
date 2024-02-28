@@ -57,6 +57,7 @@ import org.apache.solr.handler.admin.ConfigSetsHandler;
 import org.apache.solr.util.LogLevel;
 import org.apache.solr.util.TimeOut;
 import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.data.Stat;
 import org.junit.After;
 import org.junit.Before;
 import org.slf4j.Logger;
@@ -291,7 +292,8 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     assertFalse(ref.isLazilyLoaded());
     assertEquals(0, ref.get().getZNodeVersion());
     // no more dummy node
-    assertEquals(0, ref.get().getChildNodesVersion());
+
+    assertEquals(0, getCVersion(fixture.zkClient, state.getZNode()));
 
     DocCollection collection = ref.get();
     PerReplicaStates prs =
@@ -310,7 +312,8 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
 
     ref = reader.getClusterState().getCollectionRef("c1");
     assertEquals(0, ref.get().getZNodeVersion()); // no change in Znode version
-    assertEquals(1, ref.get().getChildNodesVersion()); // but child version should be 1 now
+    assertEquals(
+        1, getCVersion(fixture.zkClient, state.getZNode())); // but child version should be 1 now
 
     prs = ref.get().getPerReplicaStates();
     PerReplicaStatesOps.flipState("r1", Replica.State.ACTIVE, prs)
@@ -324,7 +327,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     ref = reader.getClusterState().getCollectionRef("c1");
     assertEquals(0, ref.get().getZNodeVersion()); // no change in Znode version
     // but child version should be 3 now (1 del + 1 add)
-    assertEquals(3, ref.get().getChildNodesVersion());
+    assertEquals(3, getCVersion(fixture.zkClient, state.getZNode()));
 
     // now delete the collection
     wc = new ZkWriteCommand("c1", null);
@@ -349,7 +352,7 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     ref = reader.getClusterState().getCollectionRef("c1");
     assertFalse(ref.isLazilyLoaded());
     assertEquals(0, ref.get().getZNodeVersion());
-    assertEquals(0, ref.get().getChildNodesVersion()); // child node version is reset
+    assertEquals(0, getCVersion(fixture.zkClient, state.getZNode())); // child node version is reset
 
     // re-add PRS
     collection = ref.get();
@@ -370,7 +373,12 @@ public class ZkStateReaderTest extends SolrTestCaseJ4 {
     ref = reader.getClusterState().getCollectionRef("c1");
 
     // child version should be reset since the state.json node was deleted and re-created
-    assertEquals(1, ref.get().getChildNodesVersion());
+    assertEquals(1, getCVersion(fixture.zkClient, state.getZNode()));
+  }
+
+  private long getCVersion(SolrZkClient zkClient, String zNode) throws Exception {
+    Stat stat = zkClient.exists(zNode, null, true);
+    return stat.getCversion();
   }
 
   public void testForciblyRefreshAllClusterState() throws Exception {

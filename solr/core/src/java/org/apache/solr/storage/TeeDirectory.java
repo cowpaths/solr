@@ -196,7 +196,11 @@ public class TeeDirectory extends BaseDirectory {
   public void removeAssociated() throws IOException {
     synchronized (persistentFunction) {
       if (associatedPaths != null) {
-        IOUtils.rm(associatedPaths.stream().map(Path::of).filter(p -> p.toFile().exists()).toArray(Path[]::new));
+        IOUtils.rm(
+            associatedPaths.stream()
+                .map(Path::of)
+                .filter(p -> p.toFile().exists())
+                .toArray(Path[]::new));
       }
     }
   }

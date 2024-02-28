@@ -267,7 +267,8 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
         Path a = Path.of(accessDir);
         Path relative = a.relativize(p);
         if (relative.getNameCount() > 0) {
-          accessDir = a.resolve(relative.getName(0)).toString().concat("/TeeDirectoryFactory-access");
+          accessDir =
+              a.resolve(relative.getName(0)).toString().concat("/TeeDirectoryFactory-access");
         }
       }
     }

@@ -18,7 +18,6 @@ package org.apache.solr.search;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.reflect.Array;

@@ -779,9 +779,15 @@ public class AccessDirectory extends MMapDirectory {
           limit += MAX_MAP_SIZE;
         }
       }
-      ByteBuffer[] copy = new ByteBuffer[accessMapped.length];
+      boolean padCopy = (length & MAX_MAP_SHIFT) == 0;
+      ByteBuffer[] copy = new ByteBuffer[padCopy ? accessMapped.length + 1 : accessMapped.length];
       for (int i = accessMapped.length - 1; i >= 0; i--) {
         copy[i] = accessMapped[i].duplicate().order(ByteOrder.LITTLE_ENDIAN);
+      }
+      if (padCopy) {
+        // ByteBufferIndexInput seems to overallocate number of buffers on chunk size boundaries,
+        // so add padding empty buffer to avoid creating problems.
+        copy[accessMapped.length] = ByteBuffer.allocateDirect(0).order(ByteOrder.LITTLE_ENDIAN);
       }
       this.accessPopulated =
           ByteBufferIndexInput.newInstance("accessPopulated", copy, length, MAX_MAP_SHIFT, guard);

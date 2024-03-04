@@ -23,6 +23,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -107,7 +108,10 @@ public class CompressingDirectory extends FSDirectory {
   public long fileLength(String name) throws IOException {
     Path path = directoryPath.resolve(name);
     File file = path.toFile();
-    super.fileLength(name); // to throw NoSuchFileException -- hacky
+    ensureOpen();
+    if (getPendingDeletions().contains(name)) {
+      throw new NoSuchFileException("file \"" + name + "\" is pending delete");
+    }
     if (file.length() < Long.BYTES) {
       return 0;
     } else {

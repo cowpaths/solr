@@ -29,6 +29,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -36,7 +38,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BiConsumer;
+import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.LockFactory;
 import org.apache.lucene.util.RamUsageEstimator;
@@ -73,6 +77,8 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
 
   static class NodeLevelTeeDirectoryState implements SolrMetricProducer {
     final ExecutorService ioExec = ExecutorUtil.newMDCAwareCachedThreadPool("teeIOExec");
+    private final Future<?> lengthVerificationTask;
+    final BlockingQueue<PersistentLengthVerification> persistentLengthVerificationQueue;
     private final Future<?> activationTask;
     final LinkedBlockingQueue<AccessDirectory.LazyEntry> activationQueue =
         new LinkedBlockingQueue<>();
@@ -90,7 +96,8 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     final Meter priorityActivateMeter = new Meter();
     final Meter activateMeter = new Meter();
 
-    NodeLevelTeeDirectoryState() {
+    NodeLevelTeeDirectoryState(int lengthVerificationQueueSize) {
+      persistentLengthVerificationQueue = new ArrayBlockingQueue<>(lengthVerificationQueueSize);
       activationTask =
           ioExec.submit(
               () -> {
@@ -143,6 +150,23 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
                   }
                 }
                 return null;
+              });
+      lengthVerificationTask =
+          ioExec.submit(
+              () -> {
+                Thread t = Thread.currentThread();
+                while (!t.isInterrupted()) {
+                  PersistentLengthVerification a = null;
+                  try {
+                    a = persistentLengthVerificationQueue.take();
+                    a.verify();
+                  } catch (InterruptedException e) {
+                    t.interrupt();
+                    break;
+                  } catch (Throwable th) {
+                    log.error("error verifying persistent length {}", a);
+                  }
+                }
               });
     }
 
@@ -199,8 +223,69 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     public void close() throws IOException {
       try (Closeable c1 = SolrMetricProducer.super::close;
           Closeable c2 = () -> ExecutorUtil.shutdownAndAwaitTermination(ioExec)) {
-        activationTask.cancel(true);
+        try {
+          lengthVerificationTask.cancel(true);
+        } finally {
+          activationTask.cancel(true);
+        }
       }
+    }
+  }
+
+  static final class PersistentLengthVerification {
+    private final Directory accessDir;
+    private final Directory persistentDir;
+    private final String name;
+    private final long accessLength;
+
+    PersistentLengthVerification(
+        Directory accessDir, Directory persistentDir, String name, long accessLength) {
+      this.accessDir = accessDir;
+      this.persistentDir = persistentDir;
+      this.name = name;
+      this.accessLength = accessLength;
+    }
+
+    private void verify() {
+      try {
+        long l = persistentDir.fileLength(name);
+        if (l != accessLength) {
+          log.error("file length mismatch {} != {}", l, this);
+        }
+      } catch (AlreadyClosedException th) {
+        // swallow this; we have to defer lookup, but we know that in doing so we run the risk
+        // the the directory will already have been closed by the time we look up the length
+      } catch (NoSuchFileException e) {
+        try {
+          accessDir.fileLength(name);
+          log.error("file absent in persistent, present in access: {}", this);
+        } catch (NoSuchFileException e1) {
+          // this is what we expect, so just swallow it
+        } catch (Throwable t) {
+          log.warn("unable to re-verify access length {}", this, t);
+        }
+      } catch (Throwable t) {
+        log.warn("unable to verify persistent length {}", this, t);
+      }
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("{name=").append(name).append(", length=").append(accessLength).append(", access=");
+      if (accessDir instanceof FSDirectory) {
+        sb.append(((FSDirectory) accessDir).getDirectory());
+      } else {
+        sb.append(accessDir);
+      }
+      sb.append(", persistent=");
+      if (persistentDir instanceof FSDirectory) {
+        sb.append(((FSDirectory) persistentDir).getDirectory());
+      } else {
+        sb.append(persistentDir);
+      }
+      sb.append("}");
+      return sb.toString();
     }
   }
 
@@ -216,13 +301,13 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
                   "nodeLevelTeeDirectoryState",
                   NodeLevelTeeDirectoryState.class,
                   (k) -> {
-                    NodeLevelTeeDirectoryState ret = new NodeLevelTeeDirectoryState();
+                    NodeLevelTeeDirectoryState ret = new NodeLevelTeeDirectoryState(4096);
                     ret.initializeMetrics(
                         cc.getMetricsHandler().getSolrMetricsContext(), "teeDirectory");
                     return ret;
                   });
     } else {
-      nodeLevelState = new NodeLevelTeeDirectoryState();
+      nodeLevelState = new NodeLevelTeeDirectoryState(64);
       ownNodeLevelState = nodeLevelState;
     }
     super.init(args);
@@ -297,7 +382,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
           return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
         };
     return new SizeAwareDirectory(
-        new TeeDirectory(naive, accessFunction, persistentFunction, nodeLevelState.ioExec), 0);
+        new TeeDirectory(naive, accessFunction, persistentFunction, nodeLevelState), 0);
   }
 
   @Override

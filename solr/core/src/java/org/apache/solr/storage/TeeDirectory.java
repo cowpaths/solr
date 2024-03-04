@@ -521,6 +521,28 @@ public class TeeDirectory extends BaseDirectory {
     try {
       if (persistent != null) {
         persistent.rename(source, dest);
+        // NOTE: we need to incorporate `persistent.syncMetaData()` within `rename()` here,
+        // because `persistent` is our source of truth, and we must ensure that the changes
+        // here are persisted to disk _before_ we proceed to `access.rename()`.
+        // The pathological (though extremely unlikely) case that we protect against here is:
+        // both renames succeed, and `access` rename happens to be arbitrarily flushed to disk,
+        // but `persistent` rename is not. Then, before the explicit `syncMetaData()` in segment
+        // commit, there is a hard shutdown (e.g., `kill -9` or similar), potentially leaving
+        // the `segments_N` file intact on startup for `access`, but _not_ `persistent`. This
+        // is exactly what we most want to avoid: running the index off of ephemeral storage
+        // that is not backed by a persistent copy.
+        persistent.syncMetaData();
+        // NOTE also: in the event of a partial rename, we should be safe based on how
+        // `IndexFileDeleter` cleans up partial state on startup. Worst-case scenario:
+        // rename pending_segments_N => segments_N succeeds on `persistent` first (because this
+        // is the source of truth so we run the rename there first), then we get `kill -9`'d so
+        // we have both pending_segments_N (in access dir) and segments_N (in persistent dir).
+        // The logic in `IndexFileDeleter` runs multiple passes in segment discovery, incRef'ing
+        // files that are referenced by known `segments_*` files, then deletion happens for
+        // unreferenced files only (which would in include all `pending_segments_*`). Each
+        // `pending_segments_N` file will be consulted on startup to determine the max segment
+        // gen (to prevent double-writing the same segment number), but should not conflict
+        // with analogous `segments_N` files, if present.
       }
     } catch (Throwable t) {
       th = t;

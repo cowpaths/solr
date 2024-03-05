@@ -571,9 +571,12 @@ public class TeeDirectory extends BaseDirectory {
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
     IndexInput ret = access.openInput(name, context);
-    persistentLengthVerificationQueue.offer(
-        new TeeDirectoryFactory.PersistentLengthVerification(
-            access, persistent, name, ret.length()));
+    if (!name.endsWith(".tmp")) {
+      // we do not expect tmp files to be present in persistent directory
+      persistentLengthVerificationQueue.offer(
+          new TeeDirectoryFactory.PersistentLengthVerification(
+              access, persistent, name, ret.length()));
+    }
     return ret;
   }
 

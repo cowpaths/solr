@@ -16,11 +16,8 @@
  */
 package org.apache.solr.cloud;
 
-import static org.apache.solr.cloud.TestPullReplica.getHypotheticalTlogDir;
-
 import com.carrotsearch.randomizedtesting.annotations.Repeat;
 import com.codahale.metrics.Meter;
-import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
@@ -145,8 +142,9 @@ public class TestTlogReplica extends SolrCloudTestCase {
         try {
           core = cluster.getReplicaJetty(r).getCoreContainer().getCore(r.getCoreName());
           assertNotNull(core);
-          File tlogDir = getHypotheticalTlogDir(core);
-          assertTrue("Update log should exist for replicas of type Append", tlogDir.exists());
+          assertTrue(
+              "Update log should exist for replicas of type Append",
+              new java.io.File(core.getUlogDir()).exists());
         } finally {
           core.close();
         }

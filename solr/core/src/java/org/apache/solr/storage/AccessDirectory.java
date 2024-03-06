@@ -37,6 +37,7 @@ import java.nio.LongBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Collection;
@@ -129,7 +130,7 @@ public class AccessDirectory extends MMapDirectory {
   public long fileLength(String name) throws IOException {
     try {
       return super.fileLength(name);
-    } catch (IOException ex) {
+    } catch (NoSuchFileException ex) {
       LazyEntry lazy = open(name);
       if (lazy == null) {
         throw ex;
@@ -146,7 +147,8 @@ public class AccessDirectory extends MMapDirectory {
     } catch (IOException ex) {
       LazyEntry lazy = activeLazy.get(source);
       if (lazy == null) {
-        throw ex;
+        super.rename(source, dest); // will usually throw another copy of same exception
+        return;
       }
       if (isClosed) {
         throw new AlreadyClosedException("already closed");
@@ -171,7 +173,7 @@ public class AccessDirectory extends MMapDirectory {
     for (String name : names) {
       try {
         fsync(name);
-      } catch (IOException ex) {
+      } catch (NoSuchFileException ex) {
         LazyEntry lazy = open(name);
         if (lazy == null) {
           throw ex;
@@ -377,7 +379,7 @@ public class AccessDirectory extends MMapDirectory {
       IndexInput ret = super.openInput(name, context);
       rawCt.increment();
       return ret;
-    } catch (IOException ex) {
+    } catch (NoSuchFileException ex) {
       try {
         LazyEntry lazy = open(name);
         if (lazy == null) {

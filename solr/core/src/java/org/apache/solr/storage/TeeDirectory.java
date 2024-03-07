@@ -42,6 +42,7 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.store.BaseDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
@@ -163,6 +164,18 @@ public class TeeDirectory extends BaseDirectory {
           }
         }
       };
+
+  public Path getAccessDir() {
+    if (access == null) {
+      return null;
+    }
+    Directory unwrapped = FilterDirectory.unwrap(access);
+    if (unwrapped instanceof FSDirectory) {
+      return ((FSDirectory) unwrapped).getDirectory();
+    } else {
+      throw new UnsupportedOperationException("no directory path for " + access);
+    }
+  }
 
   private static final class TeeLock extends Lock {
 

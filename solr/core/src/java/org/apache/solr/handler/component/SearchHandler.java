@@ -389,9 +389,6 @@ public class SearchHandler extends RequestHandlerBase
     return false;
   }
 
-  public static final ThreadLocal<Boolean> DISABLE_REGION_CACHE =
-      ThreadLocal.withInitial(() -> Boolean.FALSE);
-
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
     boolean isShard = req.getParams().getBool(ShardParams.IS_SHARD, false);
@@ -479,7 +476,6 @@ public class SearchHandler extends RequestHandlerBase
 
       SolrQueryTimeoutImpl.set(req);
       BloomStrField.init(req);
-      DISABLE_REGION_CACHE.set(req.getParams().getBool("disableRegionCache", false));
       try {
         // The semantics of debugging vs not debugging are different enough that
         // it makes sense to have two control loops

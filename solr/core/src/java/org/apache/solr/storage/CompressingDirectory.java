@@ -196,6 +196,15 @@ public class CompressingDirectory extends FSDirectory {
     private boolean wroteBlock = false;
     private final ByteBuffer initialBlock;
 
+    // {
+    //   [(long) LOGICAL_LENGTH],
+    //   [(int) BLOCK_MAP_FOOTER_LENGTH],
+    //   [(byte) COMPRESSION_TYPE_ID],
+    //   [(byte) COMPRESSION_BLOCK_TYPE_ID]
+    //   [(2 bytes) unspecified] -- for potential future use
+    // }
+    static final int HEADER_SIZE = 16; // 16 bytes
+
     private long filePos;
     private boolean isOpen;
 
@@ -224,8 +233,9 @@ public class CompressingDirectory extends FSDirectory {
       buffer = writeHelper.init(0);
       preBuffer = ByteBuffer.wrap(compressBuffer);
       initialBlock = ByteBuffer.allocateDirect(blockSize + blockSize - 1).alignedSlice(blockSize);
-      buffer.putLong(0);
-      buffer.putInt(0);
+
+      // allocate space for the header
+      buffer.position(buffer.position() + HEADER_SIZE);
 
       if (expectLength > bufferSize && useAsyncIO) {
         writeHelper.start(ioExec);
@@ -286,13 +296,17 @@ public class CompressingDirectory extends FSDirectory {
         writeHelper.flush(buffer, true);
         initialBlock.putLong(0, filePos);
         initialBlock.putInt(Long.BYTES, blockMapFooterSize);
+        initialBlock.put(HEADER_SIZE - Integer.BYTES, (byte) COMPRESSION_BLOCK_TYPE.id);
+        initialBlock.put(HEADER_SIZE - Integer.BYTES + 1, (byte) COMPRESSION_TYPE.id);
         writeHelper.write(initialBlock, 0);
       } else {
         if (filePos > 0) {
           buffer.putLong(0, filePos);
           buffer.putInt(Long.BYTES, blockMapFooterSize);
+          buffer.put(HEADER_SIZE - Integer.BYTES, (byte) COMPRESSION_BLOCK_TYPE.id);
+          buffer.put(HEADER_SIZE - Integer.BYTES + 1, (byte) COMPRESSION_TYPE.id);
         } else {
-          assert filePos == 0 && buffer.position() == Long.BYTES + Integer.BYTES;
+          assert filePos == 0 && buffer.position() == HEADER_SIZE;
           buffer.rewind();
           buffer.limit(0);
         }
@@ -378,11 +392,39 @@ public class CompressingDirectory extends FSDirectory {
     }
   }
 
-  public static final int COMPRESSION_BLOCK_SHIFT = 18;
-  public static final int COMPRESSION_BLOCK_SIZE = 1 << COMPRESSION_BLOCK_SHIFT; // 256k
-  public static final int COMPRESSION_BLOCK_MASK_LOW = COMPRESSION_BLOCK_SIZE - 1;
-  public static final int BLOCK_SIZE_ESTIMATE =
-      COMPRESSION_BLOCK_SIZE >> 1; // estimate 50% compression;
+  enum CompressionType {
+    LZ4(0);
+    final int id;
+
+    CompressionType(int id) {
+      this.id = id;
+    }
+  }
+
+  enum CompressionBlockType {
+    SIZE_256K(0, 18);
+
+    CompressionBlockType(int id, int blockShift) {
+      this.id = id;
+      this.blockShift = blockShift;
+      this.blockSize = 1 << blockShift;
+      this.blockMaskLow = this.blockSize - 1;
+      this.blockSizeEstimate = this.blockSize >> 1; // estimate 50% compression
+    }
+
+    final int id;
+    final int blockShift;
+    final int blockSize;
+    final int blockMaskLow;
+    final int blockSizeEstimate;
+  }
+
+  static final CompressionType COMPRESSION_TYPE = CompressionType.LZ4;
+  static final CompressionBlockType COMPRESSION_BLOCK_TYPE = CompressionBlockType.SIZE_256K;
+  public static final int COMPRESSION_BLOCK_SHIFT = COMPRESSION_BLOCK_TYPE.blockShift;
+  public static final int COMPRESSION_BLOCK_SIZE = COMPRESSION_BLOCK_TYPE.blockSize;
+  public static final int COMPRESSION_BLOCK_MASK_LOW = COMPRESSION_BLOCK_TYPE.blockMaskLow;
+  public static final int BLOCK_SIZE_ESTIMATE = COMPRESSION_BLOCK_TYPE.blockSizeEstimate;
 
   private static final int MIN_MATCH = 4;
 

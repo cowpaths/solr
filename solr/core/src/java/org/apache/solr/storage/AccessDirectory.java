@@ -21,6 +21,7 @@ import static org.apache.solr.storage.CompressingDirectory.BLOCK_SIZE_ESTIMATE;
 import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_MASK_LOW;
 import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SHIFT;
 import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SIZE;
+import static org.apache.solr.storage.CompressingDirectory.DirectIOIndexOutput.HEADER_SIZE;
 
 import java.io.Closeable;
 import java.io.EOFException;
@@ -712,13 +713,23 @@ public class AccessDirectory extends MMapDirectory {
                 "file too long " + Long.toHexString(length) + ", " + source);
           }
           int blockDeltaFooterSize = guard.getInt(initial, Long.BYTES);
+          int cTypeId = guard.getByte(initial, HEADER_SIZE - Integer.BYTES) & 0xff;
+          if (cTypeId != CompressingDirectory.COMPRESSION_TYPE.id) {
+            throw new IllegalArgumentException("unrecognized compression type id: " + cTypeId);
+          }
+          int cBlockTypeId = guard.getByte(initial, HEADER_SIZE - Integer.BYTES + 1) & 0xff;
+          if (cBlockTypeId != CompressingDirectory.COMPRESSION_TYPE.id) {
+            throw new IllegalArgumentException(
+                "unrecognized compression block type id: " + cBlockTypeId);
+          }
           byte[] footer = new byte[blockDeltaFooterSize];
           long blockDeltaFooterOffset = size - blockDeltaFooterSize;
-          channel.read(
-              ByteBuffer.wrap(footer),
-              blockDeltaFooterOffset); // TODO: read this from mapped instead?
+
+          // TODO: read this from mapped instead?
+          channel.read(ByteBuffer.wrap(footer), blockDeltaFooterOffset);
           ByteArrayDataInput in = new ByteArrayDataInput(footer);
-          long blockOffset = Long.BYTES + Integer.BYTES;
+
+          long blockOffset = HEADER_SIZE;
           int lastBlockSize = BLOCK_SIZE_ESTIMATE;
           blockCount = (int) (((length - 1) >> COMPRESSION_BLOCK_SHIFT) + 1);
           blockOffsets = new long[blockCount + 1];

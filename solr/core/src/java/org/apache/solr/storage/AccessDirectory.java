@@ -25,6 +25,7 @@ import static org.apache.solr.storage.CompressingDirectory.DirectIOIndexOutput.H
 
 import java.io.Closeable;
 import java.io.EOFException;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
@@ -131,7 +132,7 @@ public class AccessDirectory extends MMapDirectory {
   public long fileLength(String name) throws IOException {
     try {
       return super.fileLength(name);
-    } catch (NoSuchFileException ex) {
+    } catch (NoSuchFileException | FileNotFoundException ex) {
       LazyEntry lazy = open(name);
       if (lazy == null) {
         throw ex;
@@ -174,7 +175,7 @@ public class AccessDirectory extends MMapDirectory {
     for (String name : names) {
       try {
         fsync(name);
-      } catch (NoSuchFileException ex) {
+      } catch (NoSuchFileException | FileNotFoundException ex) {
         LazyEntry lazy = open(name);
         if (lazy == null) {
           throw ex;
@@ -380,7 +381,7 @@ public class AccessDirectory extends MMapDirectory {
       IndexInput ret = super.openInput(name, context);
       rawCt.increment();
       return ret;
-    } catch (NoSuchFileException ex) {
+    } catch (NoSuchFileException | FileNotFoundException ex) {
       try {
         LazyEntry lazy = open(name);
         if (lazy == null) {

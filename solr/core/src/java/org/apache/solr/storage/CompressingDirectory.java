@@ -18,7 +18,6 @@
 package org.apache.solr.storage;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -107,15 +106,14 @@ public class CompressingDirectory extends FSDirectory {
   @Override
   public long fileLength(String name) throws IOException {
     Path path = directoryPath.resolve(name);
-    File file = path.toFile();
     ensureOpen();
     if (getPendingDeletions().contains(name)) {
       throw new NoSuchFileException("file \"" + name + "\" is pending delete");
     }
-    if (file.length() < Long.BYTES) {
+    if (Files.size(path) < Long.BYTES) {
       return 0;
     } else {
-      try (FileInputStream in = new FileInputStream(file)) {
+      try (FileInputStream in = new FileInputStream(path.toFile())) {
         byte[] bytes = in.readNBytes(Long.BYTES);
         return ByteBuffer.wrap(bytes).getLong(0);
       }

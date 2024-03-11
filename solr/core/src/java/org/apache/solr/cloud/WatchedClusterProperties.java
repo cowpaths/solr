@@ -19,8 +19,8 @@ public class WatchedClusterProperties implements ClusterPropertiesListener {
   private Map<String, List<BiConsumer<String, String>>> propertiesListeners =
       Collections.synchronizedMap(new HashMap<>());
 
-  private Map<String, List<BiConsumer<String, String>>> nodePropertiesListeners =
-      Collections.synchronizedMap(new HashMap<>());
+  /* private Map<String, List<BiConsumer<String, String>>> nodePropertiesListeners =
+  Collections.synchronizedMap(new HashMap<>());*/
 
   private volatile Map<String, String> knownData = new HashMap<>();
   private volatile Map<String, String> knownNodeData = new HashMap<>();
@@ -32,24 +32,27 @@ public class WatchedClusterProperties implements ClusterPropertiesListener {
   @Override
   @SuppressWarnings("unchecked")
   public boolean onChange(Map<String, Object> properties) {
-    Map<String, String> newData =
-        (Map<String, String>) properties.getOrDefault(WATCHED_PROPERTIES, Collections.EMPTY_MAP);
-    Map<String, String> modified =
-        compareAndInvokeListeners(newData, knownData, propertiesListeners);
-    if (modified != null) knownData = modified;
 
-    newData =
+    Map<String, String> newData =
         ((Map<String, Map<String, String>>)
                 properties.getOrDefault(WATCHED_NODE_PROPERTIES, Collections.EMPTY_MAP))
             .getOrDefault(nodeName, Collections.EMPTY_MAP);
-    modified = compareAndInvokeListeners(newData, knownNodeData, nodePropertiesListeners);
+    Map<String, String> modified =
+        compareAndInvokeListeners(newData, knownNodeData, null, propertiesListeners);
     if (modified != null) knownNodeData = modified;
+
+    newData =
+        (Map<String, String>) properties.getOrDefault(WATCHED_PROPERTIES, Collections.EMPTY_MAP);
+    modified = compareAndInvokeListeners(newData, knownData, knownNodeData, propertiesListeners);
+    if (modified != null) knownData = modified;
+
     return false;
   }
 
   private static Map<String, String> compareAndInvokeListeners(
       Map<String, String> newData,
       Map<String, String> knownData,
+      Map<String, String> overrideData,
       Map<String, List<BiConsumer<String, String>>> propertiesListeners) {
     boolean isModified = false;
     // look for changed data or missing keys
@@ -58,6 +61,10 @@ public class WatchedClusterProperties implements ClusterPropertiesListener {
       String newVal = newData.get(k);
       if (Objects.equals(oldVal, newVal)) continue;
       isModified = true;
+      if (overrideData != null && overrideData.containsKey(k)) {
+        // per node properties contain this key. do not invoke listener
+        continue;
+      }
       invokeListener(k, newVal, propertiesListeners);
     }
     for (String k : newData.keySet()) {
@@ -97,16 +104,6 @@ public class WatchedClusterProperties implements ClusterPropertiesListener {
 
   public void unwatchProperty(String name, BiConsumer<String, String> listener) {
     List<BiConsumer<String, String>> listeners = propertiesListeners.get(name);
-    if (listeners == null) return;
-    listeners.remove(listener);
-  }
-
-  public void watchNodeProperty(String name, BiConsumer<String, String> listener) {
-    nodePropertiesListeners.computeIfAbsent(name, s -> new CopyOnWriteArrayList<>()).add(listener);
-  }
-
-  public void unwatchNodeProperty(String name, BiConsumer<String, String> listener) {
-    List<BiConsumer<String, String>> listeners = nodePropertiesListeners.get(name);
     if (listeners == null) return;
     listeners.remove(listener);
   }

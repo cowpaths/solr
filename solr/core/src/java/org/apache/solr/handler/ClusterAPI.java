@@ -34,7 +34,6 @@ import static org.apache.solr.security.PermissionNameProvider.Name.COLL_READ_PER
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +45,6 @@ import org.apache.solr.api.PayloadObj;
 import org.apache.solr.client.solrj.cloud.DistribStateManager;
 import org.apache.solr.client.solrj.request.beans.ClusterPropPayload;
 import org.apache.solr.client.solrj.request.beans.RateLimiterPayload;
-import org.apache.solr.cloud.WatchedClusterProperties;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.annotation.JsonProperty;
 import org.apache.solr.common.cloud.ClusterProperties;
@@ -71,41 +69,11 @@ public class ClusterAPI {
   private final ConfigSetsHandler configSetsHandler;
 
   public final Commands commands = new Commands();
-  private final WCP watchedProps = new WCP();
-
-  // NOCOMMIT. for demo
-  public static class WCP implements ReflectMapWriter {
-    @JsonProperty public String global_prop1_val = null;
-    @JsonProperty public String global_prop1_time;
-    @JsonProperty public String node_prop1_val = null;
-    @JsonProperty public String node_prop1_time;
-  }
 
   public ClusterAPI(CollectionsHandler ch, ConfigSetsHandler configSetsHandler) {
     this.collectionsHandler = ch;
     this.configSetsHandler = configSetsHandler;
-    WatchedClusterProperties wcp =
-        ch.getCoreContainer().getZkController().getWatchedClusterProperties();
-    wcp.watchProperty(
-        "global_prop1",
-        (k, v) -> {
-          watchedProps.global_prop1_val = v;
-          watchedProps.global_prop1_time = new Date().toString();
-        });
-    wcp.watchProperty(
-        "node_prop1",
-        (k, v) -> {
-          watchedProps.node_prop1_time = v;
-          watchedProps.node_prop1_val = new Date().toString();
-        });
   }
-
-  @EndPoint(method = GET, path = "/node/watched-props", permission = COLL_READ_PERM)
-  public void watchedProps(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
-    rsp.add("watched-props", watchedProps);
-  }
-
-  // end  NOCOMMIT. for demo
 
   @EndPoint(method = GET, path = "/cluster/node-roles", permission = COLL_READ_PERM)
   public void roles(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {

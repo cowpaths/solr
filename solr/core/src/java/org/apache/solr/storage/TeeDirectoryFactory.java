@@ -43,12 +43,14 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.LockFactory;
+import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.MMapDirectoryFactory;
+import org.apache.solr.core.NodeRoles;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.MetricsMap;
 import org.apache.solr.metrics.SolrMetricProducer;
@@ -65,6 +67,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   private NodeLevelTeeDirectoryState ownNodeLevelState;
   private WeakReference<CoreContainer> cc;
 
+  private boolean isDataNode = true;
   private String accessDir;
   private boolean useAsyncIO;
   private boolean useDirectIO;
@@ -72,6 +75,11 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   @Override
   public void initCoreContainer(CoreContainer cc) {
     super.initCoreContainer(cc);
+    // don't set up the index cache on nodes that don't use it
+    if (cc.nodeRoles.getRoleMode(NodeRoles.Role.DATA).equals(NodeRoles.MODE_OFF)) {
+      isDataNode = false;
+      return;
+    }
     this.cc = new WeakReference<>(cc);
   }
 
@@ -363,26 +371,32 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   @Override
   public Directory create(String path, LockFactory lockFactory, DirContext dirContext)
       throws IOException {
-    Directory naive = super.create(path, lockFactory, dirContext);
-    Path compressedPath = Path.of(path);
-    IOFunction<Void, Map.Entry<String, Directory>> accessFunction =
-        unused -> {
-          String accessPath = getScopeName(accessDir, path);
-          Directory dir =
-              new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, nodeLevelState);
-          return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
-        };
-    IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction =
-        content -> {
-          assert content == naive;
-          content.close();
-          content =
-              new CompressingDirectory(
-                  compressedPath, nodeLevelState.ioExec, useAsyncIO, useDirectIO);
-          return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
-        };
-    return new SizeAwareDirectory(
-        new TeeDirectory(naive, accessFunction, persistentFunction, nodeLevelState), 0);
+    Directory backing;
+    if (!isDataNode) {
+      backing = new MMapDirectory(Path.of(path), lockFactory);
+    } else {
+      Directory naive = super.create(path, lockFactory, dirContext);
+      Path compressedPath = Path.of(path);
+      IOFunction<Void, Map.Entry<String, Directory>> accessFunction =
+          unused -> {
+            String accessPath = getScopeName(accessDir, path);
+            Directory dir =
+                new AccessDirectory(
+                    Path.of(accessPath), lockFactory, compressedPath, nodeLevelState);
+            return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
+          };
+      IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction =
+          content -> {
+            assert content == naive;
+            content.close();
+            content =
+                new CompressingDirectory(
+                    compressedPath, nodeLevelState.ioExec, useAsyncIO, useDirectIO);
+            return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
+          };
+      backing = new TeeDirectory(naive, accessFunction, persistentFunction, nodeLevelState);
+    }
+    return new SizeAwareDirectory(backing, 0);
   }
 
   @Override

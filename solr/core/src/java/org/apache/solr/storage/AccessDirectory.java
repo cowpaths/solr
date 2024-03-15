@@ -1094,7 +1094,8 @@ public class AccessDirectory extends MMapDirectory {
       if (blockIdx != currentBlockIdx) {
         initBlock(blockIdx);
       }
-      return guard.getByte(postBuffer, postBufferBaseline + (int) (absolutePos & COMPRESSION_BLOCK_MASK_LOW));
+      return guard.getByte(
+          postBuffer, postBufferBaseline + (int) (absolutePos & COMPRESSION_BLOCK_MASK_LOW));
     }
 
     @Override

@@ -324,8 +324,6 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     useAsyncIO = params.getBool("useAsyncIO", useDirectIO);
   }
 
-  private static final boolean TEST_CONTEXT = System.getProperty("tests.seed") != null;
-
   static String getScopeName(String accessDir, String path) {
     int lastPathDelimIdx = path.lastIndexOf('/');
     if (lastPathDelimIdx == -1) {
@@ -334,18 +332,19 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     String dirName = path.substring(path.lastIndexOf('/'));
     int end = path.lastIndexOf('/', lastPathDelimIdx - 1);
     int start = path.lastIndexOf('/', end - 1);
+    boolean testContext = System.getProperty("tests.seed") != null;
     String ret;
     if ("/index".equals(dirName)) {
       ret = path.substring(start, end);
     } else if (dirName.startsWith("/index.")) {
       // append the suffix identifier; this is a snapshot or temp index dir
       ret = path.substring(start, end).concat(dirName.substring("/index".length()));
-    } else if (TEST_CONTEXT) {
+    } else if (testContext) {
       ret = path.substring(path.lastIndexOf('/'));
     } else {
       throw new IllegalArgumentException("unexpected path: " + path);
     }
-    if (TEST_CONTEXT) {
+    if (testContext && !"disable".equals(System.getProperty("solr.teeDirectory.timeScope"))) {
       ret += "-" + Long.toUnsignedString(System.nanoTime(), 16);
       Path p = Path.of(path);
       if (p.startsWith(accessDir)) {

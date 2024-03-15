@@ -75,7 +75,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     this.cc = new WeakReference<>(cc);
   }
 
-  static class NodeLevelTeeDirectoryState implements SolrMetricProducer {
+  public static class NodeLevelTeeDirectoryState implements SolrMetricProducer {
     final ExecutorService ioExec = ExecutorUtil.newMDCAwareCachedThreadPool("teeIOExec");
     private final Future<?> lengthVerificationTask;
     final BlockingQueue<PersistentLengthVerification> persistentLengthVerificationQueue;
@@ -96,7 +96,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     final Meter priorityActivateMeter = new Meter();
     final Meter activateMeter = new Meter();
 
-    NodeLevelTeeDirectoryState(int lengthVerificationQueueSize) {
+    public NodeLevelTeeDirectoryState(int lengthVerificationQueueSize) {
       persistentLengthVerificationQueue = new ArrayBlockingQueue<>(lengthVerificationQueueSize);
       activationTask =
           ioExec.submit(

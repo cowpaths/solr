@@ -93,6 +93,12 @@ public class CompressingDirectory extends FSDirectory {
   private final boolean useDirectIO;
 
   public CompressingDirectory(
+      Path path, TeeDirectoryFactory.NodeLevelTeeDirectoryState s, boolean useAsyncIO, boolean useDirectIO)
+      throws IOException {
+    this(path, s.ioExec, useAsyncIO, useDirectIO);
+  }
+
+  public CompressingDirectory(
       Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
       throws IOException {
     super(path, FSLockFactory.getDefault());

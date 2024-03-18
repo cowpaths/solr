@@ -101,8 +101,7 @@ public class CompressingDirectory extends FSDirectory {
     this(path, s.ioExec, useAsyncIO, useDirectIO);
   }
 
-  public CompressingDirectory(
-      Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
+  CompressingDirectory(Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
       throws IOException {
     super(path, FSLockFactory.getDefault());
     this.blockSize = (int) (Files.getFileStore(path).getBlockSize());

@@ -376,8 +376,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
           assert content == naive;
           content.close();
           content =
-              new CompressingDirectory(
-                  compressedPath, nodeLevelState.ioExec, useAsyncIO, useDirectIO);
+              new CompressingDirectory(compressedPath, nodeLevelState, useAsyncIO, useDirectIO);
           return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
         };
     return new SizeAwareDirectory(

@@ -580,6 +580,12 @@ public class AccessDirectory extends MMapDirectory {
     }
   }
 
+  /**
+   * This interface is mainly useful for testing. We don't want to directly expose {@link
+   * LazyLoadInput} (the only implementing class, at time of writing); but we expose this interface
+   * to allow tests to efficiently block before checking that the filesystem has been updated (i.e.,
+   * that the access copy of a given file is present and fully populated).
+   */
   public interface LazyLoad {
     void blockUntilLoaded() throws InterruptedException;
   }

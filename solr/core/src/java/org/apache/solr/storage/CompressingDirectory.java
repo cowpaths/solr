@@ -92,8 +92,27 @@ public class CompressingDirectory extends FSDirectory {
   private final boolean useAsyncIO;
   private final boolean useDirectIO;
 
+  /**
+   * The main way that we expect {@link CompressingDirectory} to be used is in the context of {@link
+   * TeeDirectory}, with node-level resources (such as {@link #ioExec}) being maintained at the node
+   * level by {@link org.apache.solr.storage.TeeDirectoryFactory.NodeLevelTeeDirectoryState}.
+   *
+   * <p>So the public ctor here takes {@link
+   * org.apache.solr.storage.TeeDirectoryFactory.NodeLevelTeeDirectoryState} as an arg instead of
+   * the (potentially simpler) {@link ExecutorService}, so that {@link
+   * org.apache.solr.storage.TeeDirectoryFactory.NodeLevelTeeDirectoryState} may be held and tracked
+   * outside of this package, but without exposing any of its internal fields.
+   */
   public CompressingDirectory(
-      Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
+      Path path,
+      TeeDirectoryFactory.NodeLevelTeeDirectoryState s,
+      boolean useAsyncIO,
+      boolean useDirectIO)
+      throws IOException {
+    this(path, s.ioExec, useAsyncIO, useDirectIO);
+  }
+
+  CompressingDirectory(Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
       throws IOException {
     super(path, FSLockFactory.getDefault());
     this.blockSize = (int) (Files.getFileStore(path).getBlockSize());

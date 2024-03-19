@@ -1004,12 +1004,11 @@ public class AccessDirectory extends MMapDirectory {
               throw new RuntimeException(ex);
             }
           }
-          ByteBuffer supply = supply(blockOffset, compressedLen, decompressedLen);
           long accessBlockStart = ((long) blockIdx) << COMPRESSION_BLOCK_SHIFT;
           ByteBuffer dest = accessMapped[(int) (accessBlockStart >> MAX_MAP_SHIFT)];
           int destPos = (int) (accessBlockStart & MAX_MAP_MASK);
           synchronized (closed) {
-            // all read/write access to `accessMapped` is protected by `guard`, but
+            // all read/write access to mapped buffers is protected by `guard`, but
             // it costs us essentially nothing to add another layer of protection here.
             // The extra protection is particularly relevant for the case of background
             // loading, since it by definition takes place asynchronously, and may be
@@ -1023,6 +1022,7 @@ public class AccessDirectory extends MMapDirectory {
             if (closed[0]) {
               throw new AlreadyClosedException("already closed");
             }
+            ByteBuffer supply = supply(blockOffset, compressedLen, decompressedLen);
             guard.putBytes(dest.clear().position(destPos), supply);
           }
           setReadable(blockIdx);

@@ -274,6 +274,7 @@ public abstract class ServletUtils {
   static void consumeInputFully(HttpServletRequest req, HttpServletResponse response) {
     try {
       ServletInputStream is = req.getInputStream();
+      response.getOutputStream().flush();
       //noinspection StatementWithEmptyBody
       while (!is.isFinished() && is.read() != -1) {}
     } catch (IOException e) {

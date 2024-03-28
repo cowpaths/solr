@@ -57,7 +57,7 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
 
   public abstract void setStreamContext(StreamContext context);
 
-  public abstract List<TupleStream> children();
+  public abstract List<? extends TupleStream> children();
 
   public abstract void open() throws IOException;
 

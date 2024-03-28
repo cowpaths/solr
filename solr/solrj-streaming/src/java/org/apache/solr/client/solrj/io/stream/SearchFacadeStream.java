@@ -126,7 +126,7 @@ public class SearchFacadeStream extends TupleStream implements Expressible {
   }
 
   @Override
-  public List<TupleStream> children() {
+  public List<? extends TupleStream> children() {
     return innerStream.children();
   }
 

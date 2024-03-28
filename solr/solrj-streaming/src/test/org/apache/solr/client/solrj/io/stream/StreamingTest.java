@@ -2990,7 +2990,7 @@ public class StreamingTest extends SolrCloudTestCase {
           }
         }
       }
-      List<TupleStream> solrStreams = stream.children();
+      List<? extends TupleStream> solrStreams = stream.children();
       assertEquals(expectedNumStreams, solrStreams.size());
       for (TupleStream next : solrStreams) {
         SolrStream ss = (SolrStream) next;

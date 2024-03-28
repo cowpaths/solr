@@ -513,7 +513,7 @@ public class StreamHandler extends RequestHandlerBase
     }
 
     @Override
-    public List<TupleStream> children() {
+    public List<? extends TupleStream> children() {
       return this.tupleStream.children();
     }
 

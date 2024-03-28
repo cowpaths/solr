@@ -126,6 +126,7 @@ import org.slf4j.MDC;
  */
 public class Http2SolrClient extends SolrClient {
   public static final String REQ_PRINCIPAL_KEY = "solr-req-principal";
+  public static final String SOLR_HEARTBEAT_CONTENT_TYPE = "application/solr-heartbeat";
 
   private static volatile SSLConfig defaultSSLConfig;
 
@@ -744,8 +745,12 @@ public class Http2SolrClient extends SolrClient {
         var r = httpClient.newRequest(url + wparams.toQueryString()).method(method).body(content);
         decorateRequest(r, solrRequest, isAsync);
         r.send(listener);
-        try (var output = content.getOutputStream()) {
-          contentWriter.write(output);
+        if (SOLR_HEARTBEAT_CONTENT_TYPE.equals(contentWriter.getContentType())) {
+          contentWriter.write(content.getOutputStream());
+        } else {
+          try (var output = content.getOutputStream()) {
+            contentWriter.write(output);
+          }
         }
         return r;
 

@@ -16,6 +16,7 @@
  */
 package org.apache.solr.handler;
 
+import static org.apache.solr.client.solrj.impl.Http2SolrClient.SOLR_HEARTBEAT_CONTENT_TYPE;
 import static org.apache.solr.core.RequestParams.USEPARAM;
 
 import com.codahale.metrics.Counter;
@@ -24,7 +25,11 @@ import com.codahale.metrics.Timer;
 import java.lang.invoke.MethodHandles;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import org.apache.solr.api.Api;
 import org.apache.solr.api.ApiBag;
 import org.apache.solr.api.ApiSupport;
@@ -231,8 +236,28 @@ public abstract class RequestHandlerBase
         req.getContext().put(USEPARAM, pluginInfo.attributes.get(USEPARAM));
       SolrPluginUtils.setDefaults(this, req, defaults, appends, invariants);
       req.getContext().remove(USEPARAM);
+      @SuppressWarnings("unchecked")
+      Map.Entry<CountDownLatch, Callable<?>> heartbeat =
+          (Map.Entry<CountDownLatch, Callable<?>>)
+              req.getContext().remove(SOLR_HEARTBEAT_CONTENT_TYPE);
       rsp.setHttpCaching(httpCaching);
-      handleRequestBody(req, rsp);
+      if (heartbeat == null) {
+        handleRequestBody(req, rsp);
+      } else {
+        req.getSearcher()
+            .getTaskExecutor()
+            .invokeAll(
+                List.of(
+                    heartbeat.getValue(),
+                    () -> {
+                      try {
+                        handleRequestBody(req, rsp);
+                      } finally {
+                        heartbeat.getKey().countDown();
+                      }
+                      return null;
+                    }));
+      }
       // count timeouts
       NamedList<?> header = rsp.getResponseHeader();
       if (header != null) {

@@ -16,13 +16,19 @@
  */
 package org.apache.solr.request.json;
 
+import static org.apache.solr.client.solrj.impl.Http2SolrClient.SOLR_HEARTBEAT_CONTENT_TYPE;
 import static org.apache.solr.common.params.CommonParams.JSON;
 import static org.apache.solr.common.params.CommonParams.SORT;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.AbstractMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.MultiMapSolrParams;
@@ -82,6 +88,32 @@ public class RequestUtil {
         // node query (HttpSolrCall's request proxy)
 
         String contentType = cs.getContentType();
+        if (SOLR_HEARTBEAT_CONTENT_TYPE.equals(contentType)) {
+          CountDownLatch done = new CountDownLatch(1);
+          req.getContext()
+              .put(
+                  SOLR_HEARTBEAT_CONTENT_TYPE,
+                  new AbstractMap.SimpleImmutableEntry<>(
+                      done,
+                      (Callable<?>)
+                          () -> {
+                            try {
+                              InputStream stream = cs.getStream();
+                              for (; ; ) {
+                                if (stream.available() == 0
+                                    ? done.await(1, TimeUnit.SECONDS)
+                                    : stream.read() == -1) {
+                                  break;
+                                }
+                              }
+                            } catch (Throwable t) {
+                              // heartbeat is best-effort; if we hit an exception, just bail
+                              t.printStackTrace(System.err);
+                            }
+                            return null;
+                          }));
+          continue;
+        }
         if (contentType == null || !contentType.contains("/json")) {
           throw new SolrException(
               SolrException.ErrorCode.BAD_REQUEST,

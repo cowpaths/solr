@@ -302,6 +302,9 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
   public final SolrCore.Provider coreProvider;
 
+  private final ExecutorService taskExecutor =
+      ExecutorUtil.newMDCAwareCachedThreadPool("TaskExecutor");
+
   /**
    * The SolrResourceLoader used to load all resources for this core.
    *
@@ -1067,8 +1070,9 @@ public class SolrCore implements SolrInfoBean, Closeable {
       SolrCore prev,
       boolean reload) {
 
-    // ensure that in unclean shutdown tests we still close this
+    // ensure that in unclean shutdown tests we still close these
     assert ObjectReleaseTracker.track(searcherExecutor);
+    assert ObjectReleaseTracker.track(taskExecutor);
 
     final CountDownLatch latch = new CountDownLatch(1);
     try {
@@ -1810,6 +1814,16 @@ public class SolrCore implements SolrInfoBean, Closeable {
     }
 
     try {
+      ExecutorUtil.shutdownAndAwaitTermination(taskExecutor);
+    } catch (Throwable e) {
+      log.error("Exception shutting down taskExecutor", e);
+      if (e instanceof Error) {
+        throw (Error) e;
+      }
+    }
+    assert ObjectReleaseTracker.release(taskExecutor);
+
+    try {
       ExecutorUtil.shutdownAndAwaitTermination(searcherExecutor);
     } catch (Throwable e) {
       log.error("Exception shutting down searcherExecutor", e);
@@ -2369,7 +2383,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
                 true,
                 useCaches,
                 true,
-                directoryFactory);
+                directoryFactory,
+                taskExecutor);
 
       } else {
         // newestSearcher == null at this point
@@ -2389,7 +2404,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
                   true,
                   !realtime,
                   true,
-                  directoryFactory);
+                  directoryFactory,
+                  taskExecutor);
         } else {
           RefCounted<IndexWriter> writer = getSolrCoreState().getIndexWriter(this);
           DirectoryReader newReader = null;
@@ -2408,7 +2424,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
                   true,
                   !realtime,
                   true,
-                  directoryFactory);
+                  directoryFactory,
+                  taskExecutor);
         }
       }
 

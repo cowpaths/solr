@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory;
 
 @SolrTestCaseJ4.SuppressSSL
 @LuceneTestCase.SuppressCodecs({"Lucene3x", "Lucene40", "Lucene41", "Lucene42", "Lucene45"})
-@ThreadLeakLingering(linger = 0)
+@ThreadLeakLingering(linger = 2000)
 public class StreamIdleTimeoutTest extends SolrCloudTestCase {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private static final String TEST_COLLECTION = "collection1";

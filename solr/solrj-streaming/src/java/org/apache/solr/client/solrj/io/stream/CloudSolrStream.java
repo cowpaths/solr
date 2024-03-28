@@ -33,6 +33,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
@@ -72,7 +73,7 @@ public class CloudSolrStream extends TupleStream implements Expressible {
   protected StreamComparator comp;
   private boolean trace;
   protected transient Map<String, Tuple> eofTuples;
-  protected transient List<TupleStream> solrStreams;
+  protected transient List<SolrStream> solrStreams;
   protected transient TreeSet<TupleWrapper> tuples;
   protected transient StreamContext streamContext;
 
@@ -294,7 +295,7 @@ public class CloudSolrStream extends TupleStream implements Expressible {
   }
 
   @Override
-  public List<TupleStream> children() {
+  public List<? extends TupleStream> children() {
     return solrStreams;
   }
 
@@ -411,7 +412,7 @@ public class CloudSolrStream extends TupleStream implements Expressible {
   private void openStreams() throws IOException {
     List<StreamOpener> tasks =
         solrStreams.stream()
-            .map(s -> new StreamOpener((SolrStream) s, comp))
+            .map(s -> new StreamOpener(s, comp))
             .collect(Collectors.toUnmodifiableList());
     var results =
         submitAllAndAwaitAggregatingExceptions(tasks, "CloudSolrStream").stream()
@@ -441,6 +442,12 @@ public class CloudSolrStream extends TupleStream implements Expressible {
     return _read();
   }
 
+  private static final long HEARTBEAT_THRESHOLD = TimeUnit.SECONDS.toNanos(1);
+  private static final int HEARTBEAT_THRESHOLD_CHECK_INTERVAL = 1024;
+
+  private long lastHeartbeat = System.nanoTime();
+  private int readsSinceLastHeartbeatThresholdCheck = 0;
+
   protected Tuple _read() throws IOException {
     TupleWrapper tw = tuples.pollFirst();
     if (tw != null) {
@@ -452,6 +459,16 @@ public class CloudSolrStream extends TupleStream implements Expressible {
 
       if (tw.next()) {
         tuples.add(tw);
+      }
+      if (++readsSinceLastHeartbeatThresholdCheck > HEARTBEAT_THRESHOLD_CHECK_INTERVAL) {
+        readsSinceLastHeartbeatThresholdCheck = 0;
+        long now = System.nanoTime();
+        if (now - lastHeartbeat > HEARTBEAT_THRESHOLD) {
+          lastHeartbeat = now;
+          for (SolrStream solrStream : solrStreams) {
+            solrStream.heartbeat();
+          }
+        }
       }
       return t;
     } else {

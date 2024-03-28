@@ -20,11 +20,13 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -37,6 +39,7 @@ import org.apache.solr.client.solrj.io.stream.expr.Explanation.ExpressionType;
 import org.apache.solr.client.solrj.io.stream.expr.StreamExplanation;
 import org.apache.solr.client.solrj.io.stream.expr.StreamFactory;
 import org.apache.solr.client.solrj.request.QueryRequest;
+import org.apache.solr.client.solrj.request.RequestWriter;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
@@ -70,6 +73,7 @@ public class SolrStream extends TupleStream {
 
   private transient SolrClientCache clientCache;
   private transient boolean doCloseCache;
+  private OutputStream heartbeat;
 
   /**
    * @param baseUrl Base URL of the stream.
@@ -188,6 +192,7 @@ public class SolrStream extends TupleStream {
   /** Closes the Stream to a single Solr Instance */
   @Override
   public void close() throws IOException {
+    IOUtils.closeQuietly(heartbeat);
     IOUtils.closeQuietly(tupleStreamParser);
     IOUtils.closeQuietly(closeableHttpResponse);
     if (doCloseCache) {
@@ -272,6 +277,11 @@ public class SolrStream extends TupleStream {
     return fields;
   }
 
+  void heartbeat() throws IOException {
+    heartbeat.write(0);
+    heartbeat.flush();
+  }
+
   private TupleStreamParser constructParser(SolrParams requestParams)
       throws IOException, SolrServerException {
     String p = requestParams.get("qt");
@@ -283,7 +293,28 @@ public class SolrStream extends TupleStream {
     }
 
     String wt = requestParams.get(CommonParams.WT, "json");
-    QueryRequest query = new QueryRequest(requestParams);
+
+    AtomicBoolean done = new AtomicBoolean();
+    QueryRequest query =
+        new QueryRequest(requestParams) {
+          @Override
+          public RequestWriter.ContentWriter getContentWriter(String expectedType) {
+            return new RequestWriter.ContentWriter() {
+              @Override
+              public void write(OutputStream os) throws IOException {
+                // we seem to have to write here to init the stream?
+                os.write(0);
+                os.flush();
+                SolrStream.this.heartbeat = os;
+              }
+
+              @Override
+              public String getContentType() {
+                return "application/solr-heartbeat";
+              }
+            };
+          }
+        };
 
     // in order to reuse HttpSolrClient objects per node, we need to cache them without the core
     // name in the URL

@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -306,7 +307,8 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       SolrIndexConfig config,
       String name,
       boolean enableCache,
-      DirectoryFactory directoryFactory)
+      DirectoryFactory directoryFactory,
+      ExecutorService executor)
       throws IOException {
     // We don't need to reserve the directory because we get it from the factory
     this(
@@ -318,7 +320,8 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
         true,
         enableCache,
         false,
-        directoryFactory);
+        directoryFactory,
+        executor);
     // Release the directory at close.
     this.releaseDirectory = true;
   }
@@ -333,9 +336,10 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       boolean closeReader,
       boolean enableCache,
       boolean reserveDirectory,
-      DirectoryFactory directoryFactory)
+      DirectoryFactory directoryFactory,
+      ExecutorService executor)
       throws IOException {
-    super(wrapReader(core, r));
+    super(wrapReader(core, r), executor);
 
     this.path = path;
     this.directoryFactory = directoryFactory;

@@ -339,7 +339,7 @@ public class TopicStream extends CloudSolrStream implements Expressible {
   private void openStreams() throws IOException {
     List<Callable<TupleWrapper>> tasks =
         solrStreams.stream()
-            .map(s -> new StreamOpener((SolrStream) s, comp))
+            .map(s -> new StreamOpener(s, comp))
             .collect(Collectors.toUnmodifiableList());
     var results =
         submitAllAndAwaitAggregatingExceptions(tasks, "TopicStream").stream()

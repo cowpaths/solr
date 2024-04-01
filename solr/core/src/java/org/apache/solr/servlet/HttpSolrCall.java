@@ -16,6 +16,7 @@
  */
 package org.apache.solr.servlet;
 
+import static org.apache.solr.client.solrj.impl.Http2SolrClient.SOLR_HEARTBEAT_CONTENT_TYPE;
 import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.CORE_NAME_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.NODE_NAME_PROP;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -69,6 +71,7 @@ import org.apache.http.client.methods.HttpOptions;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.solr.api.ApiBag;
 import org.apache.solr.api.V2HttpCall;
@@ -722,6 +725,7 @@ public class HttpSolrCall {
     updatedQueryParams.set(INTERNAL_REQUEST_COUNT, forwardCount);
     String queryStr = updatedQueryParams.toQueryString();
 
+    CountDownLatch done = new CountDownLatch(0);
     try {
       String urlstr = coreUrl + queryStr;
 
@@ -734,7 +738,32 @@ public class HttpSolrCall {
         HttpEntityEnclosingRequestBase entityRequest =
             "POST".equals(req.getMethod()) ? new HttpPost(urlstr) : new HttpPut(urlstr);
         InputStream in = req.getInputStream();
-        HttpEntity entity = new InputStreamEntity(in, req.getContentLength());
+        HttpEntity entity;
+        if (SOLR_HEARTBEAT_CONTENT_TYPE.equals(req.getContentType())) {
+          // using apache HttpClient, we can't do full-duplex (feeding input at the
+          // same time as reading output), so we instead send an empty body, and discard
+          // the real output so that it doesn't buffer and cause problems for the supplier.
+          // TODO: fix this to use jetty HttpClient (checking and setting contentType as
+          //  well)? and/or in the meantime fold "discard" execution into an ExecutorService?
+          //  This currently executes via `solrDispatchFilter.getHttpClient()`, which ultimately
+          //  derives from `UpdateShardHandler.getDefaultHttpClient()`. Once
+          //  https://issues.apache.org/jira/browse/SOLR-16503 lands, that should enable us to
+          //  use Http2SolrClient from here.
+          CountDownLatch localDone = new CountDownLatch(1);
+          done = localDone;
+          new Thread(() -> {
+            try {
+              while (in.available() == 0 ? !localDone.await(1, TimeUnit.SECONDS) : in.read() != -1) {
+                // discard all
+              }
+            } catch (Throwable t) {
+              log.warn("error discarding heartbeat input", t);
+            }
+          }).start();
+          entity = new ByteArrayEntity(new byte[0]);
+        } else {
+          entity = new InputStreamEntity(in, req.getContentLength());
+        }
         entityRequest.setEntity(entity);
         method = entityRequest;
       } else if ("DELETE".equals(req.getMethod())) {
@@ -809,6 +838,7 @@ public class HttpSolrCall {
                   + forwardCount,
               e));
     } finally {
+      done.countDown();
       Utils.consumeFully(httpEntity);
     }
   }

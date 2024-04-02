@@ -740,7 +740,9 @@ public class Http2SolrClient extends SolrClient {
       HttpMethod method =
           SolrRequest.METHOD.POST == solrRequest.getMethod() ? HttpMethod.POST : HttpMethod.PUT;
 
-      if (contentWriter != null) {
+      if (contentWriter != null && (!SOLR_HEARTBEAT_CONTENT_TYPE.equals(contentWriter.getContentType()) || url.concat(wparams.toQueryString()).length() < 8187)) {
+        // TODO: magic numebr 8187 satisfies `StreamExpressionTest.tooLargeForGetRequest()`.
+        //  this could be addressed some other way, but it would be a bit tricky.
         var content = new OutputStreamRequestContent(contentWriter.getContentType());
         var r = httpClient.newRequest(url + wparams.toQueryString()).method(method).body(content);
         decorateRequest(r, solrRequest, isAsync);

@@ -129,6 +129,10 @@ public class CompressingDirectory extends FSDirectory {
     if (getPendingDeletions().contains(name)) {
       throw new NoSuchFileException("file \"" + name + "\" is pending delete");
     }
+    return readLengthFromHeader(path);
+  }
+
+  public static long readLengthFromHeader(Path path) throws IOException {
     if (Files.size(path) < Long.BYTES) {
       return 0;
     } else {

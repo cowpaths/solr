@@ -22,6 +22,7 @@ import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_MAS
 import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SHIFT;
 import static org.apache.solr.storage.CompressingDirectory.COMPRESSION_BLOCK_SIZE;
 import static org.apache.solr.storage.CompressingDirectory.DirectIOIndexOutput.HEADER_SIZE;
+import static org.apache.solr.storage.CompressingDirectory.readLengthFromHeader;
 
 import java.io.Closeable;
 import java.io.EOFException;
@@ -134,11 +135,19 @@ public class AccessDirectory extends MMapDirectory {
     try {
       return super.fileLength(name);
     } catch (NoSuchFileException | FileNotFoundException ex) {
-      LazyEntry lazy = open(name);
-      if (lazy == null) {
-        throw ex;
-      } else {
+      // we don't want to lazy `open()` here, because if all we want is the fileLength (which
+      // is sometimes done from a context where the file doesn't exist, and shouldn't be
+      // restored), then we don't want to incur the hit of restoring and mapping the lazy file.
+      LazyEntry lazy = activeLazy.get(name);
+      if (lazy != null) {
         return lazy.input.length();
+      } else {
+        try {
+          return readLengthFromHeader(compressedPath.resolve(name));
+        } catch (Throwable t) {
+          t.addSuppressed(ex);
+          throw t;
+        }
       }
     }
   }

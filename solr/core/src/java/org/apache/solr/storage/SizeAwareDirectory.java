@@ -86,7 +86,8 @@ public class SizeAwareDirectory extends FilterDirectory
     } else if ((live = liveOutputs.get(name)) != null) {
       return live.backing.getFilePointer();
     } else {
-      return super.fileLength(name);
+      // fallback delegate to wrapped Directory
+      return in.fileLength(name);
     }
   }
 

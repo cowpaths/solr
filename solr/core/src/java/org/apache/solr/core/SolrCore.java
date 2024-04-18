@@ -206,7 +206,6 @@ public class SolrCore implements SolrInfoBean, Closeable {
   private static final Logger slowLog =
       LoggerFactory.getLogger(
           MethodHandles.lookup().lookupClass().getName() + ".SlowRequest"); // nowarn
-  private final boolean isSynthetic;
 
   private String name;
 
@@ -792,8 +791,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
                 updateHandler,
                 solrDelPolicy,
                 currentCore,
-                true,
-                isSynthetic);
+                true);
 
         // we open a new IndexWriter to pick up the latest config
         core.getUpdateHandler().getSolrCoreState().newIndexWriter(core, false);
@@ -1055,13 +1053,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
     return coreContainer;
   }
 
-  protected SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {
-    this(coreContainer, cd, configSet, false);
-  }
-
-  protected SolrCore(
-      CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet, boolean isSynthetic) {
-    this(coreContainer, cd, configSet, null, null, null, null, false, isSynthetic);
+  SolrCore(CoreContainer coreContainer, CoreDescriptor cd, ConfigSet configSet) {
+    this(coreContainer, cd, configSet, null, null, null, null, false);
   }
 
   private SolrCore(
@@ -1072,8 +1065,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       UpdateHandler updateHandler,
       IndexDeletionPolicyWrapper delPolicy,
       SolrCore prev,
-      boolean reload,
-      boolean isSynthetic) {
+      boolean reload) {
 
     // ensure that in unclean shutdown tests we still close this
     assert ObjectReleaseTracker.track(searcherExecutor);
@@ -1183,10 +1175,8 @@ public class SolrCore implements SolrInfoBean, Closeable {
 
       initSearcher(prev);
 
-      this.isSynthetic = isSynthetic;
-
       // Initialize the RestManager
-      restManager = isSynthetic ? new RestManager() : initRestManager();
+      restManager = initRestManager();
 
       // Finally tell anyone who wants to know
       resourceLoader.inform(resourceLoader);
@@ -1213,9 +1203,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       // searcher!
       seedVersionBuckets();
 
-      if (!isSynthetic) {
-        bufferUpdatesIfConstructing(coreDescriptor);
-      }
+      bufferUpdatesIfConstructing(coreDescriptor);
 
       this.ruleExpiryLock = new ReentrantLock();
       this.snapshotDelLock = new ReentrantLock();
@@ -1267,7 +1255,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
   }
 
   /** Set UpdateLog to buffer updates if the slice is in construction. */
-  private void bufferUpdatesIfConstructing(CoreDescriptor coreDescriptor) {
+  protected void bufferUpdatesIfConstructing(CoreDescriptor coreDescriptor) {
 
     if (coreContainer != null && coreContainer.isZooKeeperAware()) {
       if (reqHandlers.get("/get") == null) {

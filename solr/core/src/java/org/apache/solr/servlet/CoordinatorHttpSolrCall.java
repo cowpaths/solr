@@ -33,7 +33,7 @@ import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.core.SolrCoreProxy;
+import org.apache.solr.core.SyntheticSolrCore;
 import org.apache.solr.request.DelegatingSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.slf4j.Logger;
@@ -87,8 +87,8 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         String syntheticCollectionName = getSyntheticCollectionName(confName);
 
         CoreContainer coreContainer = solrCall.cores;
-        SolrCoreProxy syntheticCore =
-            SolrCoreProxy.createAndRegisterProxy(
+        SyntheticSolrCore syntheticCore =
+            SyntheticSolrCore.createAndRegisterCore(
                 coreContainer, syntheticCollectionName, coll.getConfigName());
 
         // after this point the sync core should be available in the container. Double check

@@ -244,22 +244,26 @@ public abstract class ConfigSetService {
     return (flags == null || flags.get("trusted") == null || flags.getBooleanArg("trusted"));
   }
 
-  public final ConfigSet loadConfigSet(CoreDescriptor dcore) {
-    return loadConfigSet(dcore, null);
-  }
-
   /**
    * Load the ConfigSet for a core
    *
    * @param dcore the core's CoreDescriptor
    * @return a ConfigSet
    */
-  public final ConfigSet loadConfigSet(CoreDescriptor dcore, String configSetName) {
+  public final ConfigSet loadConfigSet(CoreDescriptor dcore) {
+    return loadConfigSet(dcore, null);
+  }
 
-    SolrResourceLoader coreLoader =
-        configSetName != null
-            ? createConfigSetResourceLoader(dcore, configSetName)
-            : createCoreResourceLoader(dcore);
+  /**
+   * Load the ConfigSet for a core with an explicit config set name
+   *
+   * @param dcore the core's CoreDescriptor
+   * @param configSetName an optional and explicit config set name
+   * @return a ConfigSet
+   */
+  final ConfigSet loadConfigSet(CoreDescriptor dcore, String configSetName) {
+
+    SolrResourceLoader coreLoader = createCoreResourceLoader(dcore, configSetName);
 
     try {
       // ConfigSet properties are loaded from ConfigSetProperties.DEFAULT_FILENAME file.
@@ -398,9 +402,19 @@ public abstract class ConfigSetService {
    */
   protected abstract SolrResourceLoader createCoreResourceLoader(CoreDescriptor cd);
 
-  protected SolrResourceLoader createConfigSetResourceLoader(
-      CoreDescriptor cd, String configSetName) {
-    throw new UnsupportedOperationException("Not supported");
+  /**
+   * Create a SolrResourceLoader for a core with the provided configSetName.
+   *
+   * <p>By default, this will just call {@link
+   * ConfigSetService#createConfigSetService(CoreContainer)}. Child implementation might override
+   * this to make use of the configSetName directly
+   *
+   * @param cd the core's CoreDescriptor
+   * @param configSetName an optional config set name
+   * @return a SolrResourceLoader
+   */
+  protected SolrResourceLoader createCoreResourceLoader(CoreDescriptor cd, String configSetName) {
+    return createCoreResourceLoader(cd);
   }
   /**
    * Return a name for the ConfigSet for a core to be used for printing/diagnostic purposes.

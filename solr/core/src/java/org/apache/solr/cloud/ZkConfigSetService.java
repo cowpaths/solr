@@ -67,8 +67,7 @@ public class ZkConfigSetService extends ConfigSetService {
   }
 
   @Override
-  protected SolrResourceLoader createConfigSetResourceLoader(
-      CoreDescriptor cd, String configSetName) {
+  protected SolrResourceLoader createCoreResourceLoader(CoreDescriptor cd, String configSetName) {
     return new ZkSolrResourceLoader(
         cd.getInstanceDir(), configSetName, parentLoader.getClassLoader(), zkController);
   }

@@ -584,7 +584,9 @@ public class TeeDirectory extends BaseDirectory {
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
     IndexInput ret = access.openInput(name, context);
-    if (!(ret instanceof AccessDirectory.LazyLoadInput) && !name.endsWith(".tmp") && persistent != null) {
+    if (!(ret instanceof AccessDirectory.LazyLoadInput)
+        && !name.endsWith(".tmp")
+        && persistent != null) {
       // we do not expect tmp files to be present in persistent directory
       persistentLengthVerificationQueue.offer(
           new TeeDirectoryFactory.PersistentLengthVerification(

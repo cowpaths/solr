@@ -255,7 +255,9 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
       this.accessDir = accessDir;
       this.persistentDir = persistentDir;
       this.accessFilePath =
-          accessDir instanceof FSDirectory ? ((FSDirectory) accessDir).getDirectory().resolve(name) : null;
+          accessDir instanceof FSDirectory
+              ? ((FSDirectory) accessDir).getDirectory().resolve(name)
+              : null;
       this.persistentDirPath =
           persistentDir instanceof FSDirectory
               ? ((FSDirectory) persistentDir).getDirectory()

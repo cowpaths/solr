@@ -34,6 +34,7 @@ import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SyntheticSolrCore;
+import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.request.DelegatingSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.slf4j.Logger;
@@ -70,8 +71,10 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       Factory factory, HttpSolrCall solrCall, String collectionName, boolean isPreferLeader) {
     String syntheticCoreName = factory.collectionVsCoreNameMapping.get(collectionName);
     if (syntheticCoreName != null) {
+      setMDCLoggingContext(collectionName);
       return solrCall.cores.getCore(syntheticCoreName);
     } else {
+      //first time loading this collection
       ZkStateReader zkStateReader = solrCall.cores.getZkController().getZkStateReader();
       ClusterState clusterState = zkStateReader.getClusterState();
       DocCollection coll = clusterState.getCollectionOrNull(collectionName, true);
@@ -82,42 +85,46 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
             collectionName);
         return null;
       }
+
+      String confName = coll.getConfigName();
+      String syntheticCollectionName = getSyntheticCollectionName(confName);
+      syntheticCoreName = syntheticCollectionName + "_core";
+
+      SolrCore syntheticCore;
       synchronized (CoordinatorHttpSolrCall.class) {
-        String confName = coll.getConfigName();
-        String syntheticCollectionName = getSyntheticCollectionName(confName);
-
         CoreContainer coreContainer = solrCall.cores;
-        SyntheticSolrCore syntheticCore =
-            SyntheticSolrCore.createAndRegisterCore(
-                coreContainer, syntheticCollectionName, coll.getConfigName());
-
-        // after this point the sync core should be available in the container. Double check
-        if (coreContainer.getCore(syntheticCore.getName()) != null) {
-          factory.collectionVsCoreNameMapping.put(collectionName, syntheticCore.getName());
-
-          // for the watcher, only remove on collection deletion (ie collection == null), since
-          // watch from coordinator is collection specific
-          solrCall
-              .cores
-              .getZkController()
-              .getZkStateReader()
-              .registerDocCollectionWatcher(
-                  collectionName,
-                  collection -> {
-                    if (collection == null) {
-                      factory.collectionVsCoreNameMapping.remove(collectionName);
-                      return true;
-                    } else {
-                      return false;
-                    }
-                  });
-          if (log.isDebugEnabled()) {
-            log.debug("coordinator node, returns synthetic core: {}", syntheticCore.getName());
-          }
-          return syntheticCore;
+        syntheticCore = coreContainer.getCore(syntheticCoreName);
+        if (syntheticCore == null) {
+          //first time loading this config set
+          log.info("Loading synthetic core for config set {}", confName);
+          syntheticCore =
+                  SyntheticSolrCore.createAndRegisterCore(
+                          coreContainer, syntheticCollectionName, coll.getConfigName());
         }
+
+        factory.collectionVsCoreNameMapping.put(collectionName, syntheticCore.getName());
+
+        // for the watcher, only remove on collection deletion (ie collection == null), since
+        // watch from coordinator is collection specific
+        coreContainer
+            .getZkController()
+            .getZkStateReader()
+            .registerDocCollectionWatcher(
+                collectionName,
+                collection -> {
+                  if (collection == null) {
+                    factory.collectionVsCoreNameMapping.remove(collectionName);
+                    return true;
+                  } else {
+                    return false;
+                  }
+                });
       }
-      return null;
+      setMDCLoggingContext(collectionName);
+      if (log.isDebugEnabled()) {
+        log.debug("coordinator node, returns synthetic core: {}", syntheticCore.getName());
+      }
+      return syntheticCore;
     }
   }
 
@@ -156,6 +163,19 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         return cloudDescriptor;
       }
     };
+  }
+
+  /**
+   * Overrides the MDC context as the core set was synthetic core, which does not reflect the
+   * collection being operated on
+   */
+  private static void setMDCLoggingContext(String collectionName) {
+    MDCLoggingContext.setCollection(collectionName);
+
+    // below is irrelevant for call to coordinator
+    MDCLoggingContext.setCoreName(null);
+    MDCLoggingContext.setShard(null);
+    MDCLoggingContext.setCoreName(null);
   }
 
   // The factory that creates an instance of HttpSolrCall

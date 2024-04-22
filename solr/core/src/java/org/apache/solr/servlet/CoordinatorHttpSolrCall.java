@@ -74,7 +74,7 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       setMDCLoggingContext(collectionName);
       return solrCall.cores.getCore(syntheticCoreName);
     } else {
-      //first time loading this collection
+      // first time loading this collection
       ZkStateReader zkStateReader = solrCall.cores.getZkController().getZkStateReader();
       ClusterState clusterState = zkStateReader.getClusterState();
       DocCollection coll = clusterState.getCollectionOrNull(collectionName, true);
@@ -95,11 +95,11 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
         CoreContainer coreContainer = solrCall.cores;
         syntheticCore = coreContainer.getCore(syntheticCoreName);
         if (syntheticCore == null) {
-          //first time loading this config set
+          // first time loading this config set
           log.info("Loading synthetic core for config set {}", confName);
           syntheticCore =
-                  SyntheticSolrCore.createAndRegisterCore(
-                          coreContainer, syntheticCollectionName, coll.getConfigName());
+              SyntheticSolrCore.createAndRegisterCore(
+                  coreContainer, syntheticCollectionName, coll.getConfigName());
         }
 
         factory.collectionVsCoreNameMapping.put(collectionName, syntheticCore.getName());

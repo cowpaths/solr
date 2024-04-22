@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -152,24 +151,7 @@ public class TestLogWatcher extends SolrTestCaseJ4 {
   private static void validateWrite(SolrDocumentList docs, String expectMsg) throws IOException {
     CharArr arr = new CharArr();
     org.noggit.JSONWriter w = new org.noggit.JSONWriter(arr, 2);
-    docs.writeMap(
-        new MapWriter.EntryWriter() {
-          boolean first = true;
-
-          @Override
-          public MapWriter.EntryWriter put(CharSequence k, Object v) {
-            if (first) {
-              first = false;
-            } else {
-              w.writeValueSeparator();
-            }
-            w.indent();
-            w.writeString(k.toString());
-            w.writeNameSeparator();
-            w.write(v);
-            return this;
-          }
-        });
+    w.write(docs);
     String output = arr.toString();
     assertTrue("found: " + output, output.contains(expectMsg));
   }

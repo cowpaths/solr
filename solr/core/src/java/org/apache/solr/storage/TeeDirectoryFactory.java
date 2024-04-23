@@ -19,9 +19,11 @@ package org.apache.solr.storage;
 
 import com.codahale.metrics.Meter;
 import java.io.Closeable;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.ref.WeakReference;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.AbstractMap;
@@ -243,6 +245,8 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   static final class PersistentLengthVerification {
     private final Directory accessDir;
     private final Directory persistentDir;
+    private final Path accessFilePath;
+    private final Path persistentDirPath;
     private final String name;
     private final long accessLength;
 
@@ -250,9 +254,19 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
         Directory accessDir, Directory persistentDir, String name, long accessLength) {
       this.accessDir = accessDir;
       this.persistentDir = persistentDir;
+      this.accessFilePath =
+          accessDir instanceof FSDirectory
+              ? ((FSDirectory) accessDir).getDirectory().resolve(name)
+              : null;
+      this.persistentDirPath =
+          persistentDir instanceof FSDirectory
+              ? ((FSDirectory) persistentDir).getDirectory()
+              : null;
       this.name = name;
       this.accessLength = accessLength;
     }
+
+    private static final int RECHECK_FILE_GONE = 5;
 
     private void verify() {
       try {
@@ -263,17 +277,44 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
       } catch (AlreadyClosedException th) {
         // swallow this; we have to defer lookup, but we know that in doing so we run the risk
         // the the directory will already have been closed by the time we look up the length
-      } catch (NoSuchFileException e) {
+      } catch (NoSuchFileException | FileNotFoundException e) {
         try {
-          accessDir.fileLength(name);
+          if (accessFilePath == null) {
+            accessDir.fileLength(name);
+            // we should arrive here only rarely, and we expect that the access copy should
+            // be on its way to being deleted, so simply pause for a while, then re-check
+            int retries = RECHECK_FILE_GONE;
+            do {
+              Thread.sleep(1000);
+              accessDir.fileLength(name); // expect this to throw NoSuchFileException
+            } while (--retries > 0);
+          } else {
+            int retries = RECHECK_FILE_GONE;
+            do {
+              if (!Files.exists(accessFilePath)) {
+                // good; the file is finally gone from access path
+                return;
+              }
+              // we should loop only rarely, and we expect that the access copy should
+              // be on its way to being deleted, so simply pause for a while, then re-check
+              Thread.sleep(1000);
+            } while (--retries > 0);
+            // one last time, check the expensive way, in case the directory's closed but
+            // the file's not gone yet (for some reason ... that would be weird, but it's
+            // not what we're checking for here, so just let it slide).
+            accessDir.fileLength(name);
+          }
+          // if the access copy is _still_ not gone, then we may have a real problem; log it
           log.error("file absent in persistent, present in access: {}", this);
-        } catch (NoSuchFileException e1) {
+        } catch (NoSuchFileException | FileNotFoundException e1) {
           // this is what we expect, so just swallow it
+        } catch (AlreadyClosedException e1) {
+          // we know this is possible, and should not be considered a problem
         } catch (Throwable t) {
-          log.warn("unable to re-verify access length {}", this, t);
+          log.error("unable to re-verify access length {}", this, t);
         }
       } catch (Throwable t) {
-        log.warn("unable to verify persistent length {}", this, t);
+        log.error("unable to verify persistent length {}", this, t);
       }
     }
 
@@ -281,17 +322,9 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     public String toString() {
       StringBuilder sb = new StringBuilder();
       sb.append("{name=").append(name).append(", length=").append(accessLength).append(", access=");
-      if (accessDir instanceof FSDirectory) {
-        sb.append(((FSDirectory) accessDir).getDirectory());
-      } else {
-        sb.append(accessDir);
-      }
+      sb.append(accessFilePath == null ? accessDir : accessFilePath.getParent());
       sb.append(", persistent=");
-      if (persistentDir instanceof FSDirectory) {
-        sb.append(((FSDirectory) persistentDir).getDirectory());
-      } else {
-        sb.append(persistentDir);
-      }
+      sb.append(persistentDirPath == null ? persistentDir : persistentDirPath);
       sb.append("}");
       return sb.toString();
     }

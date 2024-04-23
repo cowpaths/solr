@@ -22,15 +22,15 @@ public class SyntheticSolrCore extends SolrCore {
   }
 
   public static SyntheticSolrCore createAndRegisterCore(
-      CoreContainer coreContainer, String syntheticCollectionName, String configSetName) {
+      CoreContainer coreContainer, String syntheticCoreName, String configSetName) {
     Map<String, String> coreProps = new HashMap<>();
     coreProps.put(CoreAdminParams.CORE_NODE_NAME, coreContainer.getHostName());
-    coreProps.put(CoreAdminParams.COLLECTION, syntheticCollectionName);
+    coreProps.put(CoreAdminParams.COLLECTION, syntheticCoreName);
 
     CoreDescriptor syntheticCoreDescriptor =
         new CoreDescriptor(
-            syntheticCollectionName,
-            Paths.get(coreContainer.getSolrHome() + "/" + syntheticCollectionName),
+                syntheticCoreName,
+            Paths.get(coreContainer.getSolrHome() + "/" + syntheticCoreName),
             coreProps,
             coreContainer.getContainerProperties(),
             coreContainer.getZkController());
@@ -57,5 +57,10 @@ public class SyntheticSolrCore extends SolrCore {
     // which synthetic core is not registered in ZK.
     // We do not expect RestManager ops on Coordinator Nodes
     return new RestManager();
+  }
+
+  @Override
+  public void close() {
+    super.close();
   }
 }

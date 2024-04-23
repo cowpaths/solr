@@ -99,7 +99,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
           log.info("Loading synthetic core for config set {}", confName);
           syntheticCore =
               SyntheticSolrCore.createAndRegisterCore(
-                  coreContainer, syntheticCollectionName, coll.getConfigName());
+                  coreContainer, syntheticCoreName, coll.getConfigName());
+          // getting the core should open it
+          syntheticCore.open();
         }
 
         factory.collectionVsCoreNameMapping.put(collectionName, syntheticCore.getName());

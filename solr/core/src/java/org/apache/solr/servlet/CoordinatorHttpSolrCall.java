@@ -71,8 +71,9 @@ public class CoordinatorHttpSolrCall extends HttpSolrCall {
       Factory factory, HttpSolrCall solrCall, String collectionName, boolean isPreferLeader) {
     String syntheticCoreName = factory.collectionVsCoreNameMapping.get(collectionName);
     if (syntheticCoreName != null) {
+      SolrCore syntheticCore = solrCall.cores.getCore(syntheticCoreName);
       setMDCLoggingContext(collectionName);
-      return solrCall.cores.getCore(syntheticCoreName);
+      return syntheticCore;
     } else {
       // first time loading this collection
       ZkStateReader zkStateReader = solrCall.cores.getZkController().getZkStateReader();

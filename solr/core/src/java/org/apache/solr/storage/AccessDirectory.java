@@ -180,29 +180,11 @@ public class AccessDirectory extends MMapDirectory {
 
   @Override
   public void sync(Collection<String> names) throws IOException {
-    ensureOpen();
-
-    for (String name : names) {
-      try {
-        fsync(name);
-      } catch (NoSuchFileException | FileNotFoundException ex) {
-        LazyEntry lazy = open(name);
-        if (lazy == null) {
-          throw ex;
-        } else {
-          try {
-            fsync(lazy.lazyName);
-          } catch (IOException ex1) {
-            // try one more time with the original name in case the file was in the
-            // process of being renamed
-            fsync(name);
-          }
-        }
-      }
-    }
-
-    // to trigger `maybeDeletePendingFiles()`
-    super.sync(Collections.emptySet());
+    super.sync(names);
+    // NOTE: just call super here. `sync()` should only be called with an expectation
+    // that all files should be present -- notably, sync'ing a lazy partially-populated
+    // file would be pointless (sync'ing is about guaranteeing that a file on disk is
+    // complete, which by definition a lazily reconstituted file is not).
   }
 
   private volatile boolean isClosed = false;
@@ -215,7 +197,7 @@ public class AccessDirectory extends MMapDirectory {
     long fileSize = canonical.length();
     boolean success = false;
     try {
-      super.sync(Collections.singleton(lazyName));
+      canonical.force();
       super.rename(lazyName, name);
       success = true;
       syncMetaData();
@@ -1814,6 +1796,26 @@ public class AccessDirectory extends MMapDirectory {
     @Override
     public void blockUntilLoaded() throws InterruptedException {
       loadedLatch.await();
+    }
+
+    /**
+     * This must only be called on the initial/canonical lazy input, used to fsync/force output to
+     * disk ({@link org.apache.lucene.store.Directory#sync(Collection)} does not work across
+     * FileChannel/MappedByteBuffer).
+     */
+    public void force() {
+      MappedByteBuffer[] toForce = (MappedByteBuffer[]) accessMapped;
+      if (toForce == null) {
+        throw new AlreadyClosedException("already closed");
+      }
+      synchronized (closed) {
+        if (closed[0]) {
+          throw new AlreadyClosedException("already closed");
+        }
+        for (MappedByteBuffer bb : toForce) {
+          bb.force();
+        }
+      }
     }
   }
 }

@@ -153,9 +153,8 @@ public class CorePropertiesLocator implements CoresLocator {
           maxDepth,
           new SimpleFileVisitor<>() {
             @Override
-            public FileVisitResult preVisitDirectory(Path dir,
-                                                     BasicFileAttributes attr)
-                    throws IOException {
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attr)
+                throws IOException {
               for (Path i : ignoredDirectories) {
                 if (dir.startsWith(i)) {
                   return FileVisitResult.SKIP_SUBTREE;

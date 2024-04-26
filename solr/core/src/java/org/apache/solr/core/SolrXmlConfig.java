@@ -351,6 +351,7 @@ public class SolrXmlConfig {
                 break;
               case "coreRootIgnoredDirectories":
                 builder.setCoreRootIgnoredDirectories(separatePaths(it.txt()));
+                break;
               case "solrDataHome":
                 builder.setSolrDataHome(it.txt());
                 break;

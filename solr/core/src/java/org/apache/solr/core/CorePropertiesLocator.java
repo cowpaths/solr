@@ -155,9 +155,11 @@ public class CorePropertiesLocator implements CoresLocator {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attr)
                 throws IOException {
-              for (Path i : ignoredDirectories) {
-                if (dir.startsWith(i)) {
-                  return FileVisitResult.SKIP_SUBTREE;
+              if (ignoredDirectories != null) {
+                for (Path i : ignoredDirectories) {
+                  if (dir.startsWith(i)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                  }
                 }
               }
               return FileVisitResult.CONTINUE;

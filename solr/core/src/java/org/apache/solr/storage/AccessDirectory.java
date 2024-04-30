@@ -180,11 +180,30 @@ public class AccessDirectory extends MMapDirectory {
 
   @Override
   public void sync(Collection<String> names) throws IOException {
-    super.sync(names);
-    // NOTE: just call super here. `sync()` should only be called with an expectation
-    // that all files should be present -- notably, sync'ing a lazy partially-populated
-    // file would be pointless (sync'ing is about guaranteeing that a file on disk is
-    // complete, which by definition a lazily reconstituted file is not).
+    ensureOpen();
+
+    for (String name : names) {
+      try {
+        fsync(name); // this covers the normal, actively-writing case.
+      } catch (NoSuchFileException | FileNotFoundException ex) {
+        try {
+          if (activeLazy.get(name) != null
+              || CompressingDirectory.readLengthFromHeader(compressedPath.resolve(name)) > 0) {
+            // if we have a lazy entry, or if the length header is written (indicating that the
+            // compressed copy is completely written) then trust that the compressed/canonical
+            // copy is complete, and return, ignoring the sync request (since sync'ing a partially
+            // populated file would be pointless).
+            continue;
+          }
+        } catch (Throwable t) {
+          ex.addSuppressed(t);
+        }
+        throw ex;
+      }
+    }
+
+    // to trigger `maybeDeletePendingFiles()`
+    super.sync(Collections.emptySet());
   }
 
   private volatile boolean isClosed = false;

@@ -193,7 +193,7 @@ public class AccessDirectory extends MMapDirectory {
             // compressed copy is completely written) then trust that the compressed/canonical
             // copy is complete, and return, ignoring the sync request (since sync'ing a partially
             // populated file would be pointless).
-            return;
+            continue;
           }
         } catch (Throwable t) {
           ex.addSuppressed(t);

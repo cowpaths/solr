@@ -259,11 +259,22 @@ public class AccessDirectory extends MMapDirectory {
       }
       long offset = ((long) from[0]) << COMPRESSION_BLOCK_SHIFT;
 
-      // NOTE: regular activate (what we're doing here) should bypass `slice`, since
-      // we don't want crosstalk with `priorityActivate`, `populated()`, etc.
-      LazyLoadInput in = new LazyLoadInput("activation", input, offset, input.length - offset);
+      LazyLoadInput in;
+      synchronized (input.closed) {
+        if (input.closed[0]) {
+          return -1;
+        }
+        // NOTE: regular activate (what we're doing here) should bypass `slice`, since
+        // we don't want crosstalk with `priorityActivate`, `populated()`, etc.
+        in = new LazyLoadInput("activation", input, offset, input.length - offset);
+      }
 
-      final int ret = in.load(from);
+      final int ret;
+      try {
+        ret = in.load(from);
+      } catch (AlreadyClosedException ex) {
+        return -1;
+      }
       if (ret >= 0) {
         return ret;
       }

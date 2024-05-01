@@ -130,12 +130,10 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
                       }
                       if (lazyEntry != null) {
                         // we load background activation in multiple passes, in order to
-                        // periodically give
-                        // `priorityActivate` a crack at running. Otherwise, a single monolithic
-                        // large file
-                        // could block IO for a long time, depriving us of the ability to benefit
-                        // from
-                        // signals about specific file areas that should be loaded earlier.
+                        // periodically give `priorityActivate` a crack at running. Otherwise,
+                        // a single monolithic large file could block IO for a long time,
+                        // depriving us of the ability to benefit from signals about specific
+                        // file areas that should be loaded earlier.
                         int blocksLoadedCount = lazyEntry.load();
                         if (blocksLoadedCount < 0) {
                           blocksLoadedCount = ~blocksLoadedCount;

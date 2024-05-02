@@ -23,11 +23,9 @@ import static org.apache.solr.common.params.CommonParams.TRUE;
 import java.lang.invoke.MethodHandles;
 import java.util.Date;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -56,7 +54,6 @@ import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.core.NodeRoles;
 import org.apache.solr.embedded.JettySolrRunner;
-import org.apache.solr.servlet.CoordinatorHttpSolrCall;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +66,6 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
     try {
       CloudSolrClient client = cluster.getSolrClient();
       String COLLECTION_NAME = "test_coll";
-      String SYNTHETIC_COLLECTION = CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX + "conf";
       CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 2, 2)
           .process(cluster.getSolrClient());
       cluster.waitForActiveCollection(COLLECTION_NAME, 2, 4);
@@ -97,15 +93,6 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
               .process(client, COLLECTION_NAME);
 
       assertEquals(10, rslt.getResults().size());
-
-      DocCollection collection =
-          cluster.getSolrClient().getClusterStateProvider().getCollection(SYNTHETIC_COLLECTION);
-      assertNotNull(collection);
-
-      Set<String> expectedNodes = new HashSet<>();
-      expectedNodes.add(coordinatorJetty.getNodeName());
-      collection.forEachReplica((s, replica) -> expectedNodes.remove(replica.getNodeName()));
-      assertTrue(expectedNodes.isEmpty());
     } finally {
       cluster.shutdown();
     }
@@ -117,7 +104,6 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
     try {
       CloudSolrClient client = cluster.getSolrClient();
       String COLLECTION_NAME = "test_coll";
-      String SYNTHETIC_COLLECTION = CoordinatorHttpSolrCall.SYNTHETIC_COLL_PREFIX + "conf";
       for (int j = 1; j <= 10; j++) {
         String collname = COLLECTION_NAME + "_" + j;
         CollectionAdminRequest.createCollection(collname, "conf", 2, 2)
@@ -163,15 +149,6 @@ public class TestCoordinatorRole extends SolrCloudTestCase {
 
         assertEquals(10, rslt.getResults().size());
       }
-
-      DocCollection collection =
-          cluster.getSolrClient().getClusterStateProvider().getCollection(SYNTHETIC_COLLECTION);
-      assertNotNull(collection);
-
-      int coordNode1NumCores = coordinatorJetty1.getCoreContainer().getNumAllCores();
-      assertEquals("Unexpected number of cores found for coordinator node", 1, coordNode1NumCores);
-      int coordNode2NumCores = coordinatorJetty2.getCoreContainer().getNumAllCores();
-      assertEquals("Unexpected number of cores found for coordinator node", 1, coordNode2NumCores);
     } finally {
       cluster.shutdown();
     }

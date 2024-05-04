@@ -41,11 +41,14 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -109,12 +112,14 @@ public class AccessDirectory extends MMapDirectory {
   private final LongAdder lazyMapSize;
   private final LongAdder lazyMapDiskUsage;
   private final LongAdder lazyLoadedBlockBytes;
+  private final boolean useDecompressDirectIO;
 
   public AccessDirectory(
       Path path,
       LockFactory lockFactory,
       Path compressedPath,
-      TeeDirectoryFactory.NodeLevelTeeDirectoryState s)
+      TeeDirectoryFactory.NodeLevelTeeDirectoryState s,
+      boolean useDecompressDirectIO)
       throws IOException {
     super(path, lockFactory);
     this.path = path;
@@ -128,6 +133,7 @@ public class AccessDirectory extends MMapDirectory {
     this.lazyMapSize = s.lazyMapSize;
     this.lazyMapDiskUsage = s.lazyMapDiskUsage;
     this.lazyLoadedBlockBytes = s.lazyLoadedBlockBytes;
+    this.useDecompressDirectIO = useDecompressDirectIO;
   }
 
   @Override
@@ -361,7 +367,8 @@ public class AccessDirectory extends MMapDirectory {
                               populatedCt,
                               lazyCt,
                               priorityActivate,
-                              lazyLoadedBlockBytes),
+                              lazyLoadedBlockBytes,
+                                  useDecompressDirectIO),
                           this);
                   weComputed[0] = true;
                   lazyMapDiskUsage.add(ret.input.length());
@@ -657,6 +664,8 @@ public class AccessDirectory extends MMapDirectory {
     private final LongAdder lazyCt;
     private final LongAdder lazyLoadedBlockBytes;
 
+    private final boolean useDecompressDirectIO;
+
     private LazyLoadInput(
         String resourceDescription, LazyLoadInput parent, long offset, long length) {
       super(resourceDescription);
@@ -697,6 +706,7 @@ public class AccessDirectory extends MMapDirectory {
       this.loadedCt = parent.loadedCt;
       this.populatedCt = parent.populatedCt;
       this.lazyCt = parent.lazyCt;
+      this.useDecompressDirectIO = parent.useDecompressDirectIO;
     }
 
     private LazyLoadInput(
@@ -707,7 +717,8 @@ public class AccessDirectory extends MMapDirectory {
         LongAdder populatedCt,
         LongAdder lazyCt,
         ConcurrentHashMap<ConcurrentIntSet, Boolean> priorityActivate,
-        LongAdder lazyLoadedBlockBytes)
+        LongAdder lazyLoadedBlockBytes,
+        boolean useDecompressDirectIO)
         throws IOException {
       super("lazy");
       this.lazyLoadedBlockBytes = lazyLoadedBlockBytes;
@@ -715,12 +726,21 @@ public class AccessDirectory extends MMapDirectory {
       this.loadedCt = loadedCt;
       this.populatedCt = populatedCt;
       this.lazyCt = lazyCt;
+      this.useDecompressDirectIO = useDecompressDirectIO;
       loaded = new AtomicReference<>();
       loadedLatch = new CountDownLatch(1);
       guard = new ByteBufferGuard("accessGuard", unmapHack());
       this.closed = new boolean[1];
       compressedGuard = new ByteBufferGuard("compressedGuard", unmapHack());
-      try (FileChannel channel = FileChannel.open(source, StandardOpenOption.READ)) {
+
+      List<OpenOption> openOptions = new ArrayList<>();
+      openOptions.add(StandardOpenOption.READ);
+      if (useDecompressDirectIO) {
+        openOptions.add(CompressingDirectory.getDirectOpenOption());
+        log.info("Using decompress Direct IO!!!!!!!!!!!!!!!!!");
+      }
+
+      try (FileChannel channel = FileChannel.open(source, openOptions.toArray(new OpenOption[0]))) {
         long compressedFileSize = channel.size();
         mapped =
             new MappedByteBuffer[Math.toIntExact(((compressedFileSize - 1) >> MAX_MAP_SHIFT) + 1)];

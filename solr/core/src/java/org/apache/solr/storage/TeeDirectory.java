@@ -94,7 +94,7 @@ public class TeeDirectory extends BaseDirectory {
     accessFunction =
         unused -> {
           Directory dir =
-              new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, ownState);
+              new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, ownState, false);
           return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
         };
     persistentFunction =

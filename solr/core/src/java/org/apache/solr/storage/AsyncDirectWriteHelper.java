@@ -19,6 +19,7 @@ package org.apache.solr.storage;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -32,6 +33,8 @@ import java.util.concurrent.Phaser;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.apache.solr.util.IOFunction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AsyncDirectWriteHelper implements Closeable {
 
@@ -41,6 +44,7 @@ public class AsyncDirectWriteHelper implements Closeable {
   private final boolean useDirectIO;
   private final Struct[] buffers = new Struct[2];
   private final AtomicReference<Future<?>> future = new AtomicReference<>();
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private enum Status {
     SYNC,
@@ -167,6 +171,7 @@ public class AsyncDirectWriteHelper implements Closeable {
               StandardOpenOption.WRITE,
               StandardOpenOption.CREATE_NEW,
               CompressingDirectory.getDirectOpenOption());
+      log.info("Using Direct IO for Compressing Directory!!!!");
     } else {
       channel[0] = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
     }

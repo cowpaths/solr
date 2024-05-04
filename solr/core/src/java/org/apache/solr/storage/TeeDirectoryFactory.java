@@ -73,6 +73,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   private String accessDir;
   private boolean useAsyncIO;
   private boolean useDirectIO;
+  private boolean useDecompressDirectIO;
 
   @Override
   public void initCoreContainer(CoreContainer cc) {
@@ -360,6 +361,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
       throw new IllegalArgumentException("accessDir should be absolute; found " + accessDir);
     }
     useDirectIO = params.getBool("useDirectIO", CompressingDirectory.DEFAULT_USE_DIRECT_IO);
+    useDecompressDirectIO = params.getBool("useDecompressDirectIO", CompressingDirectory.DEFAULT_USE_DIRECT_IO);
     useAsyncIO = params.getBool("useAsyncIO", useDirectIO);
   }
 
@@ -412,7 +414,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
             String accessPath = getScopeName(accessDir, path);
             Directory dir =
                 new AccessDirectory(
-                    Path.of(accessPath), lockFactory, compressedPath, nodeLevelState);
+                    Path.of(accessPath), lockFactory, compressedPath, nodeLevelState, useDecompressDirectIO);
             return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
           };
       IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction =

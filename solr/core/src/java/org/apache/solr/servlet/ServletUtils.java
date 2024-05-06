@@ -209,7 +209,11 @@ public abstract class ServletUtils {
     RateLimitManager rateLimitManager = getRateLimitManager(request);
     try {
       try {
-        accepted = rateLimitManager.handleRequest(request);
+        if (rateLimitManager != null) {
+          accepted = rateLimitManager.handleRequest(request);
+        } else {
+          accepted = true;
+        }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new SolrException(ErrorCode.SERVER_ERROR, e.getMessage());
@@ -227,7 +231,7 @@ public abstract class ServletUtils {
       traceHttpRequestExecution2(request, response, limitedExecution, trace);
     } finally {
       if (accepted) {
-        rateLimitManager.decrementActiveRequests(request);
+        if (rateLimitManager != null) rateLimitManager.decrementActiveRequests(request);
       }
     }
   }

@@ -25,7 +25,6 @@ import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.http.HttpServletRequest;
 import net.jcip.annotations.ThreadSafe;
 import org.apache.solr.client.solrj.SolrRequest;
@@ -54,11 +53,8 @@ public class RateLimitManager implements ClusterPropertiesListener {
   public static final long DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS = -1;
   private final Map<String, RequestRateLimiter> requestRateLimiterMap;
 
-  private final Map<HttpServletRequest, RequestRateLimiter.SlotMetadata> activeRequestsMap;
-
   public RateLimitManager() {
     this.requestRateLimiterMap = new HashMap<>();
-    this.activeRequestsMap = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -83,46 +79,35 @@ public class RateLimitManager implements ClusterPropertiesListener {
   // identify which (if any) rate limiter can handle this request. Internal requests will not be
   // rate limited
   // Returns true if request is accepted for processing, false if it should be rejected
-  public boolean handleRequest(HttpServletRequest request) throws InterruptedException {
+  public RequestRateLimiter.SlotReservation handleRequest(HttpServletRequest request) throws InterruptedException {
     String requestContext = request.getHeader(SOLR_REQUEST_CONTEXT_PARAM);
     String typeOfRequest = request.getHeader(SOLR_REQUEST_TYPE_PARAM);
 
     if (typeOfRequest == null) {
       // Cannot determine if this request should be throttled
-      return true;
+      return RequestRateLimiter.UNLIMITED;
     }
 
     // Do not throttle internal requests
     if (requestContext != null
         && requestContext.equals(SolrRequest.SolrClientContext.SERVER.toString())) {
-      return true;
+      return RequestRateLimiter.UNLIMITED;
     }
 
     RequestRateLimiter requestRateLimiter = requestRateLimiterMap.get(typeOfRequest);
 
     if (requestRateLimiter == null) {
       // No request rate limiter for this request type
-      return true;
+      return RequestRateLimiter.UNLIMITED;
     }
 
-    RequestRateLimiter.SlotMetadata result = requestRateLimiter.handleRequest();
+    RequestRateLimiter.SlotReservation result = requestRateLimiter.handleRequest();
 
     if (result != null) {
-      // Can be the case if request rate limiter is disabled
-      if (result.isReleasable()) {
-        activeRequestsMap.put(request, result);
-      }
-      return true;
+      return result;
     }
 
-    RequestRateLimiter.SlotMetadata slotMetadata = trySlotBorrowing(typeOfRequest);
-
-    if (slotMetadata != null) {
-      activeRequestsMap.put(request, slotMetadata);
-      return true;
-    }
-
-    return false;
+    return trySlotBorrowing(typeOfRequest); // possibly null, if unable to borrow a slot
   }
 
   /* For a rejected request type, do the following:
@@ -132,9 +117,10 @@ public class RateLimitManager implements ClusterPropertiesListener {
    *
    * @lucene.experimental -- Can cause slots to be blocked if a request borrows a slot and is itself long lived.
    */
-  private RequestRateLimiter.SlotMetadata trySlotBorrowing(String requestType) {
+  private RequestRateLimiter.SlotReservation trySlotBorrowing(String requestType) {
+    // TODO: randomly distributed slot borrowing over available RequestRateLimiters
     for (Map.Entry<String, RequestRateLimiter> currentEntry : requestRateLimiterMap.entrySet()) {
-      RequestRateLimiter.SlotMetadata result = null;
+      RequestRateLimiter.SlotReservation result = null;
       RequestRateLimiter requestRateLimiter = currentEntry.getValue();
 
       // Cant borrow from ourselves
@@ -157,27 +143,13 @@ public class RateLimitManager implements ClusterPropertiesListener {
           Thread.currentThread().interrupt();
         }
 
-        if (result == null) {
-          throw new IllegalStateException("Returned metadata object is null");
-        }
-
-        if (result.isReleasable()) {
+        if (result != null) {
           return result;
         }
       }
     }
 
     return null;
-  }
-
-  // Decrement the active requests in the rate limiter for the corresponding request type.
-  public void decrementActiveRequests(HttpServletRequest request) {
-    RequestRateLimiter.SlotMetadata slotMetadata = activeRequestsMap.get(request);
-
-    if (slotMetadata != null) {
-      activeRequestsMap.remove(request);
-      slotMetadata.decrementRequest();
-    }
   }
 
   public void registerRequestRateLimiter(

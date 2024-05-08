@@ -221,10 +221,10 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     }
 
     @Override
-    public SlotMetadata handleRequest() throws InterruptedException {
+    public SlotReservation handleRequest() throws InterruptedException {
       incomingRequestCount.getAndIncrement();
 
-      SlotMetadata response = super.handleRequest();
+      SlotReservation response = super.handleRequest();
 
       if (response != null) {
         acceptedNewRequestCount.getAndIncrement();
@@ -236,10 +236,10 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     }
 
     @Override
-    public SlotMetadata allowSlotBorrowing() throws InterruptedException {
-      SlotMetadata result = super.allowSlotBorrowing();
+    public SlotReservation allowSlotBorrowing() throws InterruptedException {
+      SlotReservation result = super.allowSlotBorrowing();
 
-      if (result.isReleasable()) {
+      if (result != null) {
         borrowedSlotCount.incrementAndGet();
       }
 

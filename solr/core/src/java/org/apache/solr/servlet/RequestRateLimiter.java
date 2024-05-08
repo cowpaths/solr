@@ -17,6 +17,7 @@
 
 package org.apache.solr.servlet;
 
+import java.io.Closeable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import net.jcip.annotations.ThreadSafe;
@@ -40,9 +41,9 @@ public class RequestRateLimiter {
   private final Semaphore borrowableSlotsPool;
 
   private final RateLimiterConfig rateLimiterConfig;
-  private final SlotMetadata guaranteedSlotMetadata;
-  private final SlotMetadata borrowedSlotMetadata;
-  private static final SlotMetadata nullSlotMetadata = new SlotMetadata(null);
+  public static final SlotReservation UNLIMITED = () -> {
+    // no-op
+  };
 
   public RequestRateLimiter(RateLimiterConfig rateLimiterConfig) {
     this.rateLimiterConfig = rateLimiterConfig;
@@ -50,28 +51,26 @@ public class RequestRateLimiter {
     this.borrowableSlotsPool =
         new Semaphore(
             rateLimiterConfig.allowedRequests - rateLimiterConfig.guaranteedSlotsThreshold);
-    this.guaranteedSlotMetadata = new SlotMetadata(guaranteedSlotsPool);
-    this.borrowedSlotMetadata = new SlotMetadata(borrowableSlotsPool);
   }
 
   /**
    * Handles an incoming request. returns a metadata object representing the metadata for the
    * acquired slot, if acquired. If a slot is not acquired, returns a null metadata object.
    */
-  public SlotMetadata handleRequest() throws InterruptedException {
+  public SlotReservation handleRequest() throws InterruptedException {
 
     if (!rateLimiterConfig.isEnabled) {
-      return nullSlotMetadata;
+      return UNLIMITED;
     }
 
     if (guaranteedSlotsPool.tryAcquire(
         rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
-      return guaranteedSlotMetadata;
+      return new SingleSemaphoreReservation(guaranteedSlotsPool);
     }
 
     if (borrowableSlotsPool.tryAcquire(
         rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
-      return borrowedSlotMetadata;
+      return new SingleSemaphoreReservation(borrowableSlotsPool);
     }
 
     return null;
@@ -87,35 +86,33 @@ public class RequestRateLimiter {
    * @lucene.experimental -- Can cause slots to be blocked if a request borrows a slot and is itself
    *     long lived.
    */
-  public SlotMetadata allowSlotBorrowing() throws InterruptedException {
+  public SlotReservation allowSlotBorrowing() throws InterruptedException {
     if (borrowableSlotsPool.tryAcquire(
         rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
-      return borrowedSlotMetadata;
+      return new SingleSemaphoreReservation(borrowableSlotsPool);
     }
 
-    return nullSlotMetadata;
+    return null;
   }
 
   public RateLimiterConfig getRateLimiterConfig() {
     return rateLimiterConfig;
   }
 
+  public interface SlotReservation extends Closeable {}
+
   // Represents the metadata for a slot
-  static class SlotMetadata {
+  static class SingleSemaphoreReservation implements SlotReservation {
     private final Semaphore usedPool;
 
-    public SlotMetadata(Semaphore usedPool) {
+    public SingleSemaphoreReservation(Semaphore usedPool) {
+      assert usedPool != null;
       this.usedPool = usedPool;
     }
 
-    public void decrementRequest() {
-      if (usedPool != null) {
-        usedPool.release();
-      }
-    }
-
-    public boolean isReleasable() {
-      return usedPool != null;
+    @Override
+    public void close() {
+      usedPool.release();
     }
   }
 }

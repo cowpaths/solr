@@ -44,7 +44,8 @@ public abstract class FacetMerger {
   public static class Context {
     // FacetComponentState state;  // todo: is this needed?
     final int numShards;
-    // BitSet per shard, each bit set holds bucket nums for whether or not a bucket has been seen for a given shard.
+    // BitSet per shard, each bit set holds bucket nums for whether or not a bucket has been seen
+    // for a given shard.
     private final BitSet[] sawShard;
     // bucket1_shard1, bucket1_shard2]
     private final Map<String, Integer> shardmap = new HashMap<>();

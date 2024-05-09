@@ -18,6 +18,7 @@
 package org.apache.solr.servlet;
 
 import java.io.Closeable;
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import net.jcip.annotations.ThreadSafe;
@@ -31,15 +32,24 @@ import org.apache.solr.core.RateLimiterConfig;
  */
 @ThreadSafe
 public class RequestRateLimiter {
-  // Slots that are guaranteed for this request rate limiter.
-  private final Semaphore guaranteedSlotsPool;
 
-  // Competitive slots pool that are available for this rate limiter as well as borrowing by other
-  // request rate limiters. By competitive, the meaning is that there is no prioritization for the
-  // acquisition of these slots -- First Come First Serve, irrespective of whether the request is of
-  // this request rate limiter or other.
-  private final Semaphore borrowableSlotsPool;
+  private static final class State {
+    // Slots that are guaranteed for this request rate limiter.
+    private final Semaphore guaranteedSlotsPool;
 
+    // Competitive slots pool that are available for this rate limiter as well as borrowing by other
+    // request rate limiters. By competitive, the meaning is that there is no prioritization for the
+    // acquisition of these slots -- First Come First Serve, irrespective of whether the request is of
+    // this request rate limiter or other.
+    private final Semaphore borrowableSlotsPool;
+
+    private State(Semaphore guaranteedSlotsPool, Semaphore borrowableSlotsPool) {
+      this.guaranteedSlotsPool = guaranteedSlotsPool;
+      this.borrowableSlotsPool = borrowableSlotsPool;
+    }
+  }
+
+  private State state;
   private final RateLimiterConfig rateLimiterConfig;
   public static final SlotReservation UNLIMITED = () -> {
     // no-op
@@ -47,10 +57,19 @@ public class RequestRateLimiter {
 
   public RequestRateLimiter(RateLimiterConfig rateLimiterConfig) {
     this.rateLimiterConfig = rateLimiterConfig;
-    this.guaranteedSlotsPool = new Semaphore(rateLimiterConfig.guaranteedSlotsThreshold);
-    this.borrowableSlotsPool =
+    init();
+    // within the ctor, we need to ensure that subsequent reads get a non-null value for
+    // `state`, so call `VarHandle.fullFence()`; beyond that, it's arbitrary what state
+    // is applied to a given request
+    VarHandle.fullFence();
+  }
+
+  public final void init() {
+    Semaphore guaranteedSlotsPool = new Semaphore(rateLimiterConfig.guaranteedSlotsThreshold);
+    Semaphore borrowableSlotsPool =
         new Semaphore(
             rateLimiterConfig.allowedRequests - rateLimiterConfig.guaranteedSlotsThreshold);
+    state = new State(guaranteedSlotsPool, borrowableSlotsPool);
   }
 
   /**
@@ -63,11 +82,15 @@ public class RequestRateLimiter {
       return UNLIMITED;
     }
 
+    final State stateSnapshot = this.state;
+    final Semaphore guaranteedSlotsPool = stateSnapshot.guaranteedSlotsPool;
+
     if (guaranteedSlotsPool.tryAcquire(
         rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
       return new SingleSemaphoreReservation(guaranteedSlotsPool);
     }
 
+    final Semaphore borrowableSlotsPool = stateSnapshot.borrowableSlotsPool;
     if (borrowableSlotsPool.tryAcquire(
         rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
       return new SingleSemaphoreReservation(borrowableSlotsPool);
@@ -87,6 +110,7 @@ public class RequestRateLimiter {
    *     long lived.
    */
   public SlotReservation allowSlotBorrowing() throws InterruptedException {
+    final Semaphore borrowableSlotsPool = state.borrowableSlotsPool;
     if (borrowableSlotsPool.tryAcquire(
         rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
       return new SingleSemaphoreReservation(borrowableSlotsPool);

@@ -21,24 +21,27 @@ import static org.apache.solr.servlet.RateLimitManager.DEFAULT_CONCURRENT_REQUES
 import static org.apache.solr.servlet.RateLimitManager.DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS;
 
 import org.apache.solr.client.solrj.SolrRequest;
+import org.apache.solr.client.solrj.request.beans.RateLimiterPayload;
 
 public class RateLimiterConfig {
   public static final String RL_CONFIG_KEY = "rate-limiters";
 
-  public SolrRequest.SolrRequestType requestType;
+  public final SolrRequest.SolrRequestType requestType;
   public boolean isEnabled;
   public long waitForSlotAcquisition;
   public int allowedRequests;
   public boolean isSlotBorrowingEnabled;
   public int guaranteedSlotsThreshold;
 
+  /**
+   * We store the config definition in order to determine whether anything has changed that would
+   * call for re-initialization.
+   */
+  public RateLimiterPayload definition;
+
   public RateLimiterConfig(SolrRequest.SolrRequestType requestType) {
     this.requestType = requestType;
-    this.isEnabled = false;
-    this.allowedRequests = DEFAULT_CONCURRENT_REQUESTS;
-    this.isSlotBorrowingEnabled = false;
-    this.guaranteedSlotsThreshold = this.allowedRequests / 2;
-    this.waitForSlotAcquisition = DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS;
+    update(EMPTY); // use defaults
   }
 
   public RateLimiterConfig(
@@ -54,5 +57,37 @@ public class RateLimiterConfig {
     this.waitForSlotAcquisition = waitForSlotAcquisition;
     this.allowedRequests = allowedRequests;
     this.isSlotBorrowingEnabled = isSlotBorrowingEnabled;
+    this.definition = new RateLimiterPayload();
+    definition.enabled = isEnabled;
+    definition.allowedRequests = allowedRequests;
+    definition.guaranteedSlots = guaranteedSlotsThreshold;
+    definition.slotBorrowingEnabled = isSlotBorrowingEnabled;
+    definition.slotAcquisitionTimeoutInMS = Math.toIntExact(waitForSlotAcquisition);
+  }
+
+  private static final RateLimiterPayload EMPTY = new RateLimiterPayload(); // use defaults;
+
+  public boolean update(RateLimiterPayload definition) {
+    if (definition == null) {
+      definition = EMPTY; // use defaults
+    }
+
+    if (definition.equals(this.definition)) {
+      return false;
+    }
+
+    this.definition = definition;
+
+    allowedRequests = definition.allowedRequests == null ? DEFAULT_CONCURRENT_REQUESTS : definition.allowedRequests;
+
+    isEnabled = definition.enabled == null ? false : definition.enabled; // disabled by default
+
+    guaranteedSlotsThreshold = definition.guaranteedSlots == null ? this.allowedRequests / 2 : definition.guaranteedSlots;
+
+    isSlotBorrowingEnabled = definition.slotBorrowingEnabled == null ? false : definition.slotBorrowingEnabled;
+
+    waitForSlotAcquisition = definition.slotAcquisitionTimeoutInMS == null ? DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS : definition.slotAcquisitionTimeoutInMS.longValue();
+
+    return true;
   }
 }

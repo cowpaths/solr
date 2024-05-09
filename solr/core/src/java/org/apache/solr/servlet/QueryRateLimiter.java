@@ -47,13 +47,20 @@ public class QueryRateLimiter extends RequestRateLimiter {
     RateLimiterConfig rateLimiterConfig = getRateLimiterConfig();
     byte[] configInput = Utils.toJSON(properties.get(RL_CONFIG_KEY));
 
+    RateLimiterPayload rateLimiterMeta;
     if (configInput == null || configInput.length == 0) {
-      return;
+      rateLimiterMeta = null;
+    } else {
+      rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
     }
 
-    RateLimiterPayload rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
-
-    constructQueryRateLimiterConfigInternal(rateLimiterMeta, rateLimiterConfig);
+    synchronized (rateLimiterConfig) {
+      // `rateLimiterConfig` is what we're mutating, so synchronize on it.
+      if (rateLimiterConfig.update(rateLimiterMeta)) {
+        // config has changed, re-init
+        init();
+      }
+    }
   }
 
   // To be used in initialization
@@ -80,7 +87,7 @@ public class QueryRateLimiter extends RequestRateLimiter {
 
       RateLimiterPayload rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
 
-      constructQueryRateLimiterConfigInternal(rateLimiterMeta, rateLimiterConfig);
+      rateLimiterConfig.update(rateLimiterMeta);
 
       return rateLimiterConfig;
     } catch (KeeperException.NoNodeException e) {
@@ -90,36 +97,6 @@ public class QueryRateLimiter extends RequestRateLimiter {
           "Error reading cluster property", SolrZkClient.checkInterrupted(e));
     } catch (IOException e) {
       throw new RuntimeException("Encountered an IOException " + e.getMessage());
-    }
-  }
-
-  private static void constructQueryRateLimiterConfigInternal(
-      RateLimiterPayload rateLimiterMeta, RateLimiterConfig rateLimiterConfig) {
-
-    if (rateLimiterMeta == null) {
-      // No Rate limiter configuration defined in clusterprops.json
-      return;
-    }
-
-    if (rateLimiterMeta.allowedRequests != null) {
-      rateLimiterConfig.allowedRequests = rateLimiterMeta.allowedRequests.intValue();
-    }
-
-    if (rateLimiterMeta.enabled != null) {
-      rateLimiterConfig.isEnabled = rateLimiterMeta.enabled;
-    }
-
-    if (rateLimiterMeta.guaranteedSlots != null) {
-      rateLimiterConfig.guaranteedSlotsThreshold = rateLimiterMeta.guaranteedSlots;
-    }
-
-    if (rateLimiterMeta.slotBorrowingEnabled != null) {
-      rateLimiterConfig.isSlotBorrowingEnabled = rateLimiterMeta.slotBorrowingEnabled;
-    }
-
-    if (rateLimiterMeta.slotAcquisitionTimeoutInMS != null) {
-      rateLimiterConfig.waitForSlotAcquisition =
-          rateLimiterMeta.slotAcquisitionTimeoutInMS.longValue();
     }
   }
 }

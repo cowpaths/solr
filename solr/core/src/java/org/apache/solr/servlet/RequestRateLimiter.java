@@ -21,6 +21,7 @@ import java.io.Closeable;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.jcip.annotations.ThreadSafe;
 import org.apache.solr.core.RateLimiterConfig;
 
@@ -34,8 +35,8 @@ import org.apache.solr.core.RateLimiterConfig;
 public class RequestRateLimiter {
 
   private static final class State {
-    // Slots that are guaranteed for this request rate limiter.
-    private final Semaphore guaranteedSlotsPool;
+    // Total slots that are available for this request rate limiter.
+    private final Semaphore totalSlotsPool;
 
     // Competitive slots pool that are available for this rate limiter as well as borrowing by other
     // request rate limiters. By competitive, the meaning is that there is no prioritization for the
@@ -43,9 +44,28 @@ public class RequestRateLimiter {
     // this request rate limiter or other.
     private final Semaphore borrowableSlotsPool;
 
-    private State(Semaphore guaranteedSlotsPool, Semaphore borrowableSlotsPool) {
-      this.guaranteedSlotsPool = guaranteedSlotsPool;
-      this.borrowableSlotsPool = borrowableSlotsPool;
+    private final AtomicInteger nativeReservations;
+
+    private final int guaranteedSlots;
+
+    private final long waitForSlotAcquisition;
+
+    private State(RateLimiterConfig config) {
+      totalSlotsPool = new Semaphore(config.allowedRequests);
+      guaranteedSlots = config.guaranteedSlotsThreshold;
+      if (!config.isSlotBorrowingEnabled || guaranteedSlots >= config.allowedRequests) {
+        // slot borrowing is disabled, either explicitly or implicitly
+        borrowableSlotsPool = null;
+        nativeReservations = null;
+      } else if (guaranteedSlots <= 0) {
+        // all slots are guaranteed
+        borrowableSlotsPool = totalSlotsPool;
+        nativeReservations = null;
+      } else {
+        borrowableSlotsPool = new Semaphore(config.allowedRequests - guaranteedSlots);
+        nativeReservations = new AtomicInteger();
+      }
+      this.waitForSlotAcquisition = config.waitForSlotAcquisition;
     }
   }
 
@@ -65,11 +85,7 @@ public class RequestRateLimiter {
   }
 
   public final void init() {
-    Semaphore guaranteedSlotsPool = new Semaphore(rateLimiterConfig.guaranteedSlotsThreshold);
-    Semaphore borrowableSlotsPool =
-        new Semaphore(
-            rateLimiterConfig.allowedRequests - rateLimiterConfig.guaranteedSlotsThreshold);
-    state = new State(guaranteedSlotsPool, borrowableSlotsPool);
+    state = new State(rateLimiterConfig);
   }
 
   /**
@@ -82,18 +98,24 @@ public class RequestRateLimiter {
       return UNLIMITED;
     }
 
-    final State stateSnapshot = this.state;
-    final Semaphore guaranteedSlotsPool = stateSnapshot.guaranteedSlotsPool;
+    final State state = this.state;
+    final Semaphore totalSlotsPool = state.totalSlotsPool;
 
-    if (guaranteedSlotsPool.tryAcquire(
-        rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
-      return new SingleSemaphoreReservation(guaranteedSlotsPool);
-    }
-
-    final Semaphore borrowableSlotsPool = stateSnapshot.borrowableSlotsPool;
-    if (borrowableSlotsPool.tryAcquire(
-        rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
-      return new SingleSemaphoreReservation(borrowableSlotsPool);
+    if (totalSlotsPool.tryAcquire(state.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
+      final Semaphore borrowableSlotsPool = state.borrowableSlotsPool;
+      if (borrowableSlotsPool == null || totalSlotsPool == borrowableSlotsPool) {
+        // simple case: all slots guaranteed; or none, do not double-acquire
+        return new SingleSemaphoreReservation(totalSlotsPool);
+      } else if (state.nativeReservations.incrementAndGet() <= state.guaranteedSlots || borrowableSlotsPool.tryAcquire()) {
+        // we either fungibly occupy a guaranteed slot, so don't have to acquire
+        // a borrowable slot; or we acquire a borrowable slot
+        return new NativeBorrowableReservation(totalSlotsPool, borrowableSlotsPool, state.nativeReservations, state.guaranteedSlots);
+      } else {
+        // this should never happen, but if it does we should not leak permits/accounting
+        state.nativeReservations.decrementAndGet();
+        totalSlotsPool.release();
+        throw new IllegalStateException("if we have a top-level slot, there should be an available borrowable slot");
+      }
     }
 
     return null;
@@ -110,10 +132,24 @@ public class RequestRateLimiter {
    *     long lived.
    */
   public SlotReservation allowSlotBorrowing() throws InterruptedException {
+    final State state = this.state;
     final Semaphore borrowableSlotsPool = state.borrowableSlotsPool;
-    if (borrowableSlotsPool.tryAcquire(
-        rateLimiterConfig.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
-      return new SingleSemaphoreReservation(borrowableSlotsPool);
+    if (borrowableSlotsPool == null) {
+      return null;
+    }
+    final Semaphore totalSlotsPool = state.totalSlotsPool;
+    if (totalSlotsPool.tryAcquire(state.waitForSlotAcquisition, TimeUnit.MILLISECONDS)) {
+      if (totalSlotsPool == borrowableSlotsPool) {
+        // simple case: there are no guaranteed slots; do not double-acquire
+        return new SingleSemaphoreReservation(borrowableSlotsPool);
+      } else if (borrowableSlotsPool.tryAcquire()) {
+        return new BorrowedReservation(totalSlotsPool, borrowableSlotsPool);
+      } else {
+        // this can happen, e.g., if all of the borrowable slots are occupied
+        // by non-native requests, but there are open guaranteed slots. In that
+        // case, top-level acquire would succeed, but borrowed acquire would fail.
+        totalSlotsPool.release();
+      }
     }
 
     return null;
@@ -137,6 +173,45 @@ public class RequestRateLimiter {
     @Override
     public void close() {
       usedPool.release();
+    }
+  }
+
+  static class NativeBorrowableReservation implements SlotReservation {
+    private final Semaphore totalPool;
+    private final Semaphore borrowablePool;
+    private final AtomicInteger nativeReservations;
+    private final int guaranteedSlots;
+
+    public NativeBorrowableReservation(Semaphore totalPool, Semaphore borrowablePool, AtomicInteger nativeReservations, int guaranteedSlots) {
+      this.totalPool = totalPool;
+      this.borrowablePool = borrowablePool;
+      this.nativeReservations = nativeReservations;
+      this.guaranteedSlots = guaranteedSlots;
+    }
+
+    @Override
+    public void close() {
+      if (nativeReservations.getAndDecrement() > guaranteedSlots) {
+        // we should consider ourselves as having come from the borrowable pool
+        borrowablePool.release();
+      }
+      totalPool.release(); // release this last
+    }
+  }
+
+  static class BorrowedReservation implements SlotReservation {
+    private final Semaphore totalPool;
+    private final Semaphore borrowablePool;
+
+    public BorrowedReservation(Semaphore totalPool, Semaphore borrowablePool) {
+      this.totalPool = totalPool;
+      this.borrowablePool = borrowablePool;
+    }
+
+    @Override
+    public void close() {
+      borrowablePool.release();
+      totalPool.release();
     }
   }
 }

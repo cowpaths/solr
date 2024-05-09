@@ -54,8 +54,7 @@ public class QueryRateLimiter extends RequestRateLimiter {
       rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
     }
 
-    synchronized (rateLimiterConfig) {
-      // `rateLimiterConfig` is what we're mutating, so synchronize on it.
+    synchronized (this) {
       if (rateLimiterConfig.update(rateLimiterMeta)) {
         // config has changed, re-init
         init();

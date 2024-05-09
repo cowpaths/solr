@@ -391,6 +391,7 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
         }
         assertEquals(0, outstanding.get());
         assertEquals(0, outstandingBorrowed.get());
+        assertTrue(limiter.isEmpty());
         allowed = r.nextInt(maxAllowed) + 1;
         guaranteed = r.nextInt(allowed + 1);
         borrowLimit = allowed - guaranteed;

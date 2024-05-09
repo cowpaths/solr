@@ -22,6 +22,7 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.google.common.annotations.VisibleForTesting;
 import net.jcip.annotations.ThreadSafe;
 import org.apache.solr.core.RateLimiterConfig;
 
@@ -86,6 +87,20 @@ public class RequestRateLimiter {
 
   public final void init() {
     state = new State(rateLimiterConfig);
+  }
+
+  @VisibleForTesting
+  boolean isEmpty() {
+    if (state.totalSlotsPool.availablePermits() != rateLimiterConfig.allowedRequests) {
+      return false;
+    }
+    if (state.nativeReservations == null) {
+      return true;
+    }
+    if (state.nativeReservations.get() != 0) {
+      return false;
+    }
+    return state.borrowableSlotsPool.availablePermits() == rateLimiterConfig.allowedRequests - state.guaranteedSlots;
   }
 
   /**

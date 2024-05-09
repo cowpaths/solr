@@ -21,13 +21,20 @@ import static org.apache.solr.servlet.RateLimitManager.DEFAULT_SLOT_ACQUISITION_
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
@@ -281,6 +288,103 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
       }
 
       return rateLimitManager;
+    }
+  }
+
+  @Test
+  @SuppressWarnings("try")
+  public void blah() throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    Random r = random();
+    int allowed = r.nextInt(8) + 1;
+    int guaranteed = r.nextInt(allowed + 1);
+    int borrowLimit = allowed - guaranteed;
+    RequestRateLimiter limiter = new RequestRateLimiter(
+        new RateLimiterConfig(
+        SolrRequest.SolrRequestType.QUERY,
+        true,
+        guaranteed,
+        20,
+        allowed /* allowedRequests */,
+        true /* isSlotBorrowing */)
+    );
+    ExecutorService exec = ExecutorUtil.newMDCAwareCachedThreadPool("tests");
+    try (Closeable c = () -> ExecutorUtil.shutdownAndAwaitTermination(exec)) {
+      AtomicBoolean finish = new AtomicBoolean();
+      AtomicInteger outstanding = new AtomicInteger();
+      AtomicInteger outstandingBorrowed = new AtomicInteger();
+      LongAdder executed = new LongAdder();
+      LongAdder skipped = new LongAdder();
+      LongAdder borrowedExecuted = new LongAdder();
+      LongAdder borrowedSkipped = new LongAdder();
+      List<Future<Void>> futures = new ArrayList<>();
+      int nativeClients = r.nextInt(16);
+      for (int i = nativeClients; i > 0; i--) {
+        Random tRandom = new Random(r.nextLong());
+        futures.add(exec.submit(() -> {
+          while (!finish.get()) {
+            try (RequestRateLimiter.SlotReservation slotReservation = limiter.handleRequest()) {
+              if (slotReservation != null) {
+                executed.increment();
+                int ct = outstanding.incrementAndGet();
+                assertTrue(ct+" <= "+allowed, ct <= allowed);
+                ct = outstandingBorrowed.get();
+                assertTrue(ct+" <= "+borrowLimit, ct <= borrowLimit);
+                Thread.sleep(tRandom.nextInt(200));
+                int ct1 = outstandingBorrowed.get();
+                assertTrue(ct1+" <= "+borrowLimit, ct1 <= borrowLimit);
+                int ct2 = outstanding.getAndDecrement();
+                assertTrue(ct2+" <= "+allowed, ct2 <= allowed);
+              } else {
+                skipped.increment();
+                Thread.sleep(tRandom.nextInt(10));
+              }
+            }
+          }
+          return null;
+        }));
+      }
+      int borrowClients = r.nextInt(16);
+      for (int i = borrowClients; i > 0; i--) {
+        Random tRandom = new Random(r.nextLong());
+        futures.add(exec.submit(() -> {
+          while (!finish.get()) {
+            try (RequestRateLimiter.SlotReservation slotReservation = limiter.allowSlotBorrowing()) {
+              if (slotReservation != null) {
+                borrowedExecuted.increment();
+                int ct = outstanding.incrementAndGet();
+                assertTrue(ct+" <= "+allowed, ct <= allowed);
+                ct = outstandingBorrowed.incrementAndGet();
+                assertTrue(ct+" <= "+borrowLimit, ct <= borrowLimit);
+                Thread.sleep(tRandom.nextInt(200));
+                int ct1 = outstandingBorrowed.getAndDecrement();
+                assertTrue(ct1+" <= "+borrowLimit, ct1 <= borrowLimit);
+                int ct2 = outstanding.getAndDecrement();
+                assertTrue(ct2+" <= "+allowed, ct2 <= allowed);
+              } else {
+                borrowedSkipped.increment();
+                Thread.sleep(tRandom.nextInt(10));
+              }
+            }
+          }
+          return null;
+        }));
+      }
+      Thread.sleep(10000); // let it run for a while
+      finish.set(true);
+      List<Exception> exceptions = new ArrayList<>();
+      for (Future<Void> f : futures) {
+        try {
+          f.get(1, TimeUnit.SECONDS);
+        } catch (Exception e) {
+          exceptions.add(e);
+        }
+      }
+      if (!exceptions.isEmpty()) {
+        for (Exception e : exceptions) {
+          e.printStackTrace(System.err);
+        }
+        fail("found "+exceptions.size()+" exceptions");
+      }
     }
   }
 }

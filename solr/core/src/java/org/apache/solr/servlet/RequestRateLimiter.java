@@ -17,12 +17,12 @@
 
 package org.apache.solr.servlet;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.io.Closeable;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import com.google.common.annotations.VisibleForTesting;
 import net.jcip.annotations.ThreadSafe;
 import org.apache.solr.core.RateLimiterConfig;
 
@@ -41,7 +41,8 @@ public class RequestRateLimiter {
 
     // Competitive slots pool that are available for this rate limiter as well as borrowing by other
     // request rate limiters. By competitive, the meaning is that there is no prioritization for the
-    // acquisition of these slots -- First Come First Serve, irrespective of whether the request is of
+    // acquisition of these slots -- First Come First Serve, irrespective of whether the request is
+    // of
     // this request rate limiter or other.
     private final Semaphore borrowableSlotsPool;
 
@@ -72,9 +73,10 @@ public class RequestRateLimiter {
 
   private State state;
   private final RateLimiterConfig rateLimiterConfig;
-  public static final SlotReservation UNLIMITED = () -> {
-    // no-op
-  };
+  public static final SlotReservation UNLIMITED =
+      () -> {
+        // no-op
+      };
 
   public RequestRateLimiter(RateLimiterConfig rateLimiterConfig) {
     this.rateLimiterConfig = rateLimiterConfig;
@@ -100,7 +102,8 @@ public class RequestRateLimiter {
     if (state.nativeReservations.get() != 0) {
       return false;
     }
-    return state.borrowableSlotsPool.availablePermits() == rateLimiterConfig.allowedRequests - state.guaranteedSlots;
+    return state.borrowableSlotsPool.availablePermits()
+        == rateLimiterConfig.allowedRequests - state.guaranteedSlots;
   }
 
   /**
@@ -121,15 +124,18 @@ public class RequestRateLimiter {
       if (borrowableSlotsPool == null || totalSlotsPool == borrowableSlotsPool) {
         // simple case: all slots guaranteed; or none, do not double-acquire
         return new SingleSemaphoreReservation(totalSlotsPool);
-      } else if (state.nativeReservations.incrementAndGet() <= state.guaranteedSlots || borrowableSlotsPool.tryAcquire()) {
+      } else if (state.nativeReservations.incrementAndGet() <= state.guaranteedSlots
+          || borrowableSlotsPool.tryAcquire()) {
         // we either fungibly occupy a guaranteed slot, so don't have to acquire
         // a borrowable slot; or we acquire a borrowable slot
-        return new NativeBorrowableReservation(totalSlotsPool, borrowableSlotsPool, state.nativeReservations, state.guaranteedSlots);
+        return new NativeBorrowableReservation(
+            totalSlotsPool, borrowableSlotsPool, state.nativeReservations, state.guaranteedSlots);
       } else {
         // this should never happen, but if it does we should not leak permits/accounting
         state.nativeReservations.decrementAndGet();
         totalSlotsPool.release();
-        throw new IllegalStateException("if we have a top-level slot, there should be an available borrowable slot");
+        throw new IllegalStateException(
+            "if we have a top-level slot, there should be an available borrowable slot");
       }
     }
 
@@ -197,7 +203,11 @@ public class RequestRateLimiter {
     private final AtomicInteger nativeReservations;
     private final int guaranteedSlots;
 
-    public NativeBorrowableReservation(Semaphore totalPool, Semaphore borrowablePool, AtomicInteger nativeReservations, int guaranteedSlots) {
+    public NativeBorrowableReservation(
+        Semaphore totalPool,
+        Semaphore borrowablePool,
+        AtomicInteger nativeReservations,
+        int guaranteedSlots) {
       this.totalPool = totalPool;
       this.borrowablePool = borrowablePool;
       this.nativeReservations = nativeReservations;

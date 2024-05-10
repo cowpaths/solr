@@ -79,7 +79,8 @@ public class RateLimitManager implements ClusterPropertiesListener {
   // identify which (if any) rate limiter can handle this request. Internal requests will not be
   // rate limited
   // Returns true if request is accepted for processing, false if it should be rejected
-  public RequestRateLimiter.SlotReservation handleRequest(HttpServletRequest request) throws InterruptedException {
+  public RequestRateLimiter.SlotReservation handleRequest(HttpServletRequest request)
+      throws InterruptedException {
     String requestContext = request.getHeader(SOLR_REQUEST_CONTEXT_PARAM);
     String typeOfRequest = request.getHeader(SOLR_REQUEST_TYPE_PARAM);
 

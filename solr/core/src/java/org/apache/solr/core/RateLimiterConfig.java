@@ -78,15 +78,23 @@ public class RateLimiterConfig {
 
     this.definition = definition;
 
-    allowedRequests = definition.allowedRequests == null ? DEFAULT_CONCURRENT_REQUESTS : definition.allowedRequests;
+    allowedRequests =
+        definition.allowedRequests == null
+            ? DEFAULT_CONCURRENT_REQUESTS
+            : definition.allowedRequests;
 
     isEnabled = definition.enabled == null ? false : definition.enabled; // disabled by default
 
-    guaranteedSlotsThreshold = definition.guaranteedSlots == null ? this.allowedRequests / 2 : definition.guaranteedSlots;
+    guaranteedSlotsThreshold =
+        definition.guaranteedSlots == null ? this.allowedRequests / 2 : definition.guaranteedSlots;
 
-    isSlotBorrowingEnabled = definition.slotBorrowingEnabled == null ? false : definition.slotBorrowingEnabled;
+    isSlotBorrowingEnabled =
+        definition.slotBorrowingEnabled == null ? false : definition.slotBorrowingEnabled;
 
-    waitForSlotAcquisition = definition.slotAcquisitionTimeoutInMS == null ? DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS : definition.slotAcquisitionTimeoutInMS.longValue();
+    waitForSlotAcquisition =
+        definition.slotAcquisitionTimeoutInMS == null
+            ? DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS
+            : definition.slotAcquisitionTimeoutInMS.longValue();
 
     return true;
   }

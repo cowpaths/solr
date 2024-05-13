@@ -205,17 +205,9 @@ public abstract class ServletUtils {
       Runnable limitedExecution,
       boolean trace)
       throws ServletException, IOException {
-    boolean accepted = false;
     RateLimitManager rateLimitManager = getRateLimitManager(request);
-    try {
-      try {
-        accepted = rateLimitManager.handleRequest(request);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new SolrException(ErrorCode.SERVER_ERROR, e.getMessage());
-      }
-
-      if (!accepted) {
+    try (RequestRateLimiter.SlotReservation accepted = rateLimitManager.handleRequest(request)) {
+      if (accepted == null) {
         String errorMessage =
             "Too many requests for this request type."
                 + "Please try after some time or increase the quota for this request type";
@@ -225,10 +217,9 @@ public abstract class ServletUtils {
       // todo: this shouldn't be required, tracing and rate limiting should be independently
       // composable
       traceHttpRequestExecution2(request, response, limitedExecution, trace);
-    } finally {
-      if (accepted) {
-        rateLimitManager.decrementActiveRequests(request);
-      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new SolrException(ErrorCode.SERVER_ERROR, e.getMessage());
     }
   }
 

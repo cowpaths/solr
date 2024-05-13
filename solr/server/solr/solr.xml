@@ -33,6 +33,8 @@
   <str name="modules">${solr.modules:}</str>
   <str name="allowPaths">${solr.allowPaths:}</str>
   <str name="allowUrls">${solr.allowUrls:}</str>
+  <str name="hideStackTrace">${solr.hideStackTrace:false}</str>
+  <int name="indexSearcherExecutorThreads">${solr.searchThreads:4}</int>
 
   <solrcloud>
 

@@ -1872,6 +1872,8 @@ fi
 if [[ -n "${SOLR_MODULES:-}" ]] ; then
   SOLR_OPTS+=("-Dsolr.modules=$SOLR_MODULES")
 fi
+# Setting number of threads for search
+if ! command -v nproc &> /dev/null; then echo "Couldn't determine number of CPUs, using default number of search threads"; else cpus=`nproc`; SCRIPT_SOLR_OPTS+="-Dsolr.searchThreads=$cpus"; fi
 
 # Default placement plugin
 if [[ -n "${SOLR_PLACEMENTPLUGIN_DEFAULT:-}" ]] ; then

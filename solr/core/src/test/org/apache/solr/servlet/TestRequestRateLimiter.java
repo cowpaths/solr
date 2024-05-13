@@ -315,6 +315,7 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
         System.err.println("for " + allowed + "/" + guaranteed);
         int allowedF = allowed;
         int borrowLimitF = borrowLimit;
+        RequestRateLimiter limiterF = limiter;
         AtomicBoolean finish = new AtomicBoolean();
         AtomicInteger outstanding = new AtomicInteger();
         AtomicInteger outstandingBorrowed = new AtomicInteger();
@@ -331,7 +332,7 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
                   () -> {
                     while (!finish.get()) {
                       try (RequestRateLimiter.SlotReservation slotReservation =
-                          limiter.handleRequest()) {
+                          limiterF.handleRequest()) {
                         if (slotReservation != null) {
                           executed.increment();
                           int ct = outstanding.incrementAndGet();
@@ -360,7 +361,7 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
                   () -> {
                     while (!finish.get()) {
                       try (RequestRateLimiter.SlotReservation slotReservation =
-                          limiter.allowSlotBorrowing()) {
+                          limiterF.allowSlotBorrowing()) {
                         if (slotReservation != null) {
                           borrowedExecuted.increment();
                           int ct = outstanding.incrementAndGet();
@@ -403,9 +404,15 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
         allowed = r.nextInt(maxAllowed) + 1;
         guaranteed = r.nextInt(allowed + 1);
         borrowLimit = allowed - guaranteed;
-        config.allowedRequests = allowed;
-        config.guaranteedSlotsThreshold = guaranteed;
-        limiter.init();
+        config =
+            new RateLimiterConfig(
+                SolrRequest.SolrRequestType.QUERY,
+                true,
+                guaranteed,
+                20,
+                allowed /* allowedRequests */,
+                true /* isSlotBorrowing */);
+        limiter = new RequestRateLimiter(config);
       }
     }
   }

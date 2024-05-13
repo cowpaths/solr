@@ -43,8 +43,15 @@ public class QueryRateLimiter extends RequestRateLimiter {
     super(constructQueryRateLimiterConfig(solrZkClient));
   }
 
-  public void processConfigChange(Map<String, Object> properties) throws IOException {
-    RateLimiterConfig rateLimiterConfig = getRateLimiterConfig();
+  public QueryRateLimiter(RateLimiterConfig config) {
+    super(config);
+  }
+
+  public static RateLimiterConfig processConfigChange(
+      SolrRequest.SolrRequestType requestType,
+      RateLimiterConfig rateLimiterConfig,
+      Map<String, Object> properties)
+      throws IOException {
     byte[] configInput = Utils.toJSON(properties.get(RL_CONFIG_KEY));
 
     RateLimiterPayload rateLimiterMeta;
@@ -54,11 +61,11 @@ public class QueryRateLimiter extends RequestRateLimiter {
       rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
     }
 
-    synchronized (this) {
-      if (rateLimiterConfig.update(rateLimiterMeta)) {
-        // config has changed, re-init
-        init();
-      }
+    if (rateLimiterConfig == null || rateLimiterConfig.shouldUpdate(rateLimiterMeta)) {
+      // no prior config, or config has changed; return the new config
+      return new RateLimiterConfig(requestType, rateLimiterMeta);
+    } else {
+      return null;
     }
   }
 
@@ -71,8 +78,6 @@ public class QueryRateLimiter extends RequestRateLimiter {
         return new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY);
       }
 
-      RateLimiterConfig rateLimiterConfig =
-          new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY);
       Map<String, Object> clusterPropsJson =
           (Map<String, Object>)
               Utils.fromJSON(zkClient.getData(ZkStateReader.CLUSTER_PROPS, null, new Stat(), true));
@@ -81,14 +86,12 @@ public class QueryRateLimiter extends RequestRateLimiter {
       if (configInput.length == 0) {
         // No Rate Limiter configuration defined in clusterprops.json. Return default configuration
         // values
-        return rateLimiterConfig;
+        return new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY);
       }
 
       RateLimiterPayload rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
 
-      rateLimiterConfig.update(rateLimiterMeta);
-
-      return rateLimiterConfig;
+      return new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY, rateLimiterMeta);
     } catch (KeeperException.NoNodeException e) {
       return new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY);
     } catch (KeeperException | InterruptedException e) {

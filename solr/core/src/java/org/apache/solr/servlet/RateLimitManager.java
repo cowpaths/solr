@@ -23,13 +23,14 @@ import static org.apache.solr.common.params.CommonParams.SOLR_REQUEST_TYPE_PARAM
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.http.HttpServletRequest;
 import net.jcip.annotations.ThreadSafe;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.common.cloud.ClusterPropertiesListener;
 import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.core.RateLimiterConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,26 +52,34 @@ public class RateLimitManager implements ClusterPropertiesListener {
   public static final int DEFAULT_CONCURRENT_REQUESTS =
       (Runtime.getRuntime().availableProcessors()) * 3;
   public static final long DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS = -1;
-  private final Map<String, RequestRateLimiter> requestRateLimiterMap;
+  private final ConcurrentHashMap<String, RequestRateLimiter> requestRateLimiterMap;
 
   public RateLimitManager() {
-    this.requestRateLimiterMap = new HashMap<>();
+    this.requestRateLimiterMap = new ConcurrentHashMap<>();
   }
 
   @Override
   public boolean onChange(Map<String, Object> properties) {
 
     // Hack: We only support query rate limiting for now
-    QueryRateLimiter queryRateLimiter =
-        (QueryRateLimiter) getRequestRateLimiter(SolrRequest.SolrRequestType.QUERY);
-
-    if (queryRateLimiter != null) {
-      try {
-        queryRateLimiter.processConfigChange(properties);
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-    }
+    requestRateLimiterMap.compute(
+        SolrRequest.SolrRequestType.QUERY.toString(),
+        (k, v) -> {
+          try {
+            RateLimiterConfig newConfig =
+                QueryRateLimiter.processConfigChange(
+                    SolrRequest.SolrRequestType.QUERY,
+                    v == null ? null : v.getRateLimiterConfig(),
+                    properties);
+            if (newConfig == null) {
+              return v;
+            } else {
+              return new QueryRateLimiter(newConfig);
+            }
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        });
 
     return false;
   }

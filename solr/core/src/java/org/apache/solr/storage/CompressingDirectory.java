@@ -26,6 +26,8 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
@@ -112,10 +114,24 @@ public class CompressingDirectory extends FSDirectory {
     this(path, s.ioExec, useAsyncIO, useDirectIO);
   }
 
+  private static final Map<Integer, DirectBufferPool> POOLS_BY_BLOCK_SIZE =
+      new ConcurrentHashMap<>();
+  private static final Map<Integer, DirectBufferPool> POOLS_BY_BLOCK_SIZE_INITIAL =
+      new ConcurrentHashMap<>();
+
+  private final DirectBufferPool mainBufferPool;
+  private final DirectBufferPool initialBlockBufferPool;
+
   CompressingDirectory(Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
       throws IOException {
     super(path, FSLockFactory.getDefault());
     this.blockSize = (int) (Files.getFileStore(path).getBlockSize());
+    mainBufferPool =
+        POOLS_BY_BLOCK_SIZE.computeIfAbsent(
+            blockSize, (bs) -> new DirectBufferPool(DEFAULT_MERGE_BUFFER_SIZE, bs, 32));
+    initialBlockBufferPool =
+        POOLS_BY_BLOCK_SIZE_INITIAL.computeIfAbsent(
+            blockSize, (bs) -> new DirectBufferPool(bs, bs, 32));
     this.ioExec = ioExec;
     directoryPath = path;
     this.useAsyncIO = useAsyncIO;
@@ -170,6 +186,8 @@ public class CompressingDirectory extends FSDirectory {
         name,
         blockSize,
         DEFAULT_MERGE_BUFFER_SIZE,
+        mainBufferPool,
+        initialBlockBufferPool,
         ioExec,
         Integer.MAX_VALUE,
         useAsyncIO,
@@ -229,6 +247,8 @@ public class CompressingDirectory extends FSDirectory {
     private long filePos;
     private boolean isOpen;
 
+    private final DirectBufferPool initialBlockBufferPool;
+
     /**
      * Creates a new instance of DirectIOIndexOutput for writing index output with direct IO
      * bypassing OS buffer
@@ -242,6 +262,8 @@ public class CompressingDirectory extends FSDirectory {
         String name,
         int blockSize,
         int bufferSize,
+        DirectBufferPool mainBufferPool,
+        DirectBufferPool initialBlockBufferPool,
         ExecutorService ioExec,
         int expectLength,
         boolean useAsyncIO,
@@ -250,10 +272,11 @@ public class CompressingDirectory extends FSDirectory {
       super("DirectIOIndexOutput(path=\"" + path.toString() + "\")", name);
 
       // stored only to lazily compute the pathHash
-      writeHelper = new AsyncDirectWriteHelper(blockSize, bufferSize, path, useDirectIO);
+      writeHelper = new AsyncDirectWriteHelper(blockSize, mainBufferPool, path, useDirectIO);
       buffer = writeHelper.init(0);
       preBuffer = ByteBuffer.wrap(compressBuffer);
-      initialBlock = ByteBuffer.allocateDirect(blockSize + blockSize - 1).alignedSlice(blockSize);
+      this.initialBlockBufferPool = initialBlockBufferPool;
+      initialBlock = initialBlockBufferPool.get();
 
       // allocate space for the header
       buffer.position(buffer.position() + HEADER_SIZE);
@@ -369,6 +392,8 @@ public class CompressingDirectory extends FSDirectory {
         try (writeHelper) {
           // flush and close channel
           flush();
+        } finally {
+          initialBlockBufferPool.release(initialBlock);
         }
       }
     }

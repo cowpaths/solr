@@ -56,8 +56,12 @@ public class AsyncDirectWriteHelper implements Closeable {
   private final Path path;
   private final FileChannel[] channel = new FileChannel[1];
 
-  public AsyncDirectWriteHelper(int blockSize, int bufferSize, Path path, boolean useDirectIO) {
+  private final DirectBufferPool bufferPool;
+
+  public AsyncDirectWriteHelper(
+      int blockSize, DirectBufferPool bufferPool, Path path, boolean useDirectIO) {
     this.blockSize = blockSize;
+    this.bufferPool = bufferPool;
     this.path = path;
     this.useDirectIO = useDirectIO;
     Function<ByteBuffer, IOFunction<long[], long[]>> writeFunctionSupplier =
@@ -68,7 +72,7 @@ public class AsyncDirectWriteHelper implements Closeable {
           };
         };
     for (int i = 1; i >= 0; i--) {
-      buffers[i] = new Struct(blockSize, bufferSize, writeFunctionSupplier);
+      buffers[i] = new Struct(bufferPool, writeFunctionSupplier);
     }
   }
 
@@ -275,7 +279,9 @@ public class AsyncDirectWriteHelper implements Closeable {
       }
     } finally {
       try (FileChannel ignored = channel[0]) {
-        // ensure that FileChannel is closed.
+        // ensure that FileChannel is closed, and return buffers to the pool
+        bufferPool.release(buffers[0].buffer);
+        bufferPool.release(buffers[1].buffer);
       }
     }
   }
@@ -287,10 +293,9 @@ public class AsyncDirectWriteHelper implements Closeable {
     private final IOFunction<long[], long[]> writeFunction;
 
     private Struct(
-        int blockSize,
-        int bufferSize,
+        DirectBufferPool bufferPool,
         Function<ByteBuffer, IOFunction<long[], long[]>> writeFunctionSupplier) {
-      this.buffer = ByteBuffer.allocateDirect(bufferSize + blockSize - 1).alignedSlice(blockSize);
+      this.buffer = bufferPool.get();
       this.writeFunction = writeFunctionSupplier.apply(this.buffer);
     }
   }

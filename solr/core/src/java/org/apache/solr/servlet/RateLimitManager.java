@@ -74,6 +74,7 @@ public class RateLimitManager implements ClusterPropertiesListener {
             if (newConfig == null) {
               return v;
             } else {
+              log.info("updated config: {}", newConfig);
               return new QueryRateLimiter(newConfig);
             }
           } catch (IOException e) {
@@ -164,6 +165,7 @@ public class RateLimitManager implements ClusterPropertiesListener {
 
   public void registerRequestRateLimiter(
       RequestRateLimiter requestRateLimiter, SolrRequest.SolrRequestType requestType) {
+    log.info("initialized config: {}", requestRateLimiter.getRateLimiterConfig());
     requestRateLimiterMap.put(requestType.toString(), requestRateLimiter);
   }
 

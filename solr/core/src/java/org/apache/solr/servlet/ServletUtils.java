@@ -204,6 +204,7 @@ public abstract class ServletUtils {
       Runnable limitedExecution)
       throws ServletException, IOException {
     try (RequestRateLimiter.SlotReservation accepted = rateLimitManager.handleRequest(request)) {
+      log.info("rate limit request {}", request.getRequestURI());
       if (accepted == null) {
         response.sendError(ErrorCode.TOO_MANY_REQUESTS.code, RateLimitManager.ERROR_MESSAGE);
         return;

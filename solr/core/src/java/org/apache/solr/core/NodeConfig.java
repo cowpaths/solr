@@ -206,8 +206,8 @@ public class NodeConfig {
     if (null == this.solrHome) throw new NullPointerException("solrHome");
     if (null == this.loader) throw new NullPointerException("loader");
 
-    setupSharedLib();
     initModules();
+    setupSharedLib();
   }
 
   /**

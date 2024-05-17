@@ -270,7 +270,7 @@ public class SolrResourceLoader
     }
 
     ClassLoader oldParent = oldLoader.getParent();
-//    IOUtils.closeWhileHandlingException(oldLoader);
+    IOUtils.closeWhileHandlingException(oldLoader);
     return URLClassLoader.newInstance(allURLs.toArray(new URL[allURLs.size()]), oldParent);
   }
 

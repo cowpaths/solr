@@ -223,7 +223,12 @@ public class HttpShardHandler extends ShardHandler {
    */
   @Override
   public ShardResponse takeCompletedIncludingErrors() {
-    return take(false);
+    return take(false, Long.MAX_VALUE);
+  }
+
+  @Override
+  public ShardResponse takeCompletedIncludingErrorsWithTimeout(long maxAllowedTime) {
+    return take(false, maxAllowedTime);
   }
 
   /**
@@ -232,13 +237,16 @@ public class HttpShardHandler extends ShardHandler {
    */
   @Override
   public ShardResponse takeCompletedOrError() {
-    return take(true);
+    return take(true, Long.MAX_VALUE);
   }
 
-  private ShardResponse take(boolean bailOnError) {
+  private ShardResponse take(boolean bailOnError, long maxAllowedTime) {
     try {
       while (pending.get() > 0) {
-        ShardResponse rsp = responses.take();
+        long waitTime = maxAllowedTime - System.nanoTime();
+        ShardResponse rsp = responses.poll(waitTime, TimeUnit.NANOSECONDS);
+        if(rsp ==null)
+          return null;
         responseCancellableMap.remove(rsp);
 
         pending.decrementAndGet();

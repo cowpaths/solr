@@ -529,7 +529,7 @@ public class SearchHandler extends RequestHandlerBase
       }
     } else {
       // a distributed request
-
+      long maxTimeAllowed = req.getParams().getLong(CommonParams.TIME_ALLOWED, Long.MAX_VALUE);
       if (rb.outgoing == null) {
         rb.outgoing = new ArrayList<>();
       }

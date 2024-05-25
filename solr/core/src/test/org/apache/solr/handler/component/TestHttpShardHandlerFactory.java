@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.impl.LBSolrClient;
 import org.apache.solr.client.solrj.request.QueryRequest;
@@ -154,5 +155,58 @@ public class TestHttpShardHandlerFactory extends SolrTestCaseJ4 {
     MatcherAssert.assertThat(hostSet, hasItem("1.2.3.4:8983"));
     MatcherAssert.assertThat(hostSet, hasItem("1.2.3.4:9000"));
     MatcherAssert.assertThat(hostSet, hasItem("1.2.3.4:9001"));
+  }
+
+  @Test
+  public void testHttpShardHandlerTimeout() {
+    HttpShardHandlerFactory httpShardHandlerFactory = new HttpShardHandlerFactory();
+    HttpShardHandler shardHandler = (HttpShardHandler) httpShardHandlerFactory.getShardHandler();
+
+    long startTime = System.nanoTime();
+    long timeAllowedInMillis = 120;
+    shardHandler.setPendingRequest(1);
+    ShardResponse shardResponse =
+        shardHandler.takeCompletedIncludingErrorsWithTimeout(timeAllowedInMillis);
+
+    assertEquals(null, shardResponse);
+
+    long timeTakenInMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
+    assertTrue(
+        "Should have taken more than 100 milli seconds " + timeTakenInMillis,
+        timeTakenInMillis > 100);
+    assertTrue(
+        "Should have timeout in 120 milli seconds " + timeTakenInMillis, timeTakenInMillis < 130);
+  }
+
+  @Test
+  public void testHttpShardHandlerWithResponse() {
+    HttpShardHandlerFactory httpShardHandlerFactory = new HttpShardHandlerFactory();
+    HttpShardHandler shardHandler = (HttpShardHandler) httpShardHandlerFactory.getShardHandler();
+
+    long startTime = System.nanoTime();
+    long timeAllowedInMillis = -1;
+    shardHandler.setPendingRequest(1);
+
+    ShardResponse shardResponse = new ShardResponse();
+    shardResponse.setShard("shard_1");
+    ShardRequest shardRequest = new ShardRequest();
+    shardRequest.actualShards = new String[] {"shard_1"};
+    shardResponse.setShardRequest(shardRequest);
+
+    Thread thread =
+        new Thread(
+            () -> {
+              shardHandler.setResponse(shardResponse);
+            });
+    thread.start();
+    ShardResponse gotResponse =
+        shardHandler.takeCompletedIncludingErrorsWithTimeout(timeAllowedInMillis);
+
+    assertEquals(shardResponse, gotResponse);
+
+    long timeTakenInMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
+    assertTrue(
+        "Should have taken less than 100 milli seconds " + timeTakenInMillis,
+        timeTakenInMillis < 100);
   }
 }

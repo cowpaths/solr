@@ -223,12 +223,12 @@ public class HttpShardHandler extends ShardHandler {
    */
   @Override
   public ShardResponse takeCompletedIncludingErrors() {
-    return take(false, Long.MAX_VALUE);
+    return take(false, -1);
   }
 
   @Override
-  public ShardResponse takeCompletedIncludingErrorsWithTimeout(long maxAllowedTime) {
-    return take(false, maxAllowedTime);
+  public ShardResponse takeCompletedIncludingErrorsWithTimeout(long maxAllowedTimeInMillis) {
+    return take(false, maxAllowedTimeInMillis);
   }
 
   /**
@@ -237,16 +237,22 @@ public class HttpShardHandler extends ShardHandler {
    */
   @Override
   public ShardResponse takeCompletedOrError() {
-    return take(true, Long.MAX_VALUE);
+    return take(true, -1);
   }
 
-  private ShardResponse take(boolean bailOnError, long maxAllowedTime) {
+  private ShardResponse take(boolean bailOnError, long maxAllowedTimeInMillis) {
     try {
+      long deadline = System.nanoTime();
+      if (maxAllowedTimeInMillis > 0) {
+        deadline += TimeUnit.MILLISECONDS.toNanos(maxAllowedTimeInMillis);
+      } else {
+        deadline = Long.MAX_VALUE;
+      }
+
       while (pending.get() > 0) {
-        long waitTime = maxAllowedTime - System.nanoTime();
+        long waitTime = deadline - System.nanoTime();
         ShardResponse rsp = responses.poll(waitTime, TimeUnit.NANOSECONDS);
-        if(rsp ==null)
-          return null;
+        if (rsp == null) return null;
         responseCancellableMap.remove(rsp);
 
         pending.decrementAndGet();
@@ -410,5 +416,15 @@ public class HttpShardHandler extends ShardHandler {
   @Override
   public ShardHandlerFactory getShardHandlerFactory() {
     return httpShardHandlerFactory;
+  }
+
+  // test helper function
+  void setPendingRequest(int val) {
+    this.pending.set(val);
+  }
+
+  // test helper function
+  void setResponse(ShardResponse shardResponse) {
+    this.responses.add(shardResponse);
   }
 }

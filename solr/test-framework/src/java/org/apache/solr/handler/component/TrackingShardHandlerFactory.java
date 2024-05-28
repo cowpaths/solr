@@ -104,7 +104,7 @@ public class TrackingShardHandlerFactory extends HttpShardHandlerFactory {
       }
 
       @Override
-      public ShardResponse takeCompletedIncludingErrorsWithTimeout (long maxAllowedTimeInMillis) {
+      public ShardResponse takeCompletedIncludingErrorsWithTimeout(long maxAllowedTimeInMillis) {
         return wrapped.takeCompletedIncludingErrors();
       }
 

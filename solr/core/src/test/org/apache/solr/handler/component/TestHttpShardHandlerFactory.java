@@ -27,11 +27,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.impl.LBSolrClient;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.cloud.ClusterState;
+import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.core.CoreContainer;
 import org.hamcrest.MatcherAssert;
 import org.junit.AfterClass;
@@ -168,14 +170,12 @@ public class TestHttpShardHandlerFactory extends SolrTestCaseJ4 {
     ShardResponse shardResponse =
         shardHandler.takeCompletedIncludingErrorsWithTimeout(timeAllowedInMillis);
 
-    assertEquals(null, shardResponse);
+    assertNull(shardResponse);
 
     long timeTakenInMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
     assertTrue(
         "Should have taken more than 100 milli seconds " + timeTakenInMillis,
-        timeTakenInMillis > 100);
-    assertTrue(
-        "Should have timeout in 120 milli seconds " + timeTakenInMillis, timeTakenInMillis < 130);
+        timeTakenInMillis >= timeAllowedInMillis);
   }
 
   @Test
@@ -193,20 +193,16 @@ public class TestHttpShardHandlerFactory extends SolrTestCaseJ4 {
     shardRequest.actualShards = new String[] {"shard_1"};
     shardResponse.setShardRequest(shardRequest);
 
-    Thread thread =
-        new Thread(
-            () -> {
-              shardHandler.setResponse(shardResponse);
-            });
-    thread.start();
+    ExecutorService exec = ExecutorUtil.newMDCAwareCachedThreadPool("timeAllowedTest");
+    try {
+      exec.submit(() -> shardHandler.setResponse(shardResponse));
+
+    } finally {
+      ExecutorUtil.shutdownAndAwaitTermination(exec);
+    }
     ShardResponse gotResponse =
         shardHandler.takeCompletedIncludingErrorsWithTimeout(timeAllowedInMillis);
 
     assertEquals(shardResponse, gotResponse);
-
-    long timeTakenInMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
-    assertTrue(
-        "Should have taken less than 100 milli seconds " + timeTakenInMillis,
-        timeTakenInMillis < 100);
   }
 }

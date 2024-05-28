@@ -246,7 +246,7 @@ public class HttpShardHandler extends ShardHandler {
       if (maxAllowedTimeInMillis > 0) {
         deadline += TimeUnit.MILLISECONDS.toNanos(maxAllowedTimeInMillis);
       } else {
-        deadline = Long.MAX_VALUE;
+        deadline = System.nanoTime() + TimeUnit.DAYS.toNanos(1);
       }
 
       while (pending.get() > 0) {

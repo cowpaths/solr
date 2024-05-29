@@ -16,6 +16,8 @@
  */
 package org.apache.solr.servlet;
 
+import static org.apache.solr.util.circuitbreaker.CircuitBreakerRegistry.getTimesTrippedMetrics;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
@@ -52,8 +54,6 @@ import org.apache.solr.core.CoreContainer;
 import org.apache.solr.storage.CompressingDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.solr.util.circuitbreaker.CircuitBreakerRegistry.getTimesTrippedMetrics;
 
 /**
  * FullStory: a simple servlet to produce a few prometheus metrics. This servlet exists for
@@ -197,16 +197,16 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   }
 
   private void getCircuitBreakerMetrics(List<PrometheusMetric> metrics) {
-    getTimesTrippedMetrics().forEach(
+    getTimesTrippedMetrics()
+        .forEach(
             (k, v) -> {
               metrics.add(
-                      new PrometheusMetric(
-                              "times_tripped"+k,
-                              PrometheusMetricType.COUNTER,
-                              "number of times circuit has been tripped",
-                              v));
-            }
-    );
+                  new PrometheusMetric(
+                      "times_tripped" + k,
+                      PrometheusMetricType.COUNTER,
+                      "number of times circuit has been tripped",
+                      v));
+            });
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})

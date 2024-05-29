@@ -43,7 +43,8 @@ import org.slf4j.LoggerFactory;
 public class CircuitBreakerRegistry implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private static final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new ConcurrentHashMap<>();
+  private static final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap =
+      new ConcurrentHashMap<>();
 
   public CircuitBreakerRegistry() {}
 
@@ -107,14 +108,15 @@ public class CircuitBreakerRegistry implements Closeable {
   public static Map<String, Long> getTimesTrippedMetrics() {
     Map<String, Long> ret = new HashMap<>();
     circuitBreakerMap.forEach(
-            (reqType, cbs) -> {
-              for (CircuitBreaker cb : cbs) {
-                String metricKey = cb.getClass().getSimpleName()+"_"+reqType.name().toLowerCase(Locale.ROOT);
-                // there can be multiple circuit breakers of the same type and reqType, so sum their trip times
-                ret.merge(metricKey, cb.getTimesTripped(), Long::sum);
-              }
-            }
-    );
+        (reqType, cbs) -> {
+          for (CircuitBreaker cb : cbs) {
+            String metricKey =
+                cb.getClass().getSimpleName() + "_" + reqType.name().toLowerCase(Locale.ROOT);
+            // there can be multiple circuit breakers of the same type and reqType, so sum their
+            // trip times
+            ret.merge(metricKey, cb.getTimesTripped(), Long::sum);
+          }
+        });
     return ret;
   }
 

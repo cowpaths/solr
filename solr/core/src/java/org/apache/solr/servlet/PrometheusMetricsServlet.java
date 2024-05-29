@@ -201,7 +201,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
             (k, v) -> {
               metrics.add(
                       new PrometheusMetric(
-                              String.format("times_tripped%s", k),
+                              "times_tripped"+k,
                               PrometheusMetricType.COUNTER,
                               "number of times circuit has been tripped",
                               v));

@@ -183,23 +183,55 @@ public class TestHttpShardHandlerFactory extends SolrTestCaseJ4 {
     HttpShardHandlerFactory httpShardHandlerFactory = new HttpShardHandlerFactory();
     HttpShardHandler shardHandler = (HttpShardHandler) httpShardHandlerFactory.getShardHandler();
 
-    long startTime = System.nanoTime();
     long timeAllowedInMillis = -1;
+    // setting one pending request.
     shardHandler.setPendingRequest(1);
 
     ShardResponse shardResponse = new ShardResponse();
     shardResponse.setShard("shard_1");
     ShardRequest shardRequest = new ShardRequest();
+    // one shard
     shardRequest.actualShards = new String[] {"shard_1"};
     shardResponse.setShardRequest(shardRequest);
 
     ExecutorService exec = ExecutorUtil.newMDCAwareCachedThreadPool("timeAllowedTest");
     try {
+      // generating shardresponse for one shard
       exec.submit(() -> shardHandler.setResponse(shardResponse));
-
     } finally {
       ExecutorUtil.shutdownAndAwaitTermination(exec);
     }
+    ShardResponse gotResponse =
+        shardHandler.takeCompletedIncludingErrorsWithTimeout(timeAllowedInMillis);
+
+    assertEquals(shardResponse, gotResponse);
+  }
+
+  @Test
+  public void testHttpShardHandlerWithPartialResponse() {
+    HttpShardHandlerFactory httpShardHandlerFactory = new HttpShardHandlerFactory();
+    HttpShardHandler shardHandler = (HttpShardHandler) httpShardHandlerFactory.getShardHandler();
+
+    long timeAllowedInMillis = 100;
+    // setting two pending requests.
+    shardHandler.setPendingRequest(2);
+
+    ShardResponse shardResponse = new ShardResponse();
+    shardResponse.setShard("shard_1");
+    ShardRequest shardRequest = new ShardRequest();
+    // two shards
+    shardRequest.actualShards = new String[] {"shard_1", "shard_2"};
+    shardResponse.setShardRequest(shardRequest);
+
+    ExecutorService exec = ExecutorUtil.newMDCAwareCachedThreadPool("timeAllowedTest");
+    try {
+      // generating shardresponse for one shard only
+      exec.submit(() -> shardHandler.setResponse(shardResponse));
+    } finally {
+      ExecutorUtil.shutdownAndAwaitTermination(exec);
+    }
+
+    // partial response
     ShardResponse gotResponse =
         shardHandler.takeCompletedIncludingErrorsWithTimeout(timeAllowedInMillis);
 

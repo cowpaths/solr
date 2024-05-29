@@ -11,18 +11,19 @@ import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.SolrCloudTestCase;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.ShardParams;
 
 public class TestTimeAllowedSearch extends SolrCloudTestCase {
 
   public void testTimeAllowed() throws Exception {
     MiniSolrCloudCluster cluster =
-        configureCluster(4).addConfig("conf", configset("cloud-minimal")).configure();
+        configureCluster(2).addConfig("conf", configset("cloud-minimal")).configure();
     try {
       CloudSolrClient client = cluster.getSolrClient();
       String COLLECTION_NAME = "test_coll";
-      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 2, 1)
+      CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 4, 1)
           .process(cluster.getSolrClient());
-      cluster.waitForActiveCollection(COLLECTION_NAME, 2, 2);
+      cluster.waitForActiveCollection(COLLECTION_NAME, 4, 4);
       UpdateRequest ur = new UpdateRequest();
       Random rd = new Random();
       for (int i = 0; i < 100; i++) {
@@ -51,6 +52,22 @@ public class TestTimeAllowedSearch extends SolrCloudTestCase {
       assertTrue(
           "Should have found few docs as timeallowed is unlimited ",
           response.getResults().getNumFound() > 0);
+
+      long totalResults = response.getResults().getNumFound();
+
+      cluster.getJettySolrRunner(1).stop();
+
+      query = new SolrQuery();
+      // executing same query but one node is down
+      query.setQuery("subject_s:*b*");
+      query.set(ShardParams.SHARDS_TOLERANT, "true");
+      query.set(CommonParams.TIME_ALLOWED, 100);
+      response = client.query(COLLECTION_NAME, query);
+      System.out.println("response " + response);
+      assertTrue(
+          "Should have found less docs as one node is stopped ",
+          response.getResults().getNumFound() < totalResults);
+
     } finally {
       cluster.shutdown();
     }

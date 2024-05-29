@@ -249,10 +249,11 @@ public class HttpShardHandler extends ShardHandler {
         deadline = System.nanoTime() + TimeUnit.DAYS.toNanos(1);
       }
 
+      ShardResponse previousResponse = null;
       while (pending.get() > 0) {
         long waitTime = deadline - System.nanoTime();
         ShardResponse rsp = responses.poll(waitTime, TimeUnit.NANOSECONDS);
-        if (rsp == null) return null;
+        if (rsp == null) return previousResponse;
         responseCancellableMap.remove(rsp);
 
         pending.decrementAndGet();
@@ -263,6 +264,7 @@ public class HttpShardHandler extends ShardHandler {
         // for a request was received.  Otherwise we might return the same
         // request more than once.
         rsp.getShardRequest().responses.add(rsp);
+        previousResponse = rsp;
         if (rsp.getShardRequest().responses.size() == rsp.getShardRequest().actualShards.length) {
           return rsp;
         }

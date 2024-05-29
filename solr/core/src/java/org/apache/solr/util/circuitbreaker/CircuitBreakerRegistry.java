@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.solr.client.solrj.SolrRequest.SolrRequestType;
 import org.slf4j.Logger;
@@ -42,7 +43,7 @@ import org.slf4j.LoggerFactory;
 public class CircuitBreakerRegistry implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new HashMap<>();
+  private static final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new ConcurrentHashMap<>();
 
   public CircuitBreakerRegistry() {}
 
@@ -82,6 +83,7 @@ public class CircuitBreakerRegistry implements Closeable {
     for (CircuitBreaker circuitBreaker :
         circuitBreakerMap.getOrDefault(requestType, Collections.emptyList())) {
       if (circuitBreaker.isTripped()) {
+        circuitBreaker.incrementTripped(1);
         if (circuitBreaker.isDebugMode()) {
           if (log.isInfoEnabled()) {
             log.info(
@@ -100,6 +102,20 @@ public class CircuitBreakerRegistry implements Closeable {
     }
 
     return triggeredCircuitBreakers;
+  }
+
+  public static Map<String, Long> getTimesTrippedMetrics() {
+    Map<String, Long> ret = new HashMap<>();
+    circuitBreakerMap.forEach(
+            (reqType, cbs) -> {
+              for (CircuitBreaker cb : cbs) {
+                String metricKey = String.format("%s_%s",cb.getClass().getSimpleName(),reqType.name().toLowerCase());
+                // there can be multiple circuit breakers of the same type and reqType, so sum their trip times
+                ret.merge(metricKey, cb.getTimesTripped(), Long::sum);
+              }
+            }
+    );
+    return ret;
   }
 
   /**

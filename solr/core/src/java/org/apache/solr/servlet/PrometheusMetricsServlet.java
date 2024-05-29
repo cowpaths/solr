@@ -53,6 +53,8 @@ import org.apache.solr.storage.CompressingDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.solr.util.circuitbreaker.CircuitBreakerRegistry.getTimesTrippedMetrics;
+
 /**
  * FullStory: a simple servlet to produce a few prometheus metrics. This servlet exists for
  * backwards compatibility and will be removed in favor of the native prometheus-exporter.
@@ -92,6 +94,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       caller.call(qTime, metrics, request);
     }
     getCompressingDirectoryPoolMetrics(metrics);
+    getCircuitBreakerMetrics(metrics);
     getSharedCacheMetrics(metrics, getSolrDispatchFilter(request).getCores(), cacheMetricTypes);
     metrics.add(
         new PrometheusMetric(
@@ -191,6 +194,19 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               "init " + BASE_POOL_DESCRIPTION + "outstanding (in use) high water mark",
               v[5]));
     }
+  }
+
+  private void getCircuitBreakerMetrics(List<PrometheusMetric> metrics) {
+    getTimesTrippedMetrics().forEach(
+            (k, v) -> {
+              metrics.add(
+                      new PrometheusMetric(
+                              String.format("times_tripped%s", k),
+                              PrometheusMetricType.COUNTER,
+                              "number of times circuit has been tripped",
+                              v));
+            }
+    );
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})

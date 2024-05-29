@@ -109,7 +109,7 @@ public class CircuitBreakerRegistry implements Closeable {
     circuitBreakerMap.forEach(
             (reqType, cbs) -> {
               for (CircuitBreaker cb : cbs) {
-                String metricKey = cb.getClass().getSimpleName()+"_"+reqType.name().toLowerCase();
+                String metricKey = cb.getClass().getSimpleName()+"_"+reqType.name().toLowerCase(Locale.ROOT);
                 // there can be multiple circuit breakers of the same type and reqType, so sum their trip times
                 ret.merge(metricKey, cb.getTimesTripped(), Long::sum);
               }

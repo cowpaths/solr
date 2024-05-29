@@ -40,9 +40,9 @@ import org.slf4j.LoggerFactory;
  * @since 9.4
  */
 public class CircuitBreakerRegistry implements Closeable {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  protected static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new HashMap<>();
+  protected final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new HashMap<>();
 
   public CircuitBreakerRegistry() {}
 
@@ -77,7 +77,7 @@ public class CircuitBreakerRegistry implements Closeable {
    * @return CircuitBreakers which have triggered, null otherwise.
    */
   public List<CircuitBreaker> checkTripped(SolrRequestType requestType) {
-    List<CircuitBreaker> triggeredCircuitBreakers = null;
+    List<CircuitBreaker> triggeredCircuitBreakers = new ArrayList<>();
 
     for (CircuitBreaker circuitBreaker :
         circuitBreakerMap.getOrDefault(requestType, Collections.emptyList())) {
@@ -90,10 +90,6 @@ public class CircuitBreakerRegistry implements Closeable {
                 circuitBreaker.getErrorMessage());
           }
         } else {
-          if (triggeredCircuitBreakers == null) {
-            triggeredCircuitBreakers = new ArrayList<>();
-          }
-
           triggeredCircuitBreakers.add(circuitBreaker);
         }
       }

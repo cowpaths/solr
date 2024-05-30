@@ -58,18 +58,24 @@ public class TestTimeAllowedSearch extends SolrCloudTestCase {
 
       ur.commit(client, COLLECTION_NAME);
 
+      // warm up query
       SolrQuery query = new SolrQuery();
       query.setQuery("subject_s:*abcd*");
-      query.set(CommonParams.TIME_ALLOWED, 50);
       query.set(ShardParams.SHARDS_TOLERANT, "true");
       QueryResponse response = client.query(COLLECTION_NAME, query);
+
+      query = new SolrQuery();
+      query.setQuery("subject_s:*xyz*");
+      query.set(CommonParams.TIME_ALLOWED, 25);
+      query.set(ShardParams.SHARDS_TOLERANT, "true");
+      response = client.query(COLLECTION_NAME, query);
       assertTrue(
           "Should have found 1/0 doc as timeallowed is 50ms found:"
               + response.getResults().getNumFound(),
           response.getResults().getNumFound() <= 1);
 
       query = new SolrQuery();
-      query.setQuery("subject_s:*abcd*");
+      query.setQuery("subject_s:*xyz*");
       query.set(ShardParams.SHARDS_TOLERANT, "true");
       response = client.query(COLLECTION_NAME, query);
       assertTrue(

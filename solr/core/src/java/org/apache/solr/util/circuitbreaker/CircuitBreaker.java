@@ -51,8 +51,6 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
 
   private boolean debugMode = false;
 
-  private long timesTripped = 0;
-
   @Override
   public void init(NamedList<?> args) {
     SolrPluginUtils.invokeSetters(this, args);
@@ -121,13 +119,5 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
 
   public void setDebugMode(boolean debugMode) {
     this.debugMode = debugMode;
-  }
-
-  public void incrementTripped(long times) {
-    this.timesTripped += times;
-  }
-
-  public long getTimesTripped() {
-    return this.timesTripped;
   }
 }

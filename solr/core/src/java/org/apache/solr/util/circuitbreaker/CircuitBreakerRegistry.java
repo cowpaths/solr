@@ -43,8 +43,9 @@ import org.slf4j.LoggerFactory;
 public class CircuitBreakerRegistry implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private static final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap =
-      new ConcurrentHashMap<>();
+  private final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap =
+      new HashMap<>();
+  private static final Map<String, Long> circuitBreakerTrippedMetrics = new ConcurrentHashMap<>();
 
   public CircuitBreakerRegistry() {}
 
@@ -84,7 +85,7 @@ public class CircuitBreakerRegistry implements Closeable {
     for (CircuitBreaker circuitBreaker :
         circuitBreakerMap.getOrDefault(requestType, Collections.emptyList())) {
       if (circuitBreaker.isTripped()) {
-        circuitBreaker.incrementTripped(1);
+        incrementTripped(requestType, circuitBreaker);
         if (circuitBreaker.isDebugMode()) {
           if (log.isInfoEnabled()) {
             log.info(
@@ -105,17 +106,17 @@ public class CircuitBreakerRegistry implements Closeable {
     return triggeredCircuitBreakers;
   }
 
+  private void incrementTripped(SolrRequestType requestType, CircuitBreaker circuitBreaker) {
+    String metricKey =
+            circuitBreaker.getClass().getSimpleName() + "_" + requestType.name().toLowerCase(Locale.ROOT);
+    circuitBreakerTrippedMetrics.merge(metricKey, 1L, Long::sum);
+  }
+
   public static Map<String, Long> getTimesTrippedMetrics() {
     Map<String, Long> ret = new HashMap<>();
-    circuitBreakerMap.forEach(
-        (reqType, cbs) -> {
-          for (CircuitBreaker cb : cbs) {
-            String metricKey =
-                cb.getClass().getSimpleName() + "_" + reqType.name().toLowerCase(Locale.ROOT);
-            // there can be multiple circuit breakers of the same type and reqType, so sum their
-            // trip times
-            ret.merge(metricKey, cb.getTimesTripped(), Long::sum);
-          }
+    circuitBreakerTrippedMetrics.forEach(
+        (k, v) -> {
+          ret.put(k, v);
         });
     return ret;
   }

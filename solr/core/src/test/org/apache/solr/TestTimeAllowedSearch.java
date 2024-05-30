@@ -1,10 +1,7 @@
 package org.apache.solr;
 
-import com.carrotsearch.randomizedtesting.RandomizedRunner;
 import com.carrotsearch.randomizedtesting.generators.RandomStrings;
-
 import java.util.Locale;
-import java.util.Random;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
@@ -19,12 +16,11 @@ import org.apache.solr.common.params.ShardParams;
 public class TestTimeAllowedSearch extends SolrCloudTestCase {
 
   /**
-   * This test demonstrates timeAllowed expectation at @{@link org.apache.solr.handler.component.HttpShardHandler} level
-   * This test creates collection with 'implicit` router, which has two shards
-   * shard_1 has 100000 docs, so that query should take some time
-   * shard_2 has only 1 doc to demonstrate the HttpSHardHandler timeout
-   * Then it execute substring query with TIME_ALLOWED 50, assuming this query will time out on shard_1
-   * @throws Exception
+   * This test demonstrates timeAllowed expectation at @{@link
+   * org.apache.solr.handler.component.HttpShardHandler} level This test creates collection with
+   * 'implicit` router, which has two shards shard_1 has 100000 docs, so that query should take some
+   * time shard_2 has only 1 doc to demonstrate the HttpSHardHandler timeout Then it execute
+   * substring query with TIME_ALLOWED 50, assuming this query will time out on shard_1
    */
   public void testTimeAllowed() throws Exception {
     MiniSolrCloudCluster cluster =
@@ -33,14 +29,16 @@ public class TestTimeAllowedSearch extends SolrCloudTestCase {
       CloudSolrClient client = cluster.getSolrClient();
       String COLLECTION_NAME = "test_coll";
       CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf", 2, 1)
-              .setRouterName("implicit").setShards("shard_1,shard_2")
-              .process(cluster.getSolrClient());
+          .setRouterName("implicit")
+          .setShards("shard_1,shard_2")
+          .process(cluster.getSolrClient());
       cluster.waitForActiveCollection(COLLECTION_NAME, 2, 2);
       UpdateRequest ur = new UpdateRequest();
       for (int i = 0; i < 100000; i++) {
         SolrInputDocument doc = new SolrInputDocument();
         doc.addField("id", "" + i);
-        final String s = RandomStrings.randomAsciiLettersOfLengthBetween(random(), 10, 100)
+        final String s =
+            RandomStrings.randomAsciiLettersOfLengthBetween(random(), 10, 100)
                 .toLowerCase(Locale.ROOT);
         doc.setField("subject_s", s);
         doc.setField("_route_", "shard_1");
@@ -50,7 +48,8 @@ public class TestTimeAllowedSearch extends SolrCloudTestCase {
       for (int i = 0; i < 1; i++) {
         SolrInputDocument doc = new SolrInputDocument();
         doc.addField("id", "" + i);
-        final String s = RandomStrings.randomAsciiLettersOfLengthBetween(random(), 10, 100)
+        final String s =
+            RandomStrings.randomAsciiLettersOfLengthBetween(random(), 10, 100)
                 .toLowerCase(Locale.ROOT);
         doc.setField("subject_s", s);
         doc.setField("_route_", "shard_2");
@@ -65,7 +64,8 @@ public class TestTimeAllowedSearch extends SolrCloudTestCase {
       query.set(ShardParams.SHARDS_TOLERANT, "true");
       QueryResponse response = client.query(COLLECTION_NAME, query);
       assertTrue(
-          "Should have found 1/0 doc as timeallowed is 50ms found:" + response.getResults().getNumFound() ,
+          "Should have found 1/0 doc as timeallowed is 50ms found:"
+              + response.getResults().getNumFound(),
           response.getResults().getNumFound() <= 1);
 
       query = new SolrQuery();

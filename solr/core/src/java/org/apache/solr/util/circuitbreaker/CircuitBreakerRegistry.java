@@ -113,12 +113,7 @@ public class CircuitBreakerRegistry implements Closeable {
   }
 
   public static Map<String, Long> getTimesTrippedMetrics() {
-    Map<String, Long> ret = new HashMap<>();
-    circuitBreakerTrippedMetrics.forEach(
-        (k, v) -> {
-          ret.put(k, v);
-        });
-    return ret;
+    return Map.copyOf(circuitBreakerTrippedMetrics);
   }
 
   /**

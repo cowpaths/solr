@@ -45,16 +45,18 @@ public class TestTimeAllowedSearch extends SolrCloudTestCase {
         ur.add(doc);
       }
 
-      for (int i = 0; i < 1; i++) {
-        SolrInputDocument doc = new SolrInputDocument();
-        doc.addField("id", "" + i);
-        final String s =
-            RandomStrings.randomAsciiLettersOfLengthBetween(random(), 10, 100)
-                .toLowerCase(Locale.ROOT);
-        doc.setField("subject_s", s);
-        doc.setField("_route_", "shard_2");
-        ur.add(doc);
-      }
+      // adding "abc" in each shard as we will have query *abc*
+      SolrInputDocument doc = new SolrInputDocument();
+      doc.addField("id", "" + 10000);
+      doc.setField("subject_s", "abc");
+      doc.setField("_route_", "shard_2");
+      ur.add(doc);
+
+      doc = new SolrInputDocument();
+      doc.addField("id", "" + 100001);
+      doc.setField("subject_s", "abc");
+      doc.setField("_route_", "shard_1");
+      ur.add(doc);
 
       ur.commit(client, COLLECTION_NAME);
 
@@ -65,22 +67,22 @@ public class TestTimeAllowedSearch extends SolrCloudTestCase {
       QueryResponse response = client.query(COLLECTION_NAME, query);
 
       query = new SolrQuery();
-      query.setQuery("subject_s:*xyz*");
+      query.setQuery("subject_s:*abc*");
       query.set(CommonParams.TIME_ALLOWED, 25);
       query.set(ShardParams.SHARDS_TOLERANT, "true");
       response = client.query(COLLECTION_NAME, query);
       assertTrue(
-          "Should have found 1/0 doc as timeallowed is 50ms found:"
+          "Should have found 1 doc (shard_2) as timeallowed is 25ms found:"
               + response.getResults().getNumFound(),
-          response.getResults().getNumFound() <= 1);
+          response.getResults().getNumFound() == 1);
 
       query = new SolrQuery();
-      query.setQuery("subject_s:*xyz*");
+      query.setQuery("subject_s:*abc*");
       query.set(ShardParams.SHARDS_TOLERANT, "true");
       response = client.query(COLLECTION_NAME, query);
       assertTrue(
           "Should have found few docs as timeallowed is unlimited ",
-          response.getResults().getNumFound() >= 0);
+          response.getResults().getNumFound() > 1);
     } finally {
       cluster.shutdown();
     }

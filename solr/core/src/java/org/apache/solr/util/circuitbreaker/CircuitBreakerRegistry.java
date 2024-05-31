@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.solr.client.solrj.SolrRequest.SolrRequestType;
 import org.slf4j.Logger;
@@ -43,6 +44,7 @@ public class CircuitBreakerRegistry implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new HashMap<>();
+  private static final Map<String, Long> circuitBreakerTrippedMetrics = new ConcurrentHashMap<>();
 
   public CircuitBreakerRegistry() {}
 
@@ -82,6 +84,7 @@ public class CircuitBreakerRegistry implements Closeable {
     for (CircuitBreaker circuitBreaker :
         circuitBreakerMap.getOrDefault(requestType, Collections.emptyList())) {
       if (circuitBreaker.isTripped()) {
+        incrementTripped(requestType, circuitBreaker);
         if (circuitBreaker.isDebugMode()) {
           if (log.isInfoEnabled()) {
             log.info(
@@ -100,6 +103,18 @@ public class CircuitBreakerRegistry implements Closeable {
     }
 
     return triggeredCircuitBreakers;
+  }
+
+  private void incrementTripped(SolrRequestType requestType, CircuitBreaker circuitBreaker) {
+    String metricKey =
+        circuitBreaker.getClass().getSimpleName()
+            + "_"
+            + requestType.name().toLowerCase(Locale.ROOT);
+    circuitBreakerTrippedMetrics.merge(metricKey, 1L, Long::sum);
+  }
+
+  public static Map<String, Long> getTimesTrippedMetrics() {
+    return Map.copyOf(circuitBreakerTrippedMetrics);
   }
 
   /**

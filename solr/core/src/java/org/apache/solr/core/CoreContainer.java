@@ -1073,7 +1073,7 @@ public class CoreContainer {
     if (isZooKeeperAware()) {
       containerPluginsRegistry.refresh();
       getZkController().zkStateReader.registerClusterPropertiesListener(containerPluginsRegistry);
-      globalCircuitBreakerRegistry = new GlobalCircuitBreakerManager();
+      globalCircuitBreakerRegistry = new GlobalCircuitBreakerManager(this);
       getZkController().zkStateReader.registerClusterPropertiesListener(globalCircuitBreakerRegistry);
       ContainerPluginsApi containerPluginsApi = new ContainerPluginsApi(this);
       registerV2ApiIfEnabled(containerPluginsApi.readAPI);

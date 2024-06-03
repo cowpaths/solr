@@ -78,6 +78,7 @@ public class LoadAverageCircuitBreaker extends CircuitBreaker {
         + allowedLoadAverage.get();
   }
 
+  @Override
   public void setThreshold(double thresholdValueUnbounded) {
     if (thresholdValueUnbounded <= 0) {
       throw new IllegalStateException("Threshold cannot be less than or equal to zero");

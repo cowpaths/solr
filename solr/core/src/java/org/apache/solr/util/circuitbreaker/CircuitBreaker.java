@@ -50,6 +50,7 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
       List.of(SolrRequestType.QUERY, SolrRequestType.UPDATE);
 
   private boolean debugMode = false;
+  private double threshold;
 
   @Override
   public void init(NamedList<?> args) {
@@ -119,5 +120,9 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
 
   public void setDebugMode(boolean debugMode) {
     this.debugMode = debugMode;
+  }
+
+  public void setThreshold(double threshold) {
+    this.threshold = threshold;
   }
 }

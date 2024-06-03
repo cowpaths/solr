@@ -21,6 +21,7 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import java.lang.invoke.MethodHandles;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.slf4j.Logger;
@@ -38,7 +39,7 @@ public class CPUCircuitBreaker extends CircuitBreaker {
 
   private boolean enabled = true;
   private double cpuUsageThreshold;
-  private final SolrCore core;
+  private final CoreContainer coreContainer;
 
   private static final ThreadLocal<Double> seenCPUUsage = ThreadLocal.withInitial(() -> 0.0);
 
@@ -46,7 +47,12 @@ public class CPUCircuitBreaker extends CircuitBreaker {
 
   public CPUCircuitBreaker(SolrCore core) {
     super();
-    this.core = core;
+    this.coreContainer = core.getCoreContainer();
+  }
+
+  public CPUCircuitBreaker(CoreContainer coreContainer) {
+    super();
+    this.coreContainer = coreContainer;
   }
 
   @Override
@@ -91,6 +97,7 @@ public class CPUCircuitBreaker extends CircuitBreaker {
         + allowedCPUUsage.get();
   }
 
+  @Override
   public void setThreshold(double thresholdValueInPercentage) {
     if (thresholdValueInPercentage > 100) {
       throw new IllegalArgumentException("Invalid Invalid threshold value.");
@@ -114,13 +121,11 @@ public class CPUCircuitBreaker extends CircuitBreaker {
   protected double calculateLiveCPUUsage() {
     // TODO: Use Codahale Meter to calculate the value
     Metric metric =
-        this.core
-            .getCoreContainer()
+            this.coreContainer
             .getMetricManager()
             .registry("solr.jvm")
             .getMetrics()
-            .get("os.systemCpuLoad");
-
+            .get("os.systemCpuLoad");;
     if (metric == null) {
       return -1.0;
     }

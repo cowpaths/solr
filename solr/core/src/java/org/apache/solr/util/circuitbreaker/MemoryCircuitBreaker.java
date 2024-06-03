@@ -77,6 +77,7 @@ public class MemoryCircuitBreaker extends CircuitBreaker {
     }
   }
 
+  @Override
   public void setThreshold(double thresholdValueInPercentage) {
     long currentMaxHeap = MEMORY_MX_BEAN.getHeapMemoryUsage().getMax();
 

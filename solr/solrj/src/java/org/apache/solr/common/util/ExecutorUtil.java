@@ -169,14 +169,14 @@ public class ExecutorUtil {
   }
 
   public static ExecutorService newMDCAwareCachedThreadPool(
-          int maxThreads, int queueCapacity, ThreadFactory threadFactory) {
+      int maxThreads, int queueCapacity, ThreadFactory threadFactory) {
     return new MDCAwareThreadPoolExecutor(
-            0,
-            maxThreads,
-            60L,
-            TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(queueCapacity),
-            threadFactory);
+        0,
+        maxThreads,
+        60L,
+        TimeUnit.SECONDS,
+        new LinkedBlockingQueue<>(queueCapacity),
+        threadFactory);
   }
 
   @SuppressForbidden(reason = "class customizes ThreadPoolExecutor so it can be used instead")

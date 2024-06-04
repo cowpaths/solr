@@ -41,11 +41,10 @@ import org.slf4j.LoggerFactory;
  * @since 9.4
  */
 public class CircuitBreakerRegistry implements Closeable {
-  protected static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new HashMap<>();
   private static final Map<String, Long> circuitBreakerTrippedMetrics = new ConcurrentHashMap<>();
-
 
   public CircuitBreakerRegistry() {}
 

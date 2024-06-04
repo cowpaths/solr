@@ -121,11 +121,12 @@ public class CPUCircuitBreaker extends CircuitBreaker {
   protected double calculateLiveCPUUsage() {
     // TODO: Use Codahale Meter to calculate the value
     Metric metric =
-            this.coreContainer
+        this.coreContainer
             .getMetricManager()
             .registry("solr.jvm")
             .getMetrics()
-            .get("os.systemCpuLoad");;
+            .get("os.systemCpuLoad");
+    ;
     if (metric == null) {
       return -1.0;
     }

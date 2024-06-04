@@ -237,6 +237,7 @@ public class CoreContainer {
   private final OrderedExecutor replayUpdatesExecutor;
 
   private GlobalCircuitBreakerManager globalCircuitBreakerRegistry;
+
   public CircuitBreakerRegistry getGlobalCircuitBreakerRegistry() {
     return globalCircuitBreakerRegistry.getCircuitBreakerRegistry();
   }
@@ -1074,7 +1075,9 @@ public class CoreContainer {
       containerPluginsRegistry.refresh();
       getZkController().zkStateReader.registerClusterPropertiesListener(containerPluginsRegistry);
       globalCircuitBreakerRegistry = new GlobalCircuitBreakerManager(this);
-      getZkController().zkStateReader.registerClusterPropertiesListener(globalCircuitBreakerRegistry);
+      getZkController()
+          .zkStateReader
+          .registerClusterPropertiesListener(globalCircuitBreakerRegistry);
       ContainerPluginsApi containerPluginsApi = new ContainerPluginsApi(this);
       registerV2ApiIfEnabled(containerPluginsApi.readAPI);
       registerV2ApiIfEnabled(containerPluginsApi.editAPI);

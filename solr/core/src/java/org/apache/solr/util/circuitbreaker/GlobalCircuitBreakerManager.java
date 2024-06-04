@@ -49,7 +49,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
           return false;
         }
         CircuitBreakerConfig that = (CircuitBreakerConfig) obj;
-        return this.enabled == that.enabled
+        return this.enabled.equals(that.enabled)
             && this.updateThreshold.equals(that.updateThreshold)
             && this.queryThreshold.equals(that.queryThreshold);
       }

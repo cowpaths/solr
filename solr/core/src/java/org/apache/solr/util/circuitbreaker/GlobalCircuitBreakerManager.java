@@ -2,7 +2,6 @@ package org.apache.solr.util.circuitbreaker;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.solr.client.solrj.SolrRequest;
-import org.apache.solr.client.solrj.io.Tuple;
 import org.apache.solr.common.annotation.JsonProperty;
 import org.apache.solr.common.cloud.ClusterPropertiesListener;
 import org.apache.solr.common.util.Utils;
@@ -12,18 +11,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
     protected static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private static final ObjectMapper mapper = SolrJacksonAnnotationInspector.createObjectMapper();
     private final CircuitBreakerRegistry cbRegistry = new CircuitBreakerRegistry();
-    private final CoreContainer coreContainer;
+    private final GlobalCircuitBreakerFactory factory;
 
     public CircuitBreakerRegistry getCircuitBreakerRegistry() {
         return cbRegistry;
@@ -33,22 +31,18 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
 
     public GlobalCircuitBreakerManager(CoreContainer coreContainer) {
         super();
-        this.coreContainer = coreContainer;
+        this.factory = new GlobalCircuitBreakerFactory(coreContainer);
     }
 
     private static class GlobalCircuitBreakerConfig {
         static final String CIRCUIT_BREAKER_CLUSTER_PROPS_KEY = "circuit-breakers";
         @JsonProperty
-        CircuitBreakerConfig load = new CircuitBreakerConfig();
-        @JsonProperty
-        CircuitBreakerConfig cpu = new CircuitBreakerConfig();
-        @JsonProperty
-        CircuitBreakerConfig memory = new CircuitBreakerConfig();
+        Map<String, CircuitBreakerConfig> configs = new ConcurrentHashMap<>();
 
         static class CircuitBreakerConfig {
             @JsonProperty Boolean enabled = false;
-            @JsonProperty Long updateThreshold = Long.MAX_VALUE;
-            @JsonProperty Long queryThreshold = Long.MAX_VALUE;
+            @JsonProperty Double updateThreshold = Double.MAX_VALUE;
+            @JsonProperty Double queryThreshold = Double.MAX_VALUE;
 
             @Override
             public boolean equals(Object obj) {
@@ -73,12 +67,26 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
                 return false;
             }
             GlobalCircuitBreakerConfig that = (GlobalCircuitBreakerConfig) obj;
-            return this.load.equals(that.load) && this.cpu.equals(that.cpu) && this.memory.equals(that.memory);
+            if (that.configs.size() != this.configs.size()) {
+                return false;
+            }
+            for (Map.Entry<String, CircuitBreakerConfig> entry : configs.entrySet()) {
+                CircuitBreakerConfig thisConfig = entry.getValue();
+                CircuitBreakerConfig thatConfig = that.configs.get(entry.getKey());
+                if (thatConfig == null) {
+                    return false;
+                }
+                if (!thisConfig.equals(thatConfig)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(this.load.hashCode(), this.cpu.hashCode(), this.memory.hashCode());
+            // Map.Entry already overrides hashCode, so let's use that
+            return Objects.hash(configs.entrySet());
         }
     }
 
@@ -92,9 +100,9 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
                     registerCircuitBreakers(nextConfig);
                 }
             }
-        } catch (IOException e) {
-            log.warn("error parsing global circuit breaker configuration {}", e.getMessage());
+        } catch (Exception e) {
             // don't break when things are misconfigured
+            log.warn("error parsing global circuit breaker configuration {}", e.getMessage());
         }
         return false;
     }
@@ -103,7 +111,6 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
         Object cbConfig = properties.get(GlobalCircuitBreakerConfig.CIRCUIT_BREAKER_CLUSTER_PROPS_KEY);
         GlobalCircuitBreakerConfig globalCBConfig = null;
         if (cbConfig != null) {
-            log.info(cbConfig.toString());
             byte[] configInput = Utils.toJSON(properties.get(GlobalCircuitBreakerConfig.CIRCUIT_BREAKER_CLUSTER_PROPS_KEY));
             if (configInput != null && configInput.length > 0) {
                 globalCBConfig = mapper.readValue(configInput, GlobalCircuitBreakerConfig.class);
@@ -112,31 +119,22 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
         return globalCBConfig;
     }
 
-    private void registerCircuitBreakers(GlobalCircuitBreakerConfig gbConfig) throws IOException {
+    private void registerCircuitBreakers(GlobalCircuitBreakerConfig gbConfig) throws Exception {
         this.currentConfig = gbConfig;
         this.cbRegistry.deregisterAll();
-        if (gbConfig.load.enabled) {
-            if (gbConfig.load.queryThreshold != null) {
-                registerGlobalCircuitBreaker(new LoadAverageCircuitBreaker(), gbConfig.load.queryThreshold, SolrRequest.SolrRequestType.QUERY);
-            }
-            if (gbConfig.load.updateThreshold != null) {
-                registerGlobalCircuitBreaker(new LoadAverageCircuitBreaker(), gbConfig.load.updateThreshold, SolrRequest.SolrRequestType.UPDATE);
-            }
-        }
-        if (gbConfig.cpu.enabled) {
-            if (gbConfig.cpu.queryThreshold != null) {
-                registerGlobalCircuitBreaker(new CPUCircuitBreaker(coreContainer), gbConfig.cpu.queryThreshold, SolrRequest.SolrRequestType.QUERY);
-            }
-            if (gbConfig.cpu.updateThreshold != null) {
-                registerGlobalCircuitBreaker(new CPUCircuitBreaker(coreContainer), gbConfig.cpu.updateThreshold, SolrRequest.SolrRequestType.UPDATE);
-            }
-        }
-        if (gbConfig.memory.enabled) {
-            if (gbConfig.memory.queryThreshold != null) {
-                registerGlobalCircuitBreaker(new MemoryCircuitBreaker(), gbConfig.memory.queryThreshold, SolrRequest.SolrRequestType.QUERY);
-            }
-            if (gbConfig.memory.updateThreshold != null) {
-                registerGlobalCircuitBreaker(new MemoryCircuitBreaker(), gbConfig.memory.updateThreshold, SolrRequest.SolrRequestType.UPDATE);
+        for (Map.Entry<String, GlobalCircuitBreakerConfig.CircuitBreakerConfig> entry : this.currentConfig.configs.entrySet()) {
+            GlobalCircuitBreakerConfig.CircuitBreakerConfig config = entry.getValue();
+            try {
+                if (config.enabled) {
+                    if (config.queryThreshold != Double.MAX_VALUE) {
+                        registerGlobalCircuitBreaker(this.factory.create(entry.getKey()), config.queryThreshold, SolrRequest.SolrRequestType.QUERY);
+                    }
+                    if (config.updateThreshold != Double.MAX_VALUE) {
+                        registerGlobalCircuitBreaker(this.factory.create(entry.getKey()), config.updateThreshold, SolrRequest.SolrRequestType.UPDATE);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("error while registering global circuit breaker {}: {}", entry.getKey(), e.getMessage());
             }
         }
         log.info("onChange registered circuit breakers {}", this.cbRegistry.circuitBreakerMap);

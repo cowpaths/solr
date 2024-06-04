@@ -91,6 +91,9 @@ public class CircuitBreakerManager extends CircuitBreaker {
     }
   }
 
+  @Override
+  public void setThreshold(double threshold) {}
+
   // The methods below will be called by super class during init
   public void setMemEnabled(String enabled) {
     this.memEnabled = Boolean.getBoolean(enabled);

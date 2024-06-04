@@ -137,12 +137,12 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
                 log.warn("error while registering global circuit breaker {}: {}", entry.getKey(), e.getMessage());
             }
         }
-        log.info("onChange registered circuit breakers {}", this.cbRegistry.circuitBreakerMap);
     }
 
     private void registerGlobalCircuitBreaker(CircuitBreaker globalCb, double threshold, SolrRequest.SolrRequestType type) {
         globalCb.setThreshold(threshold);
         globalCb.setRequestTypes(List.of(type.name()));
         this.cbRegistry.register(globalCb);
+        log.info("onChange registered circuit breaker {}", globalCb);
     }
 }

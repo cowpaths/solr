@@ -126,7 +126,6 @@ public class CPUCircuitBreaker extends CircuitBreaker {
             .registry("solr.jvm")
             .getMetrics()
             .get("os.systemCpuLoad");
-    ;
     if (metric == null) {
       return -1.0;
     }

@@ -236,7 +236,8 @@ public class CoreContainer {
 
   private final OrderedExecutor replayUpdatesExecutor;
 
-  private GlobalCircuitBreakerManager globalCircuitBreakerRegistry;
+  private final GlobalCircuitBreakerManager globalCircuitBreakerRegistry =
+      new GlobalCircuitBreakerManager(this);
 
   public CircuitBreakerRegistry getGlobalCircuitBreakerRegistry() {
     return globalCircuitBreakerRegistry.getCircuitBreakerRegistry();
@@ -1074,7 +1075,6 @@ public class CoreContainer {
     if (isZooKeeperAware()) {
       containerPluginsRegistry.refresh();
       getZkController().zkStateReader.registerClusterPropertiesListener(containerPluginsRegistry);
-      globalCircuitBreakerRegistry = new GlobalCircuitBreakerManager(this);
       getZkController()
           .zkStateReader
           .registerClusterPropertiesListener(globalCircuitBreakerRegistry);

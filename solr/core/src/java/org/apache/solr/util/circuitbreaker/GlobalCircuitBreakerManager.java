@@ -3,9 +3,9 @@ package org.apache.solr.util.circuitbreaker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.common.annotation.JsonProperty;
@@ -21,71 +21,30 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   private static final ObjectMapper mapper = SolrJacksonAnnotationInspector.createObjectMapper();
   private final CircuitBreakerRegistry cbRegistry = new CircuitBreakerRegistry();
   private final GlobalCircuitBreakerFactory factory;
+  private final String hostName;
+  private int currentConfigHash;
 
   public CircuitBreakerRegistry getCircuitBreakerRegistry() {
     return cbRegistry;
   }
 
-  private GlobalCircuitBreakerConfig currentConfig = new GlobalCircuitBreakerConfig();
-  ;
-
   public GlobalCircuitBreakerManager(CoreContainer coreContainer) {
     super();
     this.factory = new GlobalCircuitBreakerFactory(coreContainer);
+    this.hostName = coreContainer.getHostName();
   }
 
   private static class GlobalCircuitBreakerConfig {
     static final String CIRCUIT_BREAKER_CLUSTER_PROPS_KEY = "circuit-breakers";
     @JsonProperty Map<String, CircuitBreakerConfig> configs = new ConcurrentHashMap<>();
 
+    @JsonProperty
+    Map<String, Map<String, CircuitBreakerConfig>> hostOverrides = new ConcurrentHashMap<>();
+
     static class CircuitBreakerConfig {
       @JsonProperty Boolean enabled = false;
       @JsonProperty Double updateThreshold = Double.MAX_VALUE;
       @JsonProperty Double queryThreshold = Double.MAX_VALUE;
-
-      @Override
-      public boolean equals(Object obj) {
-        if (!(obj instanceof CircuitBreakerConfig)) {
-          return false;
-        }
-        CircuitBreakerConfig that = (CircuitBreakerConfig) obj;
-        return this.enabled.equals(that.enabled)
-            && this.updateThreshold.equals(that.updateThreshold)
-            && this.queryThreshold.equals(that.queryThreshold);
-      }
-
-      @Override
-      public int hashCode() {
-        return Objects.hash(this.enabled, this.queryThreshold, this.updateThreshold);
-      }
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (!(obj instanceof GlobalCircuitBreakerConfig)) {
-        return false;
-      }
-      GlobalCircuitBreakerConfig that = (GlobalCircuitBreakerConfig) obj;
-      if (that.configs.size() != this.configs.size()) {
-        return false;
-      }
-      for (Map.Entry<String, CircuitBreakerConfig> entry : configs.entrySet()) {
-        CircuitBreakerConfig thisConfig = entry.getValue();
-        CircuitBreakerConfig thatConfig = that.configs.get(entry.getKey());
-        if (thatConfig == null) {
-          return false;
-        }
-        if (!thisConfig.equals(thatConfig)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    @Override
-    public int hashCode() {
-      // Map.Entry already overrides hashCode, so let's use that
-      return Objects.hash(configs.entrySet());
     }
   }
 
@@ -95,9 +54,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
     try {
       GlobalCircuitBreakerConfig nextConfig = processConfigChange(properties);
       if (nextConfig != null) {
-        if (!this.currentConfig.equals(nextConfig)) {
-          registerCircuitBreakers(nextConfig);
-        }
+        registerCircuitBreakers(nextConfig);
       }
     } catch (Exception e) {
       if (log.isWarnEnabled()) {
@@ -116,6 +73,13 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
       byte[] configInput =
           Utils.toJSON(
               properties.get(GlobalCircuitBreakerConfig.CIRCUIT_BREAKER_CLUSTER_PROPS_KEY));
+
+      int nextHashCode = Arrays.hashCode(configInput);
+      if (this.currentConfigHash == nextHashCode) {
+        return null;
+      }
+      this.currentConfigHash = nextHashCode;
+
       if (configInput != null && configInput.length > 0) {
         globalCBConfig = mapper.readValue(configInput, GlobalCircuitBreakerConfig.class);
       }
@@ -124,11 +88,11 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   }
 
   private void registerCircuitBreakers(GlobalCircuitBreakerConfig gbConfig) throws Exception {
-    this.currentConfig = gbConfig;
     this.cbRegistry.deregisterAll();
     for (Map.Entry<String, GlobalCircuitBreakerConfig.CircuitBreakerConfig> entry :
-        this.currentConfig.configs.entrySet()) {
-      GlobalCircuitBreakerConfig.CircuitBreakerConfig config = entry.getValue();
+        gbConfig.configs.entrySet()) {
+      GlobalCircuitBreakerConfig.CircuitBreakerConfig config =
+          getConfig(gbConfig, entry.getKey(), entry.getValue());
       try {
         if (config.enabled) {
           if (config.queryThreshold != Double.MAX_VALUE) {
@@ -150,6 +114,19 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
         }
       }
     }
+  }
+
+  private GlobalCircuitBreakerConfig.CircuitBreakerConfig getConfig(
+      GlobalCircuitBreakerConfig gbConfig,
+      String className,
+      GlobalCircuitBreakerConfig.CircuitBreakerConfig globalConfig) {
+    Map<String, GlobalCircuitBreakerConfig.CircuitBreakerConfig> thisHostOverrides =
+        gbConfig.hostOverrides.get(this.hostName);
+    if (thisHostOverrides != null && thisHostOverrides.get(className) != null) {
+      log.info("overriding circuit breaker {} for host {}", className, this.hostName);
+      return thisHostOverrides.get(className);
+    }
+    return globalConfig;
   }
 
   private void registerGlobalCircuitBreaker(

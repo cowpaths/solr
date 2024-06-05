@@ -43,6 +43,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
 
     static class CircuitBreakerConfig {
       @JsonProperty Boolean enabled = false;
+      @JsonProperty Boolean debugMode = false;
       @JsonProperty Double updateThreshold = Double.MAX_VALUE;
       @JsonProperty Double queryThreshold = Double.MAX_VALUE;
     }
@@ -99,13 +100,15 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
             registerGlobalCircuitBreaker(
                 this.factory.create(entry.getKey()),
                 config.queryThreshold,
-                SolrRequest.SolrRequestType.QUERY);
+                SolrRequest.SolrRequestType.QUERY,
+                config.debugMode);
           }
           if (config.updateThreshold != Double.MAX_VALUE) {
             registerGlobalCircuitBreaker(
                 this.factory.create(entry.getKey()),
                 config.updateThreshold,
-                SolrRequest.SolrRequestType.UPDATE);
+                SolrRequest.SolrRequestType.UPDATE,
+                config.debugMode);
           }
         }
       } catch (Exception e) {
@@ -130,9 +133,13 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   }
 
   private void registerGlobalCircuitBreaker(
-      CircuitBreaker globalCb, double threshold, SolrRequest.SolrRequestType type) {
+      CircuitBreaker globalCb,
+      double threshold,
+      SolrRequest.SolrRequestType type,
+      boolean debugMode) {
     globalCb.setThreshold(threshold);
     globalCb.setRequestTypes(List.of(type.name()));
+    globalCb.setDebugMode(debugMode);
     this.cbRegistry.register(globalCb);
     if (log.isInfoEnabled()) {
       log.info("onChange registered circuit breaker {}", globalCb);

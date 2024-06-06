@@ -21,7 +21,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   private static final ObjectMapper mapper = SolrJacksonAnnotationInspector.createObjectMapper();
   private final CircuitBreakerRegistry cbRegistry = new CircuitBreakerRegistry();
   private final GlobalCircuitBreakerFactory factory;
-  private final String hostName;
+  private final CoreContainer coreContainer;
   private int currentConfigHash;
 
   public CircuitBreakerRegistry getCircuitBreakerRegistry() {
@@ -31,7 +31,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   public GlobalCircuitBreakerManager(CoreContainer coreContainer) {
     super();
     this.factory = new GlobalCircuitBreakerFactory(coreContainer);
-    this.hostName = coreContainer.getHostName();
+    this.coreContainer = coreContainer;
   }
 
   private static class GlobalCircuitBreakerConfig {
@@ -124,12 +124,20 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
       String className,
       GlobalCircuitBreakerConfig.CircuitBreakerConfig globalConfig) {
     Map<String, GlobalCircuitBreakerConfig.CircuitBreakerConfig> thisHostOverrides =
-        gbConfig.hostOverrides.get(this.hostName);
+        gbConfig.hostOverrides.get(getHostName());
     if (thisHostOverrides != null && thisHostOverrides.get(className) != null) {
-      log.info("overriding circuit breaker {} for host {}", className, this.hostName);
+      if (log.isInfoEnabled()) {
+        log.info("overriding circuit breaker {} for host {}", className, getHostName());
+      }
       return thisHostOverrides.get(className);
     }
     return globalConfig;
+  }
+
+  private String getHostName() {
+    return this.coreContainer.getHostName() != null
+        ? this.coreContainer.getHostName()
+        : "localhost";
   }
 
   private void registerGlobalCircuitBreaker(

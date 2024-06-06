@@ -133,12 +133,8 @@ public abstract class ContentStreamHandlerBase extends RequestHandlerBase {
     CircuitBreakerRegistry circuitBreakerRegistry = req.getCore().getCircuitBreakerRegistry();
     CircuitBreakerRegistry globalCircuitBreakerRegistry =
         req.getCoreContainer().getGlobalCircuitBreakerRegistry();
-    if (circuitBreakerRegistry.isEnabled(SolrRequestType.UPDATE)
-        || globalCircuitBreakerRegistry.isEnabled(SolrRequestType.UPDATE)) {
-      List<CircuitBreaker> trippedCircuitBreakers =
-          circuitBreakerRegistry.checkTripped(SolrRequestType.UPDATE);
-      trippedCircuitBreakers.addAll(
-          globalCircuitBreakerRegistry.checkTripped(SolrRequestType.UPDATE));
+    if (areCircuitBreakersEnabled(req)) {
+      List<CircuitBreaker> trippedCircuitBreakers = getTrippedCircuitBreakers(req);
       if (!trippedCircuitBreakers.isEmpty()) {
         String errorMessage = CircuitBreakerRegistry.toErrorMessage(trippedCircuitBreakers);
         rsp.add(STATUS, FAILURE);
@@ -150,6 +146,23 @@ public abstract class ContentStreamHandlerBase extends RequestHandlerBase {
       }
     }
     return false;
+  }
+
+  private boolean areCircuitBreakersEnabled(SolrQueryRequest req) {
+    return req.getCore().getCircuitBreakerRegistry().isEnabled(SolrRequestType.UPDATE)
+        || req.getCoreContainer()
+            .getGlobalCircuitBreakerRegistry()
+            .isEnabled(SolrRequestType.UPDATE);
+  }
+
+  private List<CircuitBreaker> getTrippedCircuitBreakers(SolrQueryRequest req) {
+    List<CircuitBreaker> trippedCircuitBreakers =
+        req.getCore().getCircuitBreakerRegistry().checkTripped(SolrRequestType.UPDATE);
+    trippedCircuitBreakers.addAll(
+        req.getCoreContainer()
+            .getGlobalCircuitBreakerRegistry()
+            .checkTripped(SolrRequestType.UPDATE));
+    return trippedCircuitBreakers;
   }
 
   protected abstract ContentStreamLoader newLoader(

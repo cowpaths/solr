@@ -361,26 +361,18 @@ public class SearchHandler extends RequestHandlerBase
     }
     final RTimerTree timer = rb.isDebug() ? req.getRequestTimer() : null;
 
-    final CircuitBreakerRegistry circuitBreakerRegistry = req.getCore().getCircuitBreakerRegistry();
-    final CircuitBreakerRegistry globalCircuitBreakerRegistry =
-        req.getCoreContainer().getGlobalCircuitBreakerRegistry();
-    if (circuitBreakerRegistry.isEnabled(SolrRequestType.QUERY)
-        || globalCircuitBreakerRegistry.isEnabled(SolrRequestType.QUERY)) {
+    if (areCircuitBreakersEnabled(req)) {
       List<CircuitBreaker> trippedCircuitBreakers;
 
       if (timer != null) {
         RTimerTree subt = timer.sub("circuitbreaker");
         rb.setTimer(subt);
 
-        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
-        trippedCircuitBreakers.addAll(
-            globalCircuitBreakerRegistry.checkTripped(SolrRequestType.QUERY));
+        trippedCircuitBreakers = getTrippedCircuitBreakers(req);
 
         rb.getTimer().stop();
       } else {
-        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
-        trippedCircuitBreakers.addAll(
-            globalCircuitBreakerRegistry.checkTripped(SolrRequestType.QUERY));
+        trippedCircuitBreakers = getTrippedCircuitBreakers(req);
       }
 
       if (!trippedCircuitBreakers.isEmpty()) {
@@ -394,6 +386,23 @@ public class SearchHandler extends RequestHandlerBase
       }
     }
     return false;
+  }
+
+  private boolean areCircuitBreakersEnabled(SolrQueryRequest req) {
+    return req.getCore().getCircuitBreakerRegistry().isEnabled(SolrRequestType.QUERY)
+        || req.getCoreContainer()
+            .getGlobalCircuitBreakerRegistry()
+            .isEnabled(SolrRequestType.QUERY);
+  }
+
+  private List<CircuitBreaker> getTrippedCircuitBreakers(SolrQueryRequest req) {
+    List<CircuitBreaker> trippedCircuitBreakers =
+        req.getCore().getCircuitBreakerRegistry().checkTripped(SolrRequestType.QUERY);
+    trippedCircuitBreakers.addAll(
+        req.getCoreContainer()
+            .getGlobalCircuitBreakerRegistry()
+            .checkTripped(SolrRequestType.QUERY));
+    return trippedCircuitBreakers;
   }
 
   @Override

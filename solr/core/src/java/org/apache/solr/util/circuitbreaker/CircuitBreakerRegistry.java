@@ -137,7 +137,11 @@ public class CircuitBreakerRegistry implements Closeable {
   }
 
   public boolean isEnabled(SolrRequestType requestType) {
-    return circuitBreakerMap.containsKey(requestType);
+    boolean globalEnabled = false;
+    if (this.globalRegistry != null) {
+      globalEnabled = this.globalRegistry.circuitBreakerMap.containsKey(requestType);
+    }
+    return circuitBreakerMap.containsKey(requestType) || globalEnabled;
   }
 
   public void setGlobalRegistry(CircuitBreakerRegistry globalRegistry) {

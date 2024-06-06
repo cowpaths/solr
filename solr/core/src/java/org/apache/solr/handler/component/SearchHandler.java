@@ -362,10 +362,7 @@ public class SearchHandler extends RequestHandlerBase
     final RTimerTree timer = rb.isDebug() ? req.getRequestTimer() : null;
 
     final CircuitBreakerRegistry circuitBreakerRegistry = req.getCore().getCircuitBreakerRegistry();
-    final CircuitBreakerRegistry globalCircuitBreakerRegistry =
-        req.getCoreContainer().getGlobalCircuitBreakerRegistry();
-    if (circuitBreakerRegistry.isEnabled(SolrRequestType.QUERY)
-        || globalCircuitBreakerRegistry.isEnabled(SolrRequestType.QUERY)) {
+    if (circuitBreakerRegistry.isEnabled(SolrRequestType.QUERY)) {
       List<CircuitBreaker> trippedCircuitBreakers;
 
       if (timer != null) {
@@ -373,17 +370,13 @@ public class SearchHandler extends RequestHandlerBase
         rb.setTimer(subt);
 
         trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
-        trippedCircuitBreakers.addAll(
-            globalCircuitBreakerRegistry.checkTripped(SolrRequestType.QUERY));
 
         rb.getTimer().stop();
       } else {
         trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
-        trippedCircuitBreakers.addAll(
-            globalCircuitBreakerRegistry.checkTripped(SolrRequestType.QUERY));
       }
 
-      if (!trippedCircuitBreakers.isEmpty()) {
+      if (trippedCircuitBreakers != null) {
         String errorMessage = CircuitBreakerRegistry.toErrorMessage(trippedCircuitBreakers);
         rsp.add(STATUS, FAILURE);
         rsp.setException(

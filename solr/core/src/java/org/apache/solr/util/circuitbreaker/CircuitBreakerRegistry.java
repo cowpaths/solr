@@ -46,6 +46,8 @@ public class CircuitBreakerRegistry implements Closeable {
   private final Map<SolrRequestType, List<CircuitBreaker>> circuitBreakerMap = new HashMap<>();
   private static final Map<String, Long> circuitBreakerTrippedMetrics = new ConcurrentHashMap<>();
 
+  private CircuitBreakerRegistry globalRegistry;
+
   public CircuitBreakerRegistry() {}
 
   public void register(CircuitBreaker circuitBreaker) {
@@ -98,6 +100,10 @@ public class CircuitBreakerRegistry implements Closeable {
       }
     }
 
+    if (globalRegistry != null) {
+      triggeredCircuitBreakers.addAll(globalRegistry.checkTripped(requestType));
+    }
+
     return triggeredCircuitBreakers;
   }
 
@@ -132,6 +138,10 @@ public class CircuitBreakerRegistry implements Closeable {
 
   public boolean isEnabled(SolrRequestType requestType) {
     return circuitBreakerMap.containsKey(requestType);
+  }
+
+  public void setGlobalRegistry(CircuitBreakerRegistry globalRegistry) {
+    this.globalRegistry = globalRegistry;
   }
 
   @Override

@@ -13,7 +13,6 @@ public class GlobalCircuitBreakerFactory {
     Class<?> clazz = Class.forName(className);
 
     if (CircuitBreaker.class.isAssignableFrom(clazz)) {
-      // cast to CircuitBreaker class
       Class<? extends CircuitBreaker> breakerClass = clazz.asSubclass(CircuitBreaker.class);
 
       try {

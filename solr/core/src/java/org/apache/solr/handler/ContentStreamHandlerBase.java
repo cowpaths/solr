@@ -131,10 +131,15 @@ public abstract class ContentStreamHandlerBase extends RequestHandlerBase {
       return false;
     }
     CircuitBreakerRegistry circuitBreakerRegistry = req.getCore().getCircuitBreakerRegistry();
-    if (circuitBreakerRegistry.isEnabled(SolrRequestType.UPDATE)) {
+    CircuitBreakerRegistry globalCircuitBreakerRegistry =
+        req.getCoreContainer().getGlobalCircuitBreakerRegistry();
+    if (circuitBreakerRegistry.isEnabled(SolrRequestType.UPDATE)
+        || globalCircuitBreakerRegistry.isEnabled(SolrRequestType.UPDATE)) {
       List<CircuitBreaker> trippedCircuitBreakers =
           circuitBreakerRegistry.checkTripped(SolrRequestType.UPDATE);
-      if (trippedCircuitBreakers != null) {
+      trippedCircuitBreakers.addAll(
+          globalCircuitBreakerRegistry.checkTripped(SolrRequestType.UPDATE));
+      if (!trippedCircuitBreakers.isEmpty()) {
         String errorMessage = CircuitBreakerRegistry.toErrorMessage(trippedCircuitBreakers);
         rsp.add(STATUS, FAILURE);
         rsp.setException(

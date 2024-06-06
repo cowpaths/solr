@@ -178,6 +178,7 @@ import org.apache.solr.util.RefCounted;
 import org.apache.solr.util.TestInjection;
 import org.apache.solr.util.circuitbreaker.CircuitBreaker;
 import org.apache.solr.util.circuitbreaker.CircuitBreakerRegistry;
+import org.apache.solr.util.circuitbreaker.GlobalCircuitBreakerManager;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 import org.apache.solr.util.plugin.PluginInfoInitialized;
 import org.apache.solr.util.plugin.SolrCoreAware;
@@ -1115,8 +1116,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       // init pluggable circuit breakers, after metrics because some circuit breakers use metrics
       initPlugins(null, CircuitBreaker.class);
       if (this.coreContainer.isZooKeeperAware()) {
-        this.circuitBreakerRegistry.setGlobalRegistry(
-            this.coreContainer.getGlobalCircuitBreakerRegistry());
+        this.circuitBreakerRegistry.setGlobalRegistry(this.coreContainer.getGlobalCircuitBreakerRegistry());
       }
 
       SolrFieldCacheBean solrFieldCacheBean = new SolrFieldCacheBean();

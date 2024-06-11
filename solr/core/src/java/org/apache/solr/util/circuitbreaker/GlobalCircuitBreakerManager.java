@@ -85,6 +85,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   }
 
   private void registerCircuitBreakers(GlobalCircuitBreakerConfig gbConfig) throws Exception {
+    CircuitBreakerRegistry.deregisterGlobal();
     for (Map.Entry<String, GlobalCircuitBreakerConfig.CircuitBreakerConfig> entry :
         gbConfig.configs.entrySet()) {
       GlobalCircuitBreakerConfig.CircuitBreakerConfig config =

@@ -37,6 +37,7 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.core.CoreContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.solr.common.util.EnvUtils;
 
 /**
  * Keeps track of all registered circuit breaker instances for various request types. Responsible

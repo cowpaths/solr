@@ -67,10 +67,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
     Object cbConfig = properties.get(GlobalCircuitBreakerConfig.CIRCUIT_BREAKER_CLUSTER_PROPS_KEY);
     GlobalCircuitBreakerConfig globalCBConfig = null;
     if (cbConfig != null) {
-      byte[] configInput =
-          Utils.toJSON(
-              properties.get(GlobalCircuitBreakerConfig.CIRCUIT_BREAKER_CLUSTER_PROPS_KEY));
-
+      byte[] configInput = Utils.toJSON(cbConfig);
       int nextHashCode = Arrays.hashCode(configInput);
       if (this.currentConfigHash == nextHashCode) {
         return null;

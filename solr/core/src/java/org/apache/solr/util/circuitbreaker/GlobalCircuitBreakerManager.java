@@ -19,14 +19,10 @@ import org.slf4j.LoggerFactory;
 public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private static final ObjectMapper mapper = SolrJacksonAnnotationInspector.createObjectMapper();
-  private final CircuitBreakerRegistry cbRegistry = new CircuitBreakerRegistry();
   private final GlobalCircuitBreakerFactory factory;
   private final CoreContainer coreContainer;
   private int currentConfigHash;
 
-  public CircuitBreakerRegistry getCircuitBreakerRegistry() {
-    return cbRegistry;
-  }
 
   public GlobalCircuitBreakerManager(CoreContainer coreContainer) {
     super();
@@ -89,7 +85,6 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   }
 
   private void registerCircuitBreakers(GlobalCircuitBreakerConfig gbConfig) throws Exception {
-    this.cbRegistry.deregisterAll();
     for (Map.Entry<String, GlobalCircuitBreakerConfig.CircuitBreakerConfig> entry :
         gbConfig.configs.entrySet()) {
       GlobalCircuitBreakerConfig.CircuitBreakerConfig config =
@@ -148,7 +143,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
     globalCb.setThreshold(threshold);
     globalCb.setRequestTypes(List.of(type.name()));
     globalCb.setDebugMode(debugMode);
-    this.cbRegistry.register(globalCb);
+    CircuitBreakerRegistry.registerGlobal(globalCb);
     if (log.isInfoEnabled()) {
       log.info("onChange registered circuit breaker {}", globalCb);
     }

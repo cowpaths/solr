@@ -78,7 +78,7 @@ public class MemoryCircuitBreaker extends CircuitBreaker {
   }
 
   @Override
-  public void setThreshold(double thresholdValueInPercentage) {
+  public MemoryCircuitBreaker setThreshold(double thresholdValueInPercentage) {
     long currentMaxHeap = MEMORY_MX_BEAN.getHeapMemoryUsage().getMax();
 
     if (currentMaxHeap <= 0) {
@@ -91,6 +91,7 @@ public class MemoryCircuitBreaker extends CircuitBreaker {
     if (heapMemoryThreshold <= 0) {
       throw new IllegalStateException("Memory limit cannot be less than or equal to zero");
     }
+    return this;
   }
 
   @Override

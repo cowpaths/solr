@@ -20,10 +20,10 @@ package org.apache.solr.util.circuitbreaker;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Metric;
 import java.lang.invoke.MethodHandles;
-import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.metrics.SolrMetricManager;
+import org.apache.solr.util.plugin.SolrCoreAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,40 +34,25 @@ import org.slf4j.LoggerFactory;
  * We depend on OperatingSystemMXBean which does not allow a configurable interval of collection of
  * data.
  */
-public class CPUCircuitBreaker extends CircuitBreaker {
+public class CPUCircuitBreaker extends CircuitBreaker implements SolrCoreAware {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private boolean enabled = true;
+  private boolean enabled = false;
   private double cpuUsageThreshold;
-  private final CoreContainer coreContainer;
+  private CoreContainer cc;
 
   private static final ThreadLocal<Double> seenCPUUsage = ThreadLocal.withInitial(() -> 0.0);
 
   private static final ThreadLocal<Double> allowedCPUUsage = ThreadLocal.withInitial(() -> 0.0);
 
   public CPUCircuitBreaker(SolrCore core) {
-    super();
-    this.coreContainer = core.getCoreContainer();
+    this(core.getCoreContainer());
   }
 
   public CPUCircuitBreaker(CoreContainer coreContainer) {
     super();
-    this.coreContainer = coreContainer;
-  }
-
-  @Override
-  public void init(NamedList<?> args) {
-    super.init(args);
-    double localSeenCPUUsage = calculateLiveCPUUsage();
-
-    if (localSeenCPUUsage < 0) {
-      String msg =
-          "Initialization failure for CPU circuit breaker. Unable to get 'systemCpuLoad', not supported by the JVM?";
-      if (log.isErrorEnabled()) {
-        log.error(msg);
-      }
-      enabled = false;
-    }
+    this.cc = coreContainer;
+    enableIfSupported();
   }
 
   @Override
@@ -98,7 +83,7 @@ public class CPUCircuitBreaker extends CircuitBreaker {
   }
 
   @Override
-  public void setThreshold(double thresholdValueInPercentage) {
+  public CPUCircuitBreaker setThreshold(double thresholdValueInPercentage) {
     if (thresholdValueInPercentage > 100) {
       throw new IllegalArgumentException("Invalid Invalid threshold value.");
     }
@@ -107,6 +92,7 @@ public class CPUCircuitBreaker extends CircuitBreaker {
       throw new IllegalStateException("Threshold cannot be less than or equal to zero");
     }
     cpuUsageThreshold = thresholdValueInPercentage;
+    return this;
   }
 
   public double getCpuUsageThreshold() {
@@ -121,11 +107,8 @@ public class CPUCircuitBreaker extends CircuitBreaker {
   protected double calculateLiveCPUUsage() {
     // TODO: Use Codahale Meter to calculate the value
     Metric metric =
-        this.coreContainer
-            .getMetricManager()
-            .registry("solr.jvm")
-            .getMetrics()
-            .get("os.systemCpuLoad");
+        this.cc.getMetricManager().registry("solr.jvm").getMetrics().get("os.systemCpuLoad");
+
     if (metric == null) {
       return -1.0;
     }
@@ -141,5 +124,24 @@ public class CPUCircuitBreaker extends CircuitBreaker {
     }
 
     return -1.0; // Unable to unpack metric
+  }
+
+  @Override
+  public void inform(SolrCore core) {
+    this.cc = core.getCoreContainer();
+    enableIfSupported();
+  }
+
+  private void enableIfSupported() {
+    if (calculateLiveCPUUsage() < 0) {
+      String msg =
+          "Initialization failure for CPU circuit breaker. Unable to get 'systemCpuLoad', not supported by the JVM?";
+      if (log.isErrorEnabled()) {
+        log.error(msg);
+      }
+      enabled = false;
+    } else {
+      enabled = true;
+    }
   }
 }

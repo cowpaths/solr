@@ -92,7 +92,7 @@ public class CircuitBreakerManager extends CircuitBreaker {
   }
 
   @Override
-  public void setThreshold(double threshold) {}
+  public CircuitBreakerManager setThreshold(double threshold) {return this;}
 
   // The methods below will be called by super class during init
   public void setMemEnabled(String enabled) {

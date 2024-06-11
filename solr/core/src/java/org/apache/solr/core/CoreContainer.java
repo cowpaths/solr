@@ -153,7 +153,6 @@ import org.apache.solr.update.UpdateShardHandler;
 import org.apache.solr.util.OrderedExecutor;
 import org.apache.solr.util.RefCounted;
 import org.apache.solr.util.StartupLoggingUtils;
-import org.apache.solr.util.circuitbreaker.CircuitBreakerRegistry;
 import org.apache.solr.util.circuitbreaker.GlobalCircuitBreakerManager;
 import org.apache.solr.util.stats.MetricUtils;
 import org.apache.zookeeper.KeeperException;
@@ -236,12 +235,8 @@ public class CoreContainer {
 
   private final OrderedExecutor replayUpdatesExecutor;
 
-  private final GlobalCircuitBreakerManager globalCircuitBreakerRegistry =
+  private final GlobalCircuitBreakerManager globalCircuitBreakerManager =
       new GlobalCircuitBreakerManager(this);
-
-  public CircuitBreakerRegistry getGlobalCircuitBreakerRegistry() {
-    return globalCircuitBreakerRegistry.getCircuitBreakerRegistry();
-  }
 
   protected volatile LogWatcher<?> logging = null;
 
@@ -1077,7 +1072,7 @@ public class CoreContainer {
       getZkController().zkStateReader.registerClusterPropertiesListener(containerPluginsRegistry);
       getZkController()
           .zkStateReader
-          .registerClusterPropertiesListener(globalCircuitBreakerRegistry);
+          .registerClusterPropertiesListener(globalCircuitBreakerManager);
       ContainerPluginsApi containerPluginsApi = new ContainerPluginsApi(this);
       registerV2ApiIfEnabled(containerPluginsApi.readAPI);
       registerV2ApiIfEnabled(containerPluginsApi.editAPI);

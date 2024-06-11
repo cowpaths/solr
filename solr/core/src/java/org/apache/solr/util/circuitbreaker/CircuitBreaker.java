@@ -121,5 +121,5 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
     this.debugMode = debugMode;
   }
 
-  public abstract void setThreshold(double threshold);
+  public abstract CircuitBreaker setThreshold(double threshold);
 }

@@ -72,6 +72,7 @@ import org.apache.solr.schema.ManagedIndexSchemaFactory;
 import org.apache.solr.schema.SimilarityFactory;
 import org.apache.solr.search.QParserPlugin;
 import org.apache.solr.update.processor.UpdateRequestProcessorFactory;
+import org.apache.solr.util.circuitbreaker.CircuitBreaker;
 import org.apache.solr.util.plugin.SolrCoreAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -813,7 +814,8 @@ public class SolrResourceLoader
         SolrCoreAware.class,
         new Class<?>[] {
           // DO NOT ADD THINGS TO THIS LIST -- ESPECIALLY THINGS THAT CAN BE CREATED DYNAMICALLY
-          // VIA RUNTIME APIS -- UNTILL CAREFULLY CONSIDERING THE ISSUES MENTIONED IN SOLR-8311
+          // VIA RUNTIME APIS -- UNTIL CAREFULLY CONSIDERING THE ISSUES MENTIONED IN SOLR-8311
+          CircuitBreaker.class,
           CodecFactory.class,
           DirectoryFactory.class,
           ManagedIndexSchemaFactory.class,
@@ -919,7 +921,7 @@ public class SolrResourceLoader
   }
 
   /**
-   * Create a n instance of a class using an appropriate {@link SolrResourceLoader} depending on the
+   * Create an instance of a class using an appropriate {@link SolrResourceLoader} depending on the
    * package of that class
    *
    * @param registerCoreReloadListener register a listener for the package and reload the core if

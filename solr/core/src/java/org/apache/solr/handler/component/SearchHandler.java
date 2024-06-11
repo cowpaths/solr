@@ -361,21 +361,22 @@ public class SearchHandler extends RequestHandlerBase
     }
     final RTimerTree timer = rb.isDebug() ? req.getRequestTimer() : null;
 
-    if (areCircuitBreakersEnabled(req)) {
+    final CircuitBreakerRegistry circuitBreakerRegistry = req.getCore().getCircuitBreakerRegistry();
+    if (circuitBreakerRegistry.isEnabled(SolrRequestType.QUERY)) {
       List<CircuitBreaker> trippedCircuitBreakers;
 
       if (timer != null) {
         RTimerTree subt = timer.sub("circuitbreaker");
         rb.setTimer(subt);
 
-        trippedCircuitBreakers = getTrippedCircuitBreakers(req);
+        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
 
         rb.getTimer().stop();
       } else {
-        trippedCircuitBreakers = getTrippedCircuitBreakers(req);
+        trippedCircuitBreakers = circuitBreakerRegistry.checkTripped(SolrRequestType.QUERY);
       }
 
-      if (!trippedCircuitBreakers.isEmpty()) {
+      if (trippedCircuitBreakers != null) {
         String errorMessage = CircuitBreakerRegistry.toErrorMessage(trippedCircuitBreakers);
         rsp.add(STATUS, FAILURE);
         rsp.setException(
@@ -386,23 +387,6 @@ public class SearchHandler extends RequestHandlerBase
       }
     }
     return false;
-  }
-
-  private boolean areCircuitBreakersEnabled(SolrQueryRequest req) {
-    return req.getCore().getCircuitBreakerRegistry().isEnabled(SolrRequestType.QUERY)
-        || req.getCoreContainer()
-            .getGlobalCircuitBreakerRegistry()
-            .isEnabled(SolrRequestType.QUERY);
-  }
-
-  private List<CircuitBreaker> getTrippedCircuitBreakers(SolrQueryRequest req) {
-    List<CircuitBreaker> trippedCircuitBreakers =
-        req.getCore().getCircuitBreakerRegistry().checkTripped(SolrRequestType.QUERY);
-    trippedCircuitBreakers.addAll(
-        req.getCoreContainer()
-            .getGlobalCircuitBreakerRegistry()
-            .checkTripped(SolrRequestType.QUERY));
-    return trippedCircuitBreakers;
   }
 
   @Override

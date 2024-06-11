@@ -50,7 +50,6 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
   private final List<SolrRequestType> SUPPORTED_TYPES =
       List.of(SolrRequestType.QUERY, SolrRequestType.UPDATE);
 
-  private boolean debugMode = false;
 
   @Override
   public void init(NamedList<?> args) {
@@ -67,10 +66,6 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
 
   /** Get error message when the circuit breaker triggers */
   public abstract String getErrorMessage();
-
-  public boolean isDebugMode() {
-    return debugMode;
-  }
 
   @Override
   public void close() throws IOException {
@@ -127,10 +122,6 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
     } else {
       return SolrException.ErrorCode.TOO_MANY_REQUESTS;
     }
-  }
-
-  public void setDebugMode(boolean debugMode) {
-    this.debugMode = debugMode;
   }
 
   public abstract CircuitBreaker setThreshold(double threshold);

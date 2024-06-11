@@ -48,20 +48,20 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
 
     static class CircuitBreakerConfig {
       @JsonProperty Boolean enabled = false;
-      @JsonProperty Boolean debugMode = false;
+      @JsonProperty Boolean warnOnly = false;
       @JsonProperty Double updateThreshold = Double.MAX_VALUE;
       @JsonProperty Double queryThreshold = Double.MAX_VALUE;
 
       @Override
       public int hashCode() {
-        return Objects.hash(enabled, debugMode, updateThreshold, queryThreshold);
+        return Objects.hash(enabled, warnOnly, updateThreshold, queryThreshold);
       }
 
       @Override
       public boolean equals(Object obj) {
         if (obj instanceof CircuitBreakerConfig) {
           CircuitBreakerConfig that = (CircuitBreakerConfig) obj;
-          return that.enabled.equals(this.enabled) && that.debugMode.equals(this.debugMode) && that.updateThreshold.equals(this.updateThreshold) && that.queryThreshold.equals(this.queryThreshold);
+          return that.enabled.equals(this.enabled) && that.warnOnly.equals(this.warnOnly) && that.updateThreshold.equals(this.updateThreshold) && that.queryThreshold.equals(this.queryThreshold);
         }
         return false;
       }
@@ -126,14 +126,14 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
                 this.factory.create(entry.getKey()),
                 config.queryThreshold,
                 SolrRequest.SolrRequestType.QUERY,
-                config.debugMode);
+                config.warnOnly);
           }
           if (config.updateThreshold != Double.MAX_VALUE) {
             registerGlobalCircuitBreaker(
                 this.factory.create(entry.getKey()),
                 config.updateThreshold,
                 SolrRequest.SolrRequestType.UPDATE,
-                config.debugMode);
+                config.warnOnly);
           }
         }
       } catch (Exception e) {
@@ -169,10 +169,10 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
       CircuitBreaker globalCb,
       double threshold,
       SolrRequest.SolrRequestType type,
-      boolean debugMode) {
+      boolean warnOnly) {
     globalCb.setThreshold(threshold);
     globalCb.setRequestTypes(List.of(type.name()));
-    globalCb.setDebugMode(debugMode);
+    globalCb.setWarnOnly(warnOnly);
     CircuitBreakerRegistry.registerGlobal(globalCb);
     if (log.isInfoEnabled()) {
       log.info("onChange registered circuit breaker {}", globalCb);

@@ -34,10 +34,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.solr.client.solrj.SolrRequest.SolrRequestType;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.util.EnvUtils;
 import org.apache.solr.core.CoreContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.solr.common.util.EnvUtils;
 
 /**
  * Keeps track of all registered circuit breaker instances for various request types. Responsible
@@ -194,7 +194,7 @@ public class CircuitBreakerRegistry implements Closeable {
     List<CircuitBreaker> triggeredCircuitBreakers = null;
     for (CircuitBreaker circuitBreaker : breakersOfType) {
       if (circuitBreaker.isTripped()) {
-          incrementTripped(requestType, circuitBreaker);
+        incrementTripped(requestType, circuitBreaker);
         if (triggeredCircuitBreakers == null) {
           triggeredCircuitBreakers = new ArrayList<>();
         }

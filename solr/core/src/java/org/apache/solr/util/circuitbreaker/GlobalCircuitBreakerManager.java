@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.common.annotation.JsonProperty;
 import org.apache.solr.common.cloud.ClusterPropertiesListener;
@@ -30,7 +29,10 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
     if (instance == null) {
       synchronized (GlobalCircuitBreakerManager.class) {
         instance = new GlobalCircuitBreakerManager(coreContainer);
-        coreContainer.getZkController().getZkStateReader().registerClusterPropertiesListener(instance);
+        coreContainer
+            .getZkController()
+            .getZkStateReader()
+            .registerClusterPropertiesListener(instance);
       }
     }
   }
@@ -43,8 +45,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
 
   private static class GlobalCircuitBreakerConfig {
     static final String CIRCUIT_BREAKER_CLUSTER_PROPS_KEY = "circuit-breakers";
-    @JsonProperty
-    Map<String, CircuitBreakerConfig> configs = new ConcurrentHashMap<>();
+    @JsonProperty Map<String, CircuitBreakerConfig> configs = new ConcurrentHashMap<>();
 
     @JsonProperty
     Map<String, Map<String, CircuitBreakerConfig>> hostOverrides = new ConcurrentHashMap<>();
@@ -64,7 +65,10 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
       public boolean equals(Object obj) {
         if (obj instanceof CircuitBreakerConfig) {
           CircuitBreakerConfig that = (CircuitBreakerConfig) obj;
-          return that.enabled.equals(this.enabled) && that.warnOnly.equals(this.warnOnly) && that.updateThreshold.equals(this.updateThreshold) && that.queryThreshold.equals(this.queryThreshold);
+          return that.enabled.equals(this.enabled)
+              && that.warnOnly.equals(this.warnOnly)
+              && that.updateThreshold.equals(this.updateThreshold)
+              && that.queryThreshold.equals(this.queryThreshold);
         }
         return false;
       }

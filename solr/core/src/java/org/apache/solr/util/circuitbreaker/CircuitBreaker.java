@@ -50,7 +50,6 @@ public abstract class CircuitBreaker implements NamedListInitializedPlugin, Clos
   private final List<SolrRequestType> SUPPORTED_TYPES =
       List.of(SolrRequestType.QUERY, SolrRequestType.UPDATE);
 
-
   @Override
   public void init(NamedList<?> args) {
     SolrPluginUtils.invokeSetters(this, args);

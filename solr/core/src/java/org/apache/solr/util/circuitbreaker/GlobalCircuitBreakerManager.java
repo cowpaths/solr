@@ -3,7 +3,9 @@ package org.apache.solr.util.circuitbreaker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.solr.client.solrj.SolrRequest;
@@ -41,7 +43,8 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
 
   private static class GlobalCircuitBreakerConfig {
     static final String CIRCUIT_BREAKER_CLUSTER_PROPS_KEY = "circuit-breakers";
-    @JsonProperty Map<String, CircuitBreakerConfig> configs = new ConcurrentHashMap<>();
+    @JsonProperty
+    Map<String, CircuitBreakerConfig> configs = new ConcurrentHashMap<>();
 
     @JsonProperty
     Map<String, Map<String, CircuitBreakerConfig>> hostOverrides = new ConcurrentHashMap<>();

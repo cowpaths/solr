@@ -121,7 +121,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
   }
 
   private void registerCircuitBreakers(GlobalCircuitBreakerConfig gbConfig) throws Exception {
-    CircuitBreakerRegistry.deregisterGlobal();
+    CircuitBreakerRegistry.deregisterZkGlobal();
     for (Map.Entry<String, GlobalCircuitBreakerConfig.CircuitBreakerConfig> entry :
         gbConfig.configs.entrySet()) {
       GlobalCircuitBreakerConfig.CircuitBreakerConfig config =
@@ -180,7 +180,7 @@ public class GlobalCircuitBreakerManager implements ClusterPropertiesListener {
     globalCb.setThreshold(threshold);
     globalCb.setRequestTypes(List.of(type.name()));
     globalCb.setWarnOnly(warnOnly);
-    CircuitBreakerRegistry.registerGlobal(globalCb);
+    CircuitBreakerRegistry.registerZkGlobal(globalCb);
     if (log.isInfoEnabled()) {
       log.info("onChange registered circuit breaker {}", globalCb);
     }

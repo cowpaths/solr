@@ -54,6 +54,8 @@ public class CircuitBreakerRegistry implements Closeable {
   private static final Map<String, Long> circuitBreakerTrippedMetrics = new ConcurrentHashMap<>();
   private static final Map<SolrRequestType, List<CircuitBreaker>> globalCircuitBreakerMap =
       new HashMap<>();
+  private static final Map<SolrRequestType, List<CircuitBreaker>> zkGlobalCircuitBreakerMap =
+      new HashMap<>();
   private static final Pattern SYSPROP_REGEX =
       Pattern.compile("solr.circuitbreaker\\.(update|query)\\.(cpu|mem|loadavg)");
   public static final String SYSPROP_PREFIX = "solr.circuitbreaker.";
@@ -134,7 +136,7 @@ public class CircuitBreakerRegistry implements Closeable {
 
   /** List all registered circuit breakers for global context */
   public static Set<CircuitBreaker> listGlobal() {
-    return globalCircuitBreakerMap.values().stream()
+    return getCombinedGlobalMap().values().stream()
         .flatMap(List::stream)
         .collect(Collectors.toSet());
   }
@@ -161,25 +163,40 @@ public class CircuitBreakerRegistry implements Closeable {
 
   /** Register a global circuit breaker */
   public static void registerGlobal(CircuitBreaker circuitBreaker) {
+    baseRegisterGlobal(circuitBreaker, globalCircuitBreakerMap);
+  }
+
+  /** Register a zk global circuit breaker */
+  public static void registerZkGlobal(CircuitBreaker circuitBreaker) {
+    baseRegisterGlobal(circuitBreaker, zkGlobalCircuitBreakerMap);
+  }
+
+  public static void baseRegisterGlobal(CircuitBreaker circuitBreaker, Map<SolrRequestType, List<CircuitBreaker>> m) {
     circuitBreaker
-        .getRequestTypes()
-        .forEach(
-            r -> {
-              List<CircuitBreaker> list =
-                  globalCircuitBreakerMap.computeIfAbsent(r, k -> new ArrayList<>());
-              list.add(circuitBreaker);
-            });
+            .getRequestTypes()
+            .forEach(
+                    r -> {
+                      List<CircuitBreaker> list =
+                              m.computeIfAbsent(r, k -> new ArrayList<>());
+                      list.add(circuitBreaker);
+                    });
   }
 
   @VisibleForTesting
   public void deregisterAll() throws IOException {
     this.close();
     deregisterGlobal();
+    deregisterZkGlobal();
   }
 
   @VisibleForTesting
   public static void deregisterGlobal() {
     closeGlobal();
+  }
+
+  @VisibleForTesting
+  public static void deregisterZkGlobal() {
+    closeZKGlobal();
   }
 
   /**
@@ -237,7 +254,8 @@ public class CircuitBreakerRegistry implements Closeable {
 
   public boolean isEnabled(SolrRequestType requestType) {
     return circuitBreakerMap.containsKey(requestType)
-        || globalCircuitBreakerMap.containsKey(requestType);
+        || globalCircuitBreakerMap.containsKey(requestType)
+        || zkGlobalCircuitBreakerMap.containsKey(requestType);
   }
 
   @Override
@@ -256,6 +274,16 @@ public class CircuitBreakerRegistry implements Closeable {
               .flatMap(List::stream)
               .collect(Collectors.toList()));
       globalCircuitBreakerMap.clear();
+    }
+  }
+
+  private static void closeZKGlobal() {
+    synchronized (zkGlobalCircuitBreakerMap) {
+      closeCircuitBreakers(
+          zkGlobalCircuitBreakerMap.values().stream()
+              .flatMap(List::stream)
+              .collect(Collectors.toList()));
+      zkGlobalCircuitBreakerMap.clear();
     }
   }
 
@@ -302,7 +330,24 @@ public class CircuitBreakerRegistry implements Closeable {
    */
   private Map<SolrRequestType, List<CircuitBreaker>> getCombinedMap() {
     Map<SolrRequestType, List<CircuitBreaker>> combinedMap = new HashMap<>(circuitBreakerMap);
-    globalCircuitBreakerMap.forEach(
+    getCombinedGlobalMap()
+        .forEach(
+            (k, v) ->
+                combinedMap.merge(
+                    k,
+                    v,
+                    (v1, v2) -> {
+                      List<CircuitBreaker> newList = new ArrayList<>();
+                      newList.addAll(v1);
+                      newList.addAll(v2);
+                      return newList;
+                    }));
+    return combinedMap;
+  }
+
+  private static Map<SolrRequestType, List<CircuitBreaker>> getCombinedGlobalMap() {
+    Map<SolrRequestType, List<CircuitBreaker>> combinedMap = new HashMap<>(globalCircuitBreakerMap);
+    zkGlobalCircuitBreakerMap.forEach(
         (k, v) ->
             combinedMap.merge(
                 k,

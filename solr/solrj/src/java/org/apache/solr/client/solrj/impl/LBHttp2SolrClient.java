@@ -23,10 +23,13 @@ import java.lang.invoke.MethodHandles;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -175,11 +178,80 @@ public class LBHttp2SolrClient extends LBSolrClient {
     this.solrClient.setUrlParamNames(urlParamNames);
   }
 
-  public Cancellable asyncReq(Req req, AsyncListener<Rsp> asyncListener) {
+  private static class TimeoutAsyncListenerWrapper<T> implements AsyncListener<T> {
+    private final Duration timeout;
+    private final AsyncListener<T> asyncListener;
+    private final Timer timer = new Timer();
+    private final AtomicBoolean ended = new AtomicBoolean(false);
+    private transient Cancellable cancellable;
+    private transient boolean hasTimedOut;
+
+    private TimeoutAsyncListenerWrapper(AsyncListener<T> asyncListener, Duration timeout) {
+      this.asyncListener = asyncListener;
+      this.timeout = timeout;
+    }
+
+    @Override
+    public void onStart() {
+      timer.schedule(new TimerTask() {
+        @Override
+        public void run() {
+          onTimeout();
+        }
+      }, timeout.toMillis());
+      AsyncListener.super.onStart();
+    }
+
+    @Override
+    public void onSuccess(T o) {
+      if (!ended.getAndSet(true)) {
+        asyncListener.onSuccess(o);
+      }
+    }
+
+    @Override
+    public void onFailure(Throwable throwable) {
+      if (!ended.getAndSet(true)) {
+        asyncListener.onFailure(throwable);
+      }
+    }
+
+    synchronized void onTimeout() {
+      hasTimedOut = true;
+      if (!ended.getAndSet(true)) {
+        if (cancellable != null) { //in case if the request timeout before setting the cancellable
+          cancellable.cancel();
+        }
+      }
+    }
+    synchronized void setCancellable(Cancellable cancellable) {
+      if (this.cancellable == null) {
+        this.cancellable = cancellable;
+        if (hasTimedOut) { //timed out before cancellable is set, cancel immediately
+          cancellable.cancel();
+        }
+      }
+    }
+
+
+  }
+
+  public Cancellable asyncReq(Req req, AsyncListener<Rsp> asyncListener, Duration timeout) {
+    if (timeout != null) {
+      TimeoutAsyncListenerWrapper<Rsp> wrappedListener = new TimeoutAsyncListenerWrapper<>(asyncListener, timeout);
+      Cancellable cancellable = asyncReq(req, wrappedListener);
+      wrappedListener.setCancellable(cancellable);
+      return cancellable;
+    } else {
+      return asyncReq(req, asyncListener);
+    }
+  }
+  private Cancellable asyncReq(Req req, AsyncListener<Rsp> asyncListener) {
     Rsp rsp = new Rsp();
     boolean isNonRetryable =
         req.request instanceof IsUpdateRequest || ADMIN_PATHS.contains(req.request.getPath());
     ServerIterator it = new ServerIterator(req, zombieServers);
+
     asyncListener.onStart();
     final AtomicBoolean cancelled = new AtomicBoolean(false);
     AtomicReference<Cancellable> currentCancellable = new AtomicReference<>();

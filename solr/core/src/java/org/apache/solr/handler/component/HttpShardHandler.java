@@ -19,6 +19,8 @@ package org.apache.solr.handler.component;
 import io.opentracing.Span;
 import io.opentracing.Tracer;
 import io.opentracing.propagation.Format;
+
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -201,7 +203,8 @@ public class HttpShardHandler extends ShardHandler {
                 }
                 responses.add(srsp);
               }
-            }));
+            },
+                params.getLong(CommonParams.TIME_ALLOWED) != null ? Duration.ofMillis(params.getLong(CommonParams.TIME_ALLOWED)) : null));
   }
 
   /** Subclasses could modify the request based on the shard */

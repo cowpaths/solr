@@ -184,14 +184,14 @@ public class LBHttp2SolrClient extends LBSolrClient {
     private final AsyncListener<T> asyncListener;
     private final Timer timer = new Timer();
     private final AtomicBoolean ended = new AtomicBoolean(false);
-    private final String basePath;
+    private final Req req;
     private transient Cancellable cancellable;
     private transient boolean hasTimedOut;
 
     private TimeoutAsyncListenerWrapper(AsyncListener<T> asyncListener, Duration timeout, Req req) {
       this.asyncListener = asyncListener;
       this.timeout = timeout;
-      this.basePath = req.getRequest().getBasePath();
+      this.req = req;
     }
 
     @Override
@@ -228,7 +228,7 @@ public class LBHttp2SolrClient extends LBSolrClient {
         if (cancellable != null) { //in case if the request timeout before setting the cancellable
           cancellable.cancel();
         }
-        asyncListener.onFailure(new TimeoutException("Timing out as req to " + basePath + " failed to finished within " + timeout.toMillis() + " millisec."));
+        asyncListener.onFailure(new TimeoutException("Timing out as req to " + req.getRequest().getBasePath() + " failed to finished within " + timeout.toMillis() + " millisec."));
       }}
     synchronized void setCancellable(Cancellable cancellable) {
       if (this.cancellable == null) {

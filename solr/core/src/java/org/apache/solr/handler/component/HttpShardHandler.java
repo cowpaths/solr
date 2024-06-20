@@ -204,7 +204,7 @@ public class HttpShardHandler extends ShardHandler {
                 responses.add(srsp);
               }
             },
-                params.getLong(CommonParams.TIME_ALLOWED) != null ? Duration.ofMillis(params.getLong(CommonParams.TIME_ALLOWED)) : null));
+                params.getLong(CommonParams.TIME_ALLOWED, 0) > 0 ? Duration.ofMillis(params.getLong(CommonParams.TIME_ALLOWED)) : null));
   }
 
   /** Subclasses could modify the request based on the shard */

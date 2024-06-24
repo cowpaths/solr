@@ -221,8 +221,10 @@ public abstract class RequestHandlerBase
         req.getContext().put(USEPARAM, pluginInfo.attributes.get(USEPARAM));
       SolrPluginUtils.setDefaults(this, req, defaults, appends, invariants);
       SolrParams params = req.getParams();
-      if (params.getParams(CommonParams.JSON) != null && params.getBool(CommonParams.DISTRIB, true)) {
-        //log JSON for top level query, this includes query embedded in POST query, which is available after SolrPluginUtils.setDefaults
+      if (params.getParams(CommonParams.JSON) != null
+          && params.getBool(CommonParams.DISTRIB, true)) {
+        // log JSON for top level query, this includes query embedded in POST query, which is
+        // available after SolrPluginUtils.setDefaults
         rsp.getToLog().add("json", String.join(" ", params.getParams(CommonParams.JSON)));
       }
 

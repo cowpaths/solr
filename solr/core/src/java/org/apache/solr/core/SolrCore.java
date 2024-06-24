@@ -3004,6 +3004,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
       rsp.getToLog().add("QTime", qtime);
     }
 
+    SolrParams params = req.getParams();
     if (null != handler && params.getBool(CommonParams.HEADER_ECHO_HANDLER, false)) {
       responseHeader.add("handler", handler.getName());
     }

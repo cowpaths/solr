@@ -16,6 +16,8 @@
  */
 package org.apache.solr.core;
 
+import static org.apache.solr.common.params.CommonParams.DISTRIB;
+import static org.apache.solr.common.params.CommonParams.JSON;
 import static org.apache.solr.common.params.CommonParams.PATH;
 
 import com.codahale.metrics.Counter;
@@ -2989,6 +2991,13 @@ public class SolrCore implements SolrInfoBean, Closeable {
     // TODO should check that responseHeader has not been replaced by handler
     NamedList<Object> responseHeader = rsp.getResponseHeader();
     if (responseHeader == null) return;
+
+    SolrParams params = req.getParams();
+    if (params.getParams(JSON) != null && params.getBool(DISTRIB, true)) {
+      //log JSON for top level query, this includes query embedded in POST query
+      rsp.getToLog().add("json", String.join(" ", params.getParams(JSON)));
+    }
+
     final int qtime = (int) (req.getRequestTimer().getTime());
     int status = 0;
     Exception exception = rsp.getException();
@@ -3004,7 +3013,6 @@ public class SolrCore implements SolrInfoBean, Closeable {
       rsp.getToLog().add("QTime", qtime);
     }
 
-    SolrParams params = req.getParams();
     if (null != handler && params.getBool(CommonParams.HEADER_ECHO_HANDLER, false)) {
       responseHeader.add("handler", handler.getName());
     }

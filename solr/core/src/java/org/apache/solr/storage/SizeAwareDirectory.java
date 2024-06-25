@@ -78,6 +78,20 @@ public class SizeAwareDirectory extends FilterDirectory
   }
 
   @Override
+  public long fileLength(String name) throws IOException {
+    Long ret = fileSizeMap.get(name);
+    SizeAccountingIndexOutput live;
+    if (ret != null) {
+      return ret;
+    } else if ((live = liveOutputs.get(name)) != null) {
+      return live.backing.getFilePointer();
+    } else {
+      // fallback delegate to wrapped Directory
+      return in.fileLength(name);
+    }
+  }
+
+  @Override
   public long size() throws IOException {
     Integer reconcileThreshold = CoreAdminHandler.getReconcileThreshold();
     if (initialized

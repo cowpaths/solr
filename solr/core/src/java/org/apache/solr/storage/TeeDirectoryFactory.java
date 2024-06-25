@@ -19,9 +19,11 @@ package org.apache.solr.storage;
 
 import com.codahale.metrics.Meter;
 import java.io.Closeable;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.ref.WeakReference;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.AbstractMap;
@@ -43,12 +45,14 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.LockFactory;
+import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.MMapDirectoryFactory;
+import org.apache.solr.core.NodeRoles;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.MetricsMap;
 import org.apache.solr.metrics.SolrMetricProducer;
@@ -65,6 +69,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   private NodeLevelTeeDirectoryState ownNodeLevelState;
   private WeakReference<CoreContainer> cc;
 
+  private boolean isDataNode = true;
   private String accessDir;
   private boolean useAsyncIO;
   private boolean useDirectIO;
@@ -72,10 +77,15 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   @Override
   public void initCoreContainer(CoreContainer cc) {
     super.initCoreContainer(cc);
+    // don't set up the index cache on nodes that don't use it
+    if (cc.nodeRoles.getRoleMode(NodeRoles.Role.DATA).equals(NodeRoles.MODE_OFF)) {
+      isDataNode = false;
+      return;
+    }
     this.cc = new WeakReference<>(cc);
   }
 
-  static class NodeLevelTeeDirectoryState implements SolrMetricProducer {
+  public static class NodeLevelTeeDirectoryState implements SolrMetricProducer {
     final ExecutorService ioExec = ExecutorUtil.newMDCAwareCachedThreadPool("teeIOExec");
     private final Future<?> lengthVerificationTask;
     final BlockingQueue<PersistentLengthVerification> persistentLengthVerificationQueue;
@@ -96,7 +106,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     final Meter priorityActivateMeter = new Meter();
     final Meter activateMeter = new Meter();
 
-    NodeLevelTeeDirectoryState(int lengthVerificationQueueSize) {
+    public NodeLevelTeeDirectoryState(int lengthVerificationQueueSize) {
       persistentLengthVerificationQueue = new ArrayBlockingQueue<>(lengthVerificationQueueSize);
       activationTask =
           ioExec.submit(
@@ -120,12 +130,10 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
                       }
                       if (lazyEntry != null) {
                         // we load background activation in multiple passes, in order to
-                        // periodically give
-                        // `priorityActivate` a crack at running. Otherwise, a single monolithic
-                        // large file
-                        // could block IO for a long time, depriving us of the ability to benefit
-                        // from
-                        // signals about specific file areas that should be loaded earlier.
+                        // periodically give `priorityActivate` a crack at running. Otherwise,
+                        // a single monolithic large file could block IO for a long time,
+                        // depriving us of the ability to benefit from signals about specific
+                        // file areas that should be loaded earlier.
                         int blocksLoadedCount = lazyEntry.load();
                         if (blocksLoadedCount < 0) {
                           blocksLoadedCount = ~blocksLoadedCount;
@@ -235,6 +243,8 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   static final class PersistentLengthVerification {
     private final Directory accessDir;
     private final Directory persistentDir;
+    private final Path accessFilePath;
+    private final Path persistentDirPath;
     private final String name;
     private final long accessLength;
 
@@ -242,9 +252,19 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
         Directory accessDir, Directory persistentDir, String name, long accessLength) {
       this.accessDir = accessDir;
       this.persistentDir = persistentDir;
+      this.accessFilePath =
+          accessDir instanceof FSDirectory
+              ? ((FSDirectory) accessDir).getDirectory().resolve(name)
+              : null;
+      this.persistentDirPath =
+          persistentDir instanceof FSDirectory
+              ? ((FSDirectory) persistentDir).getDirectory()
+              : null;
       this.name = name;
       this.accessLength = accessLength;
     }
+
+    private static final int RECHECK_FILE_GONE = 5;
 
     private void verify() {
       try {
@@ -255,17 +275,44 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
       } catch (AlreadyClosedException th) {
         // swallow this; we have to defer lookup, but we know that in doing so we run the risk
         // the the directory will already have been closed by the time we look up the length
-      } catch (NoSuchFileException e) {
+      } catch (NoSuchFileException | FileNotFoundException e) {
         try {
-          accessDir.fileLength(name);
+          if (accessFilePath == null) {
+            accessDir.fileLength(name);
+            // we should arrive here only rarely, and we expect that the access copy should
+            // be on its way to being deleted, so simply pause for a while, then re-check
+            int retries = RECHECK_FILE_GONE;
+            do {
+              Thread.sleep(1000);
+              accessDir.fileLength(name); // expect this to throw NoSuchFileException
+            } while (--retries > 0);
+          } else {
+            int retries = RECHECK_FILE_GONE;
+            do {
+              if (!Files.exists(accessFilePath)) {
+                // good; the file is finally gone from access path
+                return;
+              }
+              // we should loop only rarely, and we expect that the access copy should
+              // be on its way to being deleted, so simply pause for a while, then re-check
+              Thread.sleep(1000);
+            } while (--retries > 0);
+            // one last time, check the expensive way, in case the directory's closed but
+            // the file's not gone yet (for some reason ... that would be weird, but it's
+            // not what we're checking for here, so just let it slide).
+            accessDir.fileLength(name);
+          }
+          // if the access copy is _still_ not gone, then we may have a real problem; log it
           log.error("file absent in persistent, present in access: {}", this);
-        } catch (NoSuchFileException e1) {
+        } catch (NoSuchFileException | FileNotFoundException e1) {
           // this is what we expect, so just swallow it
+        } catch (AlreadyClosedException e1) {
+          // we know this is possible, and should not be considered a problem
         } catch (Throwable t) {
-          log.warn("unable to re-verify access length {}", this, t);
+          log.error("unable to re-verify access length {}", this, t);
         }
       } catch (Throwable t) {
-        log.warn("unable to verify persistent length {}", this, t);
+        log.error("unable to verify persistent length {}", this, t);
       }
     }
 
@@ -273,17 +320,9 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     public String toString() {
       StringBuilder sb = new StringBuilder();
       sb.append("{name=").append(name).append(", length=").append(accessLength).append(", access=");
-      if (accessDir instanceof FSDirectory) {
-        sb.append(((FSDirectory) accessDir).getDirectory());
-      } else {
-        sb.append(accessDir);
-      }
+      sb.append(accessFilePath == null ? accessDir : accessFilePath.getParent());
       sb.append(", persistent=");
-      if (persistentDir instanceof FSDirectory) {
-        sb.append(((FSDirectory) persistentDir).getDirectory());
-      } else {
-        sb.append(persistentDir);
-      }
+      sb.append(persistentDirPath == null ? persistentDir : persistentDirPath);
       sb.append("}");
       return sb.toString();
     }
@@ -324,8 +363,6 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     useAsyncIO = params.getBool("useAsyncIO", useDirectIO);
   }
 
-  private static final boolean TEST_CONTEXT = System.getProperty("tests.seed") != null;
-
   static String getScopeName(String accessDir, String path) {
     int lastPathDelimIdx = path.lastIndexOf('/');
     if (lastPathDelimIdx == -1) {
@@ -334,18 +371,19 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     String dirName = path.substring(path.lastIndexOf('/'));
     int end = path.lastIndexOf('/', lastPathDelimIdx - 1);
     int start = path.lastIndexOf('/', end - 1);
+    boolean testContext = System.getProperty("tests.seed") != null;
     String ret;
     if ("/index".equals(dirName)) {
       ret = path.substring(start, end);
     } else if (dirName.startsWith("/index.")) {
       // append the suffix identifier; this is a snapshot or temp index dir
       ret = path.substring(start, end).concat(dirName.substring("/index".length()));
-    } else if (TEST_CONTEXT) {
+    } else if (testContext) {
       ret = path.substring(path.lastIndexOf('/'));
     } else {
       throw new IllegalArgumentException("unexpected path: " + path);
     }
-    if (TEST_CONTEXT) {
+    if (testContext && !"disable".equals(System.getProperty("solr.teeDirectory.timeScope"))) {
       ret += "-" + Long.toUnsignedString(System.nanoTime(), 16);
       Path p = Path.of(path);
       if (p.startsWith(accessDir)) {
@@ -363,26 +401,31 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
   @Override
   public Directory create(String path, LockFactory lockFactory, DirContext dirContext)
       throws IOException {
-    Directory naive = super.create(path, lockFactory, dirContext);
-    Path compressedPath = Path.of(path);
-    IOFunction<Void, Map.Entry<String, Directory>> accessFunction =
-        unused -> {
-          String accessPath = getScopeName(accessDir, path);
-          Directory dir =
-              new AccessDirectory(Path.of(accessPath), lockFactory, compressedPath, nodeLevelState);
-          return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
-        };
-    IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction =
-        content -> {
-          assert content == naive;
-          content.close();
-          content =
-              new CompressingDirectory(
-                  compressedPath, nodeLevelState.ioExec, useAsyncIO, useDirectIO);
-          return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
-        };
-    return new SizeAwareDirectory(
-        new TeeDirectory(naive, accessFunction, persistentFunction, nodeLevelState), 0);
+    Directory backing;
+    if (!isDataNode) {
+      backing = new MMapDirectory(Path.of(path), lockFactory);
+    } else {
+      Directory naive = super.create(path, lockFactory, dirContext);
+      Path compressedPath = Path.of(path);
+      IOFunction<Void, Map.Entry<String, Directory>> accessFunction =
+          unused -> {
+            String accessPath = getScopeName(accessDir, path);
+            Directory dir =
+                new AccessDirectory(
+                    Path.of(accessPath), lockFactory, compressedPath, nodeLevelState);
+            return new AbstractMap.SimpleImmutableEntry<>(accessPath, dir);
+          };
+      IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction =
+          content -> {
+            assert content == naive;
+            content.close();
+            content =
+                new CompressingDirectory(compressedPath, nodeLevelState, useAsyncIO, useDirectIO);
+            return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
+          };
+      backing = new TeeDirectory(naive, accessFunction, persistentFunction, nodeLevelState);
+    }
+    return new SizeAwareDirectory(backing, 0);
   }
 
   @Override

@@ -24,12 +24,15 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import com.codahale.metrics.Histogram;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.util.RTimer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,6 +76,7 @@ public final class CommitTracker implements Runnable {
   private static final boolean WAIT_SEARCHER = true;
 
   private String name;
+  private Histogram commitDurationHistogram;
 
   public CommitTracker(
       String name,
@@ -259,6 +263,7 @@ public final class CommitTracker implements Runnable {
     }
 
     MDCLoggingContext.setCore(core);
+    RTimer timer = new RTimer();
     try (SolrQueryRequest req = new LocalSolrQueryRequest(core, new ModifiableSolrParams())) {
       CommitUpdateCommand command = new CommitUpdateCommand(req, false);
       command.openSearcher = openSearcher;
@@ -280,6 +285,9 @@ public final class CommitTracker implements Runnable {
     } catch (Exception e) {
       log.error("auto commit error...", e);
     } finally {
+      if (commitDurationHistogram != null) {
+        commitDurationHistogram.update((long) timer.stop());
+      }
       MDCLoggingContext.clear();
     }
     // log.info("###done committing");
@@ -338,5 +346,9 @@ public final class CommitTracker implements Runnable {
   // only for testing - not thread safe
   public boolean hasPending() {
     return (null != pending && !pending.isDone());
+  }
+
+  public void setDurationHistogram(Histogram commitDurationHistogram) {
+    this.commitDurationHistogram = commitDurationHistogram;
   }
 }

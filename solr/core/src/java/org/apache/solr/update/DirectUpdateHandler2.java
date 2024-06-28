@@ -16,6 +16,7 @@
  */
 package org.apache.solr.update;
 
+import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -93,6 +94,7 @@ public class DirectUpdateHandler2 extends UpdateHandler
   Meter expungeDeleteCommands;
   Meter mergeIndexesCommands;
   Meter commitCommands;
+  Histogram commitDurationHistogram;
   Meter splitCommands;
   Meter optimizeCommands;
   Meter rollbackCommands;
@@ -210,6 +212,9 @@ public class DirectUpdateHandler2 extends UpdateHandler
       this.solrMetricsContext = parentContext.getChildContext(this);
     }
     commitCommands = solrMetricsContext.meter("commits", getCategory().toString(), scope);
+
+
+    commitTracker.setDurationHistogram(solrMetricsContext.histogram("commitDuration", getCategory().toString(), scope));
     solrMetricsContext.gauge(
         () -> commitTracker.getCommitCount(), true, "autoCommits", getCategory().toString(), scope);
     solrMetricsContext.gauge(

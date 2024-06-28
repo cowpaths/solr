@@ -566,8 +566,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     CoresMetricsApiCaller() {
       super(
           "core",
-          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits",
-          "count");
+          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits,UPDATE.updateHandler.commitDuration",
+          "count", "5minRate", "mean");
     }
 
     /*
@@ -612,6 +612,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       long deleteById = 0;
       long deleteByQuery = 0;
       long softAutoCommit = 0;
+      double totalHardCommitDurationRate = 0;
+      long totalHardCommit = 0;
+      double total5MinRate = 0;
+
       for (JsonNode core : metrics) {
         mergeMajor += getNumber(core, "INDEX.merge.major", property).longValue();
         mergeMajorDocs += getNumber(core, "INDEX.merge.major.running.docs").longValue();
@@ -629,7 +633,11 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
             getNumber(core, "UPDATE.updateHandler.cumulativeDeletesById", property).longValue();
         deleteByQuery +=
             getNumber(core, "UPDATE.updateHandler.cumulativeDeletesByQuery", property).longValue();
-        softAutoCommit += getNumber(core, "UPDATE.updateHandler.softAutoCommits").longValue();
+
+        //not the best way to combine histograms...but good enough...
+        double hardCommit5MinRate = getNumber(core, "UPDATE.updateHandler.commits", "5minRate").doubleValue();
+        total5MinRate += hardCommit5MinRate;
+        totalHardCommitDurationRate +=  hardCommit5MinRate * getNumber(core, "UPDATE.updateHandler.commitDuration", "mean").longValue();
       }
       results.add(
           new PrometheusMetric(
@@ -721,6 +729,15 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               PrometheusMetricType.COUNTER,
               "cumulative number of deletes by query across cores",
               deleteByQuery));
+
+      if (total5MinRate > 0) {
+        results.add(
+                new PrometheusMetric(
+                        "hard_commit_duration",
+                        PrometheusMetricType.GAUGE,
+                        "mean for hard commit duration for all cores",
+                        totalHardCommitDurationRate / total5MinRate));
+      }
     }
   }
 
@@ -808,11 +825,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     protected final String group;
     protected final String prefix;
     protected final String property;
+    private final String[] properties;
 
-    MetricsApiCaller(String group, String prefix, String property) {
+    MetricsApiCaller(String group, String prefix, String...properties) {
       this.group = group;
       this.prefix = prefix;
-      this.property = property;
+      this.property = properties[0];
+      this.properties = properties;
     }
 
     // use HttpSolrCall to simulate a call to the metrics api.
@@ -821,7 +840,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         throws IOException, UnavailableException {
       SolrDispatchFilter filter = getSolrDispatchFilter(originalRequest);
       CoreContainer cores = filter.getCores();
-      HttpServletRequest request = new MetricsApiRequest(originalRequest, group, prefix, property);
+      HttpServletRequest request = new MetricsApiRequest(originalRequest, group, prefix, properties);
       MetricsApiResponse response = new MetricsApiResponse();
       SolrDispatchFilter.Action action =
           new HttpSolrCall(filter, cores, request, response, false).call();
@@ -860,16 +879,20 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     private final String queryString;
     private final Map<String, Object> attributes = new HashMap<>();
 
-    MetricsApiRequest(HttpServletRequest request, String group, String prefix, String property)
+    MetricsApiRequest(HttpServletRequest request, String group, String prefix, String...properties)
         throws IOException {
       super(request);
-      queryString =
+      String qs =
           String.format(
               Locale.ROOT,
-              "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
+              "wt=json&indent=false&compact=true&group=%s&prefix=%s",
               URLEncoder.encode(group, StandardCharsets.UTF_8.name()),
-              URLEncoder.encode(prefix, StandardCharsets.UTF_8.name()),
-              URLEncoder.encode(property, StandardCharsets.UTF_8.name()));
+              URLEncoder.encode(prefix, StandardCharsets.UTF_8.name()));
+
+      for (String property : properties) {
+        qs += String.format("&property=%s", URLEncoder.encode(property, StandardCharsets.UTF_8.name()));
+      }
+      queryString = qs;
     }
 
     @Override

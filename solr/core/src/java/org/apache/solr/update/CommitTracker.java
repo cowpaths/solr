@@ -288,7 +288,7 @@ public final class CommitTracker implements Runnable {
       long elapsed = (long) timer.stop();
       log.info("Spent {} millisec for {} commit", elapsed, softCommit ? "soft" : "hard");
       if (commitDurationHistogram != null) {
-        commitDurationHistogram.update((long) elapsed);
+        commitDurationHistogram.update(elapsed);
       }
       MDCLoggingContext.clear();
     }

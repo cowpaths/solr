@@ -285,8 +285,10 @@ public final class CommitTracker implements Runnable {
     } catch (Exception e) {
       log.error("auto commit error...", e);
     } finally {
+      long elapsed = (long) timer.stop();
+      log.info("Spent {} millisec for {} commit", elapsed, softCommit ? "soft" : "hard");
       if (commitDurationHistogram != null) {
-        commitDurationHistogram.update((long) timer.stop());
+        commitDurationHistogram.update((long) elapsed);
       }
       MDCLoggingContext.clear();
     }

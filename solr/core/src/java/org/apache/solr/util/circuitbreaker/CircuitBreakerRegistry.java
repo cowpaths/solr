@@ -26,8 +26,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -197,7 +197,7 @@ public class CircuitBreakerRegistry implements Closeable {
     List<CircuitBreaker> triggeredCircuitBreakers = null;
     for (CircuitBreaker circuitBreaker : breakersOfType) {
       if (circuitBreaker.isTripped()) {
-          incrementTripped(requestType, circuitBreaker);
+        incrementTripped(requestType, circuitBreaker);
         if (triggeredCircuitBreakers == null) {
           triggeredCircuitBreakers = new ArrayList<>();
         }

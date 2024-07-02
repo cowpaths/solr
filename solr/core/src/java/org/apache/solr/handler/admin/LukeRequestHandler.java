@@ -629,7 +629,7 @@ public class LukeRequestHandler extends RequestHandlerBase {
     // TODO? Is this different then: IndexReader.getCurrentVersion( dir )?
     indexInfo.add("version", reader.getVersion());
     indexInfo.add("segmentCount", reader.leaves().size());
-    indexInfo.add("current", closeSafe(reader::isCurrent));
+//    indexInfo.add("current", closeSafe(reader::isCurrent));
     indexInfo.add("hasDeletions", reader.hasDeletions());
     indexInfo.add("directory", dir);
     IndexCommit indexCommit = reader.getIndexCommit();

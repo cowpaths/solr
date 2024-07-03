@@ -631,7 +631,7 @@ public class LukeRequestHandler extends RequestHandlerBase {
     indexInfo.add("segmentCount", reader.leaves().size());
 
     // bypass for now as reader::isCurrent could be slow, and we don't need this info
-    //indexInfo.add("current", closeSafe(reader::isCurrent));
+    // indexInfo.add("current", closeSafe(reader::isCurrent));
     indexInfo.add("hasDeletions", reader.hasDeletions());
     indexInfo.add("directory", dir);
     IndexCommit indexCommit = reader.getIndexCommit();

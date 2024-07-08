@@ -19,6 +19,7 @@ package org.apache.solr.servlet;
 
 import static org.apache.solr.common.params.CommonParams.SOLR_REQUEST_CONTEXT_PARAM;
 import static org.apache.solr.common.params.CommonParams.SOLR_REQUEST_TYPE_PARAM;
+import static org.apache.solr.core.RateLimiterConfig.RL_CONFIG_KEY;
 import static org.apache.solr.servlet.RateLimitManager.DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -26,7 +27,9 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -50,8 +53,11 @@ import org.apache.solr.cloud.SolrCloudTestCase;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.ExecutorUtil;
+import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.RateLimiterConfig;
+import org.apache.zookeeper.CreateMode;
 import org.eclipse.jetty.server.Request;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -607,6 +613,35 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
                 true /* isSlotBorrowing */);
         limiter = new RequestRateLimiter(config);
       }
+    }
+  }
+  public void testMultipleRequestRateLimiters() throws Exception {
+    Map<String, Object> props = new HashMap<>(cluster.getZkStateReader().getClusterProperties());
+    props.put(
+            RL_CONFIG_KEY,
+            Utils.fromJSONString(
+                    "[\n"
+                            + "  {\n"
+                            + "    \"type\": \"QUERY\",\n"
+                            + "    \"enabled\": true,\n"
+                            + "    \"guaranteedSlots\": 5,\n"
+                            + "    \"allowedRequests\": 20,\n"
+                            + "    \"slotAcquisitionTimeoutInMS\": 70\n"
+                            + "  },\n"
+                            + "  {\n"
+                            + "    \"type\": \"UPDATE\",\n"
+                            + "    \"enabled\": true,\n"
+                            + "    \"guaranteedSlots\": 8,\n"
+                            + "    \"allowedRequests\": 10,\n"
+                            + "    \"slotAcquisitionTimeoutInMS\": 70\n"
+                            + "  }\n"
+                            + "]"));
+    if(cluster.getZkClient().exists(ZkStateReader.CLUSTER_PROPS, true)){
+      cluster.getZkClient().setData(ZkStateReader.CLUSTER_PROPS, Utils.toJSON(props), true);
+
+    } else {
+      cluster.getZkClient().create(ZkStateReader.CLUSTER_PROPS,
+              Utils.toJSON(props), CreateMode.PERSISTENT, true);
     }
   }
 }

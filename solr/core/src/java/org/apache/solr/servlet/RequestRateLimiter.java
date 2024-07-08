@@ -19,6 +19,7 @@ package org.apache.solr.servlet;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.Closeable;
+import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,6 +47,7 @@ public class RequestRateLimiter {
   private final AtomicInteger nativeReservations;
 
   private final RateLimiterConfig rateLimiterConfig;
+  byte[] configData;
   public static final SlotReservation UNLIMITED =
       () -> {
         // no-op
@@ -68,6 +70,10 @@ public class RequestRateLimiter {
       borrowableSlotsPool = new Semaphore(rateLimiterConfig.allowedRequests - guaranteedSlots);
       nativeReservations = new AtomicInteger();
     }
+  }
+
+  public boolean compare(RequestRateLimiter other) {
+    return Arrays.equals(other.configData, configData);
   }
 
   @VisibleForTesting

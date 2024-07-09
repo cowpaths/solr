@@ -50,15 +50,27 @@ public class SizeAwareDirectory extends FilterDirectory
   private boolean initialized = false;
   private volatile long reconciledTimeNanos;
   private volatile LongAdder size = new LongAdder();
+  private volatile LongAdder onDiskSize = new LongAdder();
   private volatile LongObjectProcedure<String> sizeWriter = (size, name) -> this.size.add(size);
 
   private final ConcurrentHashMap<String, Long> fileSizeMap = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Long> onDiskFileSizeMap = new ConcurrentHashMap<>();
 
   private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs =
       new ConcurrentHashMap<>();
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  private final Future<Long>[] computingSize = new Future[1];
+  private final Future<Sizes>[] computingSize = new Future[1];
+
+  private static class Sizes {
+    long size;
+    long onDiskSize;
+
+    Sizes(long size, long onDiskSize) {
+      this.size = size;
+      this.onDiskSize = onDiskSize;
+    }
+  }
 
   public SizeAwareDirectory(Directory in, long reconcileTTLNanos) {
     super(in);
@@ -74,6 +86,7 @@ public class SizeAwareDirectory extends FilterDirectory
   public long ramBytesUsed() {
     return BASE_RAM_BYTES_USED
         + RamUsageEstimator.sizeOfMap(fileSizeMap)
+            + RamUsageEstimator.sizeOfMap(onDiskFileSizeMap)
         + RamUsageEstimator.sizeOfMap(liveOutputs);
   }
 
@@ -92,6 +105,11 @@ public class SizeAwareDirectory extends FilterDirectory
   }
 
   @Override
+  public long onDiskFileLength(String name) throws IOException {
+    return in.onDiskFileLength(name);
+  }
+
+  @Override
   public long size() throws IOException {
     Integer reconcileThreshold = CoreAdminHandler.getReconcileThreshold();
     if (initialized
@@ -99,8 +117,24 @@ public class SizeAwareDirectory extends FilterDirectory
             || System.nanoTime() - reconciledTimeNanos < reconcileTTLNanos)) {
       return size.sum();
     }
-    CompletableFuture<Long> weCompute;
-    Future<Long> theyCompute;
+    return initSize().size;
+  }
+
+  @Override
+  public long onDiskSize() throws IOException {
+    Integer reconcileThreshold = CoreAdminHandler.getReconcileThreshold();
+    if (initialized
+            && (reconcileThreshold == null
+            || System.nanoTime() - reconciledTimeNanos < reconcileTTLNanos)) {
+      return onDiskSize.sum();
+    }
+    return initSize().onDiskSize;
+  }
+
+  private Sizes initSize() throws IOException {
+    Integer reconcileThreshold = CoreAdminHandler.getReconcileThreshold();
+    CompletableFuture<Sizes> weCompute;
+    Future<Sizes> theyCompute;
     synchronized (computingSize) {
       theyCompute = computingSize[0];
       if (theyCompute == null) {
@@ -121,66 +155,78 @@ public class SizeAwareDirectory extends FilterDirectory
       final String[] files = in.listAll();
 
       LongAdder recomputeSize = new LongAdder();
+      LongAdder recomputeOnDiskSize = new LongAdder();
       Set<String> recomputed = ConcurrentHashMap.newKeySet();
       LongObjectProcedure<String> dualSizeWriter =
-          (fileSize, name) -> {
-            size.add(fileSize);
-            if (fileSize >= 0 || recomputed.remove(name)) {
-              // if it's a removal, we only want to adjust if we've already
-              // incorporated this file in our count!
-              recomputeSize.add(fileSize);
-            }
-          };
+              (fileSize, name) -> {
+                size.add(fileSize);
+                recomputeOnDiskSize.add(fileSize);
+                if (fileSize >= 0 || recomputed.remove(name)) {
+                  // if it's a removal, we only want to adjust if we've already
+                  // incorporated this file in our count!
+                  recomputeSize.add(fileSize);
+                  recomputeOnDiskSize.add(fileSize);
+                }
+              };
       sizeWriter = dualSizeWriter;
       for (final String file : files) {
-        long fileSize;
+        long fileSize, onDiskFileSize;
         recomputed.add(file);
         SizeAccountingIndexOutput liveOutput = liveOutputs.get(file);
         if (liveOutput != null) {
           // get fileSize already written at this moment
           fileSize = liveOutput.setSizeWriter(dualSizeWriter);
+          onDiskFileSize = fileSize;
         } else {
           fileSize = DirectoryFactory.sizeOf(in, file);
+          onDiskFileSize = DirectoryFactory.onDiskSizeOf(in, file);
           if (fileSize > 0) {
             // whether the file exists or not, we don't care about it if it has zero size.
             // more often though, 0 size means the file isn't there.
             fileSizeMap.put(file, fileSize);
+            onDiskFileSizeMap.put(file, onDiskFileSize);
             if (DirectoryFactory.sizeOf(in, file) == 0) {
               // during reconciliation, we have to check for file presence _after_ adding
               // to the map, to prevent a race condition that could leak entries into `fileSizeMap`
               fileSizeMap.remove(file);
+              onDiskFileSizeMap.remove(file);
             }
           }
         }
         recomputeSize.add(fileSize);
+        recomputeOnDiskSize.add(onDiskFileSize);
         // TODO: do we really need to check for overflow here?
         //        if (recomputeSize < 0) {
         //          break;
         //        }
       }
 
-      long ret = recomputeSize.sum();
-      long extant = size.sum();
-      long diff = extant - ret;
+      Sizes ret = new Sizes(recomputeSize.sum(), recomputeOnDiskSize.sum());
+      Sizes extant = new Sizes(size.sum(), onDiskSize.sum());
+      long diff = extant.size - ret.size;
       boolean initializing = !initialized;
       if (!initializing && Math.abs(diff) < reconcileThreshold) {
-        double ratio = (double) extant / ret;
+        double ratio = (double) extant.size / ret.size;
         if (log.isInfoEnabled()) {
           log.info(
-              "no need to reconcile (diff {}; ratio {}; overhead {}; sizes {}/{}/{})",
-              humanReadableByteDiff(diff),
-              ratio,
-              RamUsageEstimator.humanReadableUnits(ramBytesUsed()),
-              liveOutputs.size(),
-              fileSizeMap.size(),
-              files.length);
+                  "no need to reconcile (diff {}; ratio {}; overhead {}; sizes {}/{}/{})",
+                  humanReadableByteDiff(diff),
+                  ratio,
+                  RamUsageEstimator.humanReadableUnits(ramBytesUsed()),
+                  liveOutputs.size(),
+                  fileSizeMap.size(),
+                  files.length);
         }
         ret = extant;
       } else {
         // swap the new objects into place
-        LongObjectProcedure<String> replaceSizeWriter = (size, name) -> recomputeSize.add(size);
+        LongObjectProcedure<String> replaceSizeWriter = (size, name) -> {
+          recomputeSize.add(size);
+          recomputeOnDiskSize.add(size);
+        };
         sizeWriter = replaceSizeWriter;
         size = recomputeSize;
+        onDiskSize = recomputeOnDiskSize;
         for (SizeAccountingIndexOutput liveOutput : liveOutputs.values()) {
           liveOutput.setSizeWriter(replaceSizeWriter);
         }
@@ -189,19 +235,19 @@ public class SizeAwareDirectory extends FilterDirectory
           initialized = true;
           if (log.isInfoEnabled()) {
             log.info(
-                "initialized heap-tracked size {} (overhead: {})",
-                RamUsageEstimator.humanReadableUnits(ret),
-                RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
+                    "initialized heap-tracked size {} (overhead: {})",
+                    RamUsageEstimator.humanReadableUnits(ret.size),
+                    RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
           }
         } else {
-          double ratio = (double) extant / ret;
+          double ratio = (double) extant.size / ret.size;
           log.warn(
-              "reconcile size {} => {}  (diff {}; ratio {}; overhead {})",
-              extant,
-              ret,
-              humanReadableByteDiff(diff),
-              ratio,
-              RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
+                  "reconcile size {} => {}  (diff {}; ratio {}; overhead {})",
+                  extant,
+                  ret,
+                  humanReadableByteDiff(diff),
+                  ratio,
+                  RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
         }
       }
 

@@ -507,6 +507,7 @@ public class SolrCore implements SolrInfoBean, Closeable {
                 getIndexDir(), DirContext.DEFAULT, solrConfig.indexConfig.lockType);
         try {
           size = directoryFactory.size(dir);
+          log.info("indexSize: {} | onDiskSize: {}", size, directoryFactory.onDiskSize(dir));
         } finally {
           directoryFactory.release(dir);
         }

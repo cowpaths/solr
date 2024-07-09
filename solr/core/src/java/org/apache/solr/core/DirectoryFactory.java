@@ -166,6 +166,11 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin, Cl
     return sizeOfDirectory(directory);
   }
 
+  // in case index size != onDiskSize, for example in the case of compression
+  public long onDiskSize(Directory directory) throws IOException {
+    return onDiskSizeOfDirectory(directory);
+  }
+
   /**
    * @param path to calculate size of
    * @return size in bytes
@@ -267,6 +272,7 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin, Cl
 
   public interface SizeAware {
     long size() throws IOException;
+    long onDiskSize() throws IOException;
   }
 
   public static long sizeOfDirectory(Directory directory) throws IOException {
@@ -284,6 +290,32 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin, Cl
     }
 
     return size;
+  }
+
+  public static long onDiskSizeOfDirectory(Directory directory) throws IOException {
+    if (directory instanceof SizeAware) {
+      return ((SizeAware) directory).onDiskSize();
+    }
+    final String[] files = directory.listAll();
+    long size = 0;
+
+    for (final String file : files) {
+      size += onDiskSizeOf(directory, file);
+      if (size < 0) {
+        break;
+      }
+    }
+
+    return size;
+  }
+
+  public static long onDiskSizeOf(Directory directory, String file) {
+    try {
+      return directory.onDiskFileLength(file);
+    } catch (IOException e) {
+      // could be a race, file no longer exists, access denied, is a directory, etc.
+      return 0;
+    }
   }
 
   public static long sizeOf(Directory directory, String file) throws IOException {

@@ -20,6 +20,7 @@ package org.apache.solr.storage;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -29,6 +30,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+
+import org.apache.commons.io.FileUtils;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.FSDirectory;
@@ -39,6 +42,8 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.OutputStreamDataOutput;
 import org.apache.lucene.util.CollectionUtil;
 import org.apache.lucene.util.compress.LZ4;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CompressingDirectory extends FSDirectory {
 
@@ -94,6 +99,8 @@ public class CompressingDirectory extends FSDirectory {
   private final Path directoryPath;
   private final boolean useAsyncIO;
   private final boolean useDirectIO;
+
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   /**
    * The main way that we expect {@link CompressingDirectory} to be used is in the context of {@link
@@ -165,6 +172,12 @@ public class CompressingDirectory extends FSDirectory {
       throw new NoSuchFileException("file \"" + name + "\" is pending delete");
     }
     return readLengthFromHeader(path);
+  }
+
+  @Override
+  public long onDiskFileLength(String name) {
+    Path path = directoryPath.resolve(name);
+    return FileUtils.sizeOf(path.toFile());
   }
 
   public static long readLengthFromHeader(Path path) throws IOException {

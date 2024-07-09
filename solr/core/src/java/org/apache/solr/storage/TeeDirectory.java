@@ -372,6 +372,11 @@ public class TeeDirectory extends BaseDirectory {
   }
 
   @Override
+  public long onDiskFileLength(String name) throws IOException {
+    return persistent.onDiskFileLength(name);
+  }
+
+  @Override
   @SuppressWarnings("try")
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
     if (name.startsWith("pending_segments_")) {

@@ -19,17 +19,19 @@ package org.apache.solr.handler;
 import static org.apache.solr.core.RequestParams.USEPARAM;
 
 import com.codahale.metrics.Counter;
+import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import java.lang.invoke.MethodHandles;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.solr.api.Api;
 import org.apache.solr.api.ApiBag;
 import org.apache.solr.api.ApiSupport;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SuppressForbidden;
@@ -37,6 +39,7 @@ import org.apache.solr.core.MetricsConfig;
 import org.apache.solr.core.PluginBag;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.metrics.MaxHistogram;
 import org.apache.solr.metrics.SolrDelegateRegistryMetricsContext;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
@@ -184,6 +187,8 @@ public abstract class RequestHandlerBase
     public final Counter requests;
     public final Timer requestTimes;
     public final Counter totalTime;
+    public final Histogram concurrency;
+    public final AtomicLong activeRequests = new AtomicLong();
 
     public HandlerMetrics(SolrMetricsContext solrMetricsContext, String... metricPath) {
       numErrors = solrMetricsContext.meter("errors", metricPath);
@@ -193,6 +198,14 @@ public abstract class RequestHandlerBase
       requests = solrMetricsContext.counter("requests", metricPath);
       requestTimes = solrMetricsContext.timer("requestTimes", metricPath);
       totalTime = solrMetricsContext.counter("totalTime", metricPath);
+
+      // manually, since we can't use the default histogram supplier
+      String concurrencyMetricName = SolrMetricManager.mkName("concurrency", metricPath);
+      solrMetricsContext.registerMetricName(concurrencyMetricName);
+      concurrency =
+          solrMetricsContext
+              .getMetricRegistry()
+              .histogram(concurrencyMetricName, MaxHistogram::newInstance);
     }
   }
 
@@ -217,6 +230,7 @@ public abstract class RequestHandlerBase
     metrics.requests.inc();
 
     Timer.Context timer = metrics.requestTimes.time();
+    metrics.concurrency.update(metrics.activeRequests.incrementAndGet());
     try {
       TestInjection.injectLeaderTragedy(req.getCore());
       if (pluginInfo != null && pluginInfo.attributes.containsKey(USEPARAM))
@@ -247,8 +261,12 @@ public abstract class RequestHandlerBase
       processErrorMetricsOnException(e, metrics);
       rsp.setException(e);
     } finally {
-      long elapsed = timer.stop();
-      metrics.totalTime.inc(elapsed);
+      try {
+        metrics.concurrency.update(metrics.activeRequests.decrementAndGet());
+      } finally {
+        long elapsed = timer.stop();
+        metrics.totalTime.inc(elapsed);
+      }
     }
   }
 

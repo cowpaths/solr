@@ -168,7 +168,7 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin, Cl
 
   /**
    * @param directory to calculate size of
-   * @return size in bytes
+   * @return size in bytes on disk, regardless of compression, etc
    * @throws IOException on low level IO error
    */
   public long onDiskSize(Directory directory) throws IOException {

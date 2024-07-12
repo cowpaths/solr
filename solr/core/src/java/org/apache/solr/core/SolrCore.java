@@ -531,7 +531,16 @@ public class SolrCore implements SolrInfoBean, Closeable {
   }
 
   public long getOnDiskSize() {
-    return calculateOnDiskSize();
+    SolrRequestInfo requestInfo = SolrRequestInfo.getRequestInfo();
+    if (requestInfo != null) {
+      return (Long)
+          requestInfo
+              .getReq()
+              .getContext()
+              .computeIfAbsent(cachedOnDiskIndexSizeKeyName(), key -> calculateOnDiskSize());
+    } else {
+      return calculateOnDiskSize();
+    }
   }
 
   private long calculateOnDiskSize() {
@@ -557,6 +566,11 @@ public class SolrCore implements SolrInfoBean, Closeable {
   private String cachedIndexSizeKeyName() {
     // avoid collision when we put index sizes for multiple cores in the same metrics request
     return "indexSize_" + getName();
+  }
+
+  private String cachedOnDiskIndexSizeKeyName() {
+    // avoid collision when we put index sizes for multiple cores in the same metrics request
+    return "onDiskIndexSize_" + getName();
   }
 
   public int getSegmentCount() {

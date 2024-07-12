@@ -154,6 +154,10 @@ import org.apache.solr.search.facet.FacetParser;
 import org.apache.solr.search.facet.FacetParserFactory;
 import org.apache.solr.search.stats.LocalStatsCache;
 import org.apache.solr.search.stats.StatsCache;
+import org.apache.solr.storage.AccessDirectory;
+import org.apache.solr.storage.CompressingDirectory;
+import org.apache.solr.storage.CompressingDirectoryFactory;
+import org.apache.solr.storage.TeeDirectoryFactory;
 import org.apache.solr.update.DefaultSolrCoreState;
 import org.apache.solr.update.DirectUpdateHandler2;
 import org.apache.solr.update.IndexFingerprint;
@@ -529,6 +533,31 @@ public class SolrCore implements SolrInfoBean, Closeable {
       return calculateIndexSize();
     }
   }
+
+  public long getOnDiskSize() {
+    return calculateOnDiskSize();
+  }
+
+  private long calculateOnDiskSize() {
+    Directory dir;
+    long size = 0;
+    try {
+      if (directoryFactory.exists(getIndexDir())) {
+        dir =
+                directoryFactory.get(
+                        getIndexDir(), DirContext.DEFAULT, solrConfig.indexConfig.lockType);
+        try {
+          size = directoryFactory.onDiskSize(dir);
+        } finally {
+          directoryFactory.release(dir);
+        }
+      }
+    } catch (IOException e) {
+      log.error("IO error while trying to get the size of the Directory", e);
+    }
+    return size;
+  }
+
 
   private String cachedIndexSizeKeyName() {
     // avoid collision when we put index sizes for multiple cores in the same metrics request

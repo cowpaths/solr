@@ -38,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SizeAwareDirectory extends FilterDirectory
-    implements DirectoryFactory.SizeAware, Accountable {
+    implements DirectoryFactory.SizeAware, Accountable, DirectoryFactory.OnDiskSizeDirectory {
   @SuppressWarnings("rawtypes")
   private static final long BASE_RAM_BYTES_USED =
       RamUsageEstimator.shallowSizeOfInstance(SizeAwareDirectory.class)
@@ -89,6 +89,19 @@ public class SizeAwareDirectory extends FilterDirectory
       // fallback delegate to wrapped Directory
       return in.fileLength(name);
     }
+  }
+
+  public long onDiskFileLength(String name) throws IOException {
+    // TODO: cache implementation
+    if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
+      return ((DirectoryFactory.OnDiskSizeDirectory) in).onDiskFileLength(name);
+    }
+    return fileLength(name);
+  }
+
+  @Override
+  public long onDiskSize() throws IOException {
+    return size();
   }
 
   @Override

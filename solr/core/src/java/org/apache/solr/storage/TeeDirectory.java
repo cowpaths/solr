@@ -51,11 +51,12 @@ import org.apache.lucene.store.LockFactory;
 import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.IOUtils;
 import org.apache.solr.common.util.CollectionUtil;
+import org.apache.solr.core.DirectoryFactory;
 import org.apache.solr.util.IOFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TeeDirectory extends BaseDirectory {
+public class TeeDirectory extends BaseDirectory implements DirectoryFactory.OnDiskSizeDirectory {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -64,7 +65,7 @@ public class TeeDirectory extends BaseDirectory {
   private final AutoCloseable closeLocal;
   private final IOFunction<Void, Map.Entry<String, Directory>> accessFunction;
   private final IOFunction<Directory, Map.Entry<Directory, List<String>>> persistentFunction;
-  private volatile Directory persistent;
+  private volatile CompressingDirectory persistent;
   private final BlockingQueue<TeeDirectoryFactory.PersistentLengthVerification>
       persistentLengthVerificationQueue;
 
@@ -127,7 +128,7 @@ public class TeeDirectory extends BaseDirectory {
       if (this.persistent == null) {
         List<String> buildAssociatedPaths = new ArrayList<>(3);
         Map.Entry<Directory, List<String>> persistentEntry = persistentFunction.apply(access);
-        this.persistent = persistentEntry.getKey();
+        this.persistent = (CompressingDirectory) persistentEntry.getKey();
         Path persistentFSPath = ((FSDirectory) persistent).getDirectory();
         buildAssociatedPaths.addAll(persistentEntry.getValue());
         Map.Entry<String, Directory> accessEntry = accessFunction.apply(null);
@@ -369,6 +370,10 @@ public class TeeDirectory extends BaseDirectory {
   @Override
   public long fileLength(String name) throws IOException {
     return access.fileLength(name);
+  }
+
+  public long onDiskFileLength(String name) throws IOException {
+    return persistent.onDiskFileLength(name);
   }
 
   @Override

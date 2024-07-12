@@ -279,6 +279,7 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin, Cl
 
   public interface SizeAware {
     long size() throws IOException;
+
     long onDiskSize() throws IOException;
   }
 
@@ -313,14 +314,14 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin, Cl
   }
 
   public static long onDiskSizeOfDirectory(Directory directory) throws IOException {
-//    if (directory instanceof SizeAware) {
-//      return ((SizeAware) directory).onDiskSize();
-//    }
+    if (directory instanceof SizeAware) {
+      return ((SizeAware) directory).onDiskSize();
+    }
     final String[] files = directory.listAll();
     long size = 0;
 
     for (final String file : files) {
-      size += onDiskSizeOf((OnDiskSizeDirectory) directory, file);
+      size += onDiskSizeOf(directory, file);
       if (size < 0) {
         break;
       }
@@ -329,13 +330,16 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin, Cl
     return size;
   }
 
-  public static long onDiskSizeOf(OnDiskSizeDirectory directory, String file) throws IOException {
-    try {
-      return directory.onDiskFileLength(file);
-    } catch (IOException e) {
-      // could be a race, file no longer exists, access denied, is a directory, etc.
-      return 0;
+  public static long onDiskSizeOf(Directory directory, String file) throws IOException {
+    if (directory instanceof DirectoryFactory.OnDiskSizeDirectory) {
+      try {
+        return ((OnDiskSizeDirectory) directory).onDiskFileLength(file);
+      } catch (IOException e) {
+        // could be a race, file no longer exists, access denied, is a directory, etc.
+        return 0;
+      }
     }
+    return directory.fileLength(file);
   }
 
   /** Delete the files in the Directory */

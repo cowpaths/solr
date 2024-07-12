@@ -29,7 +29,6 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
@@ -43,7 +42,8 @@ import org.apache.lucene.util.CollectionUtil;
 import org.apache.lucene.util.compress.LZ4;
 import org.apache.solr.core.DirectoryFactory;
 
-public class CompressingDirectory extends FSDirectory implements DirectoryFactory.OnDiskSizeDirectory {
+public class CompressingDirectory extends FSDirectory
+    implements DirectoryFactory.OnDiskSizeDirectory {
 
   /**
    * Reference to {@code com.sun.nio.file.ExtendedOpenOption.DIRECT} by reflective class and enum

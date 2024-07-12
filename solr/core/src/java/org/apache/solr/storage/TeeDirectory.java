@@ -372,6 +372,7 @@ public class TeeDirectory extends BaseDirectory implements DirectoryFactory.OnDi
     return access.fileLength(name);
   }
 
+  @Override
   public long onDiskFileLength(String name) throws IOException {
     return persistent.onDiskFileLength(name);
   }

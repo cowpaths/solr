@@ -104,6 +104,7 @@ public class SizeAwareDirectory extends FilterDirectory
     }
   }
 
+  @Override
   public long onDiskFileLength(String name) throws IOException {
     if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
       return ((DirectoryFactory.OnDiskSizeDirectory) in).onDiskFileLength(name);

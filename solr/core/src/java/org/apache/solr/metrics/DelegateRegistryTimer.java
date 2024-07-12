@@ -29,7 +29,7 @@ import java.util.function.Supplier;
  * A timer implementation that is aware of both primary and delegate metrics belonging to different
  * registries and able to update metrics in multiple registries
  *
- * @see SolrDelegateRegistryMetricsContext
+ * @see SolrDelegateMetricManager
  */
 public class DelegateRegistryTimer extends Timer {
 

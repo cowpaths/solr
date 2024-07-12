@@ -40,7 +40,7 @@ import org.apache.solr.core.PluginBag;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.MaxHistogram;
-import org.apache.solr.metrics.SolrDelegateRegistryMetricsContext;
+import org.apache.solr.metrics.SolrDelegateMetricManager;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
@@ -157,11 +157,12 @@ public abstract class RequestHandlerBase
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     if (aggregateNodeLevelMetricsEnabled) {
       this.solrMetricsContext =
-          new SolrDelegateRegistryMetricsContext(
-              parentContext.getMetricManager(),
+          new SolrMetricsContext(
+              SolrDelegateMetricManager.delegatingMetricManager(
+                  parentContext.getMetricManager(),
+                  SolrMetricManager.getRegistryName(SolrInfoBean.Group.node)),
               parentContext.getRegistryName(),
-              SolrMetricProducer.getUniqueMetricTag(this, parentContext.getTag()),
-              SolrMetricManager.getRegistryName(SolrInfoBean.Group.node));
+              SolrMetricProducer.getUniqueMetricTag(this, parentContext.getTag()));
     } else {
       this.solrMetricsContext = parentContext.getChildContext(this);
     }

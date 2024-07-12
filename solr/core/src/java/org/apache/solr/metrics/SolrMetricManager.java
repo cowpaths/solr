@@ -105,12 +105,12 @@ public class SolrMetricManager {
   public static final String JVM_REGISTRY =
       REGISTRY_NAME_PREFIX + SolrInfoBean.Group.jvm.toString();
 
-  private final ConcurrentMap<String, MetricRegistry> registries = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, MetricRegistry> registries;
 
-  private final Map<String, Map<String, SolrMetricReporter>> reporters = new HashMap<>();
+  private final Map<String, Map<String, SolrMetricReporter>> reporters;
 
-  private final Lock reportersLock = new ReentrantLock();
-  private final Lock swapLock = new ReentrantLock();
+  private final Lock reportersLock;
+  private final Lock swapLock;
 
   public static final int DEFAULT_CLOUD_REPORTER_PERIOD = 60;
 
@@ -126,6 +126,10 @@ public class SolrMetricManager {
     meterSupplier = MetricSuppliers.meterSupplier(null, null);
     timerSupplier = MetricSuppliers.timerSupplier(null, null);
     histogramSupplier = MetricSuppliers.histogramSupplier(null, null);
+    registries = new ConcurrentHashMap<>();
+    reporters = new HashMap<>();
+    reportersLock = new ReentrantLock();
+    swapLock = new ReentrantLock();
   }
 
   public SolrMetricManager(SolrResourceLoader loader, MetricsConfig metricsConfig) {
@@ -135,6 +139,22 @@ public class SolrMetricManager {
     timerSupplier = MetricSuppliers.timerSupplier(loader, metricsConfig.getTimerSupplier());
     histogramSupplier =
         MetricSuppliers.histogramSupplier(loader, metricsConfig.getHistogramSupplier());
+    registries = new ConcurrentHashMap<>();
+    reporters = new HashMap<>();
+    reportersLock = new ReentrantLock();
+    swapLock = new ReentrantLock();
+  }
+
+  public SolrMetricManager(SolrMetricManager template) {
+    metricsConfig = template.metricsConfig;
+    counterSupplier = template.counterSupplier;
+    meterSupplier = template.meterSupplier;
+    timerSupplier = template.timerSupplier;
+    histogramSupplier = template.histogramSupplier;
+    registries = template.registries;
+    reporters = template.reporters;
+    reportersLock = template.reportersLock;
+    swapLock = template.swapLock;
   }
 
   // for unit tests

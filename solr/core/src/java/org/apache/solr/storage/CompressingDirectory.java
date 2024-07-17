@@ -373,15 +373,15 @@ public class CompressingDirectory extends FSDirectory {
         writeHelper.flush(buffer, true);
         initialBlock.putLong(0, filePos);
         initialBlock.putInt(Long.BYTES, blockMapFooterSize);
-        initialBlock.put(HEADER_SIZE - Integer.BYTES, (byte) COMPRESSION_BLOCK_TYPE.id);
-        initialBlock.put(HEADER_SIZE - Integer.BYTES + 1, (byte) cDesc);
+        initialBlock.put(HEADER_SIZE - Integer.BYTES, (byte) cDesc);
+        initialBlock.put(HEADER_SIZE - Integer.BYTES + 1, (byte) COMPRESSION_BLOCK_TYPE.id);
         writeHelper.write(initialBlock, 0);
       } else {
         if (filePos > 0) {
           buffer.putLong(0, filePos);
           buffer.putInt(Long.BYTES, blockMapFooterSize);
-          buffer.put(HEADER_SIZE - Integer.BYTES, (byte) COMPRESSION_BLOCK_TYPE.id);
-          buffer.put(HEADER_SIZE - Integer.BYTES + 1, (byte) cDesc);
+          buffer.put(HEADER_SIZE - Integer.BYTES, (byte) cDesc);
+          buffer.put(HEADER_SIZE - Integer.BYTES + 1, (byte) COMPRESSION_BLOCK_TYPE.id);
         } else {
           assert filePos == 0 && buffer.position() == HEADER_SIZE;
           buffer.rewind();

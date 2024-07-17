@@ -766,7 +766,7 @@ public class AccessDirectory extends MMapDirectory {
           ext = (cDesc & 0x80) == 0x80;
 
           int cBlockTypeId = guard.getByte(initial, HEADER_SIZE - Integer.BYTES + 1) & 0xff;
-          if (cBlockTypeId != CompressingDirectory.COMPRESSION_TYPE.id) {
+          if (cBlockTypeId != CompressingDirectory.COMPRESSION_BLOCK_TYPE.id) {
             throw new IllegalArgumentException(
                 "unrecognized compression block type id: " + cBlockTypeId);
           }

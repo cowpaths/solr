@@ -629,6 +629,7 @@ public class AccessDirectory extends MMapDirectory {
     private final int lastBlockDecompressedLen;
     private ByteBuffer[] mapped;
     private ByteBuffer[] accessMapped;
+    private final boolean ext;
 
     private final IndexInput accessPopulated;
 
@@ -683,6 +684,7 @@ public class AccessDirectory extends MMapDirectory {
       this.multiFloatViews = parent.multiFloatViews;
       this.multiLongViews = parent.multiLongViews;
       this.multiIntViews = parent.multiIntViews;
+      this.ext = parent.ext;
       ByteBuffer[] parentMapped = parent.mapped;
       this.mapped = new ByteBuffer[parentMapped.length];
       for (int i = parentMapped.length - 1; i >= 0; i--) {
@@ -745,6 +747,7 @@ public class AccessDirectory extends MMapDirectory {
           complete = null;
           priorityLoad = null;
           populatedUpTo = null;
+          ext = false;
         } else {
           ByteBuffer initial = mapped[0];
           length = guard.getLong(initial, 0);
@@ -753,10 +756,15 @@ public class AccessDirectory extends MMapDirectory {
                 "file too long " + Long.toHexString(length) + ", " + source);
           }
           int blockDeltaFooterSize = guard.getInt(initial, Long.BYTES);
-          int cTypeId = guard.getByte(initial, HEADER_SIZE - Integer.BYTES) & 0xff;
+          int cDesc = guard.getByte(initial, HEADER_SIZE - Integer.BYTES) & 0xff;
+          int cTypeId = cDesc & 0x7f;
           if (cTypeId != CompressingDirectory.COMPRESSION_TYPE.id) {
             throw new IllegalArgumentException("unrecognized compression type id: " + cTypeId);
           }
+
+          // most significant byte of compression description is used as a boolean modifier
+          ext = (cDesc & 0x80) == 0x80;
+
           int cBlockTypeId = guard.getByte(initial, HEADER_SIZE - Integer.BYTES + 1) & 0xff;
           if (cBlockTypeId != CompressingDirectory.COMPRESSION_TYPE.id) {
             throw new IllegalArgumentException(
@@ -1001,7 +1009,7 @@ public class AccessDirectory extends MMapDirectory {
       } finally {
         RESERVATION.decrementAndGet();
       }
-      CompressingDirectory.decompress(preBuffer, 0, decompressedLen, decompressBuffer, 0);
+      CompressingDirectory.decompress(preBuffer, 0, decompressedLen, decompressBuffer, 0, ext);
       lazyLoadedBlockBytes.add(decompressedLen);
       return ByteBuffer.wrap(
           decompressBuffer,

@@ -80,6 +80,7 @@ public class CompressingDirectory extends FSDirectory {
   }
 
   static final boolean DEFAULT_USE_DIRECT_IO = false;
+  static final boolean DEFAULT_EXTENDED_WINDOW = true;
 
   static OpenOption getDirectOpenOption() {
     if (ExtendedOpenOption_DIRECT == null) {
@@ -92,6 +93,7 @@ public class CompressingDirectory extends FSDirectory {
   private final int blockSize;
   private final ExecutorService ioExec;
   private final Path directoryPath;
+  private final boolean ext;
   private final boolean useAsyncIO;
   private final boolean useDirectIO;
 
@@ -109,10 +111,11 @@ public class CompressingDirectory extends FSDirectory {
   public CompressingDirectory(
       Path path,
       TeeDirectoryFactory.NodeLevelTeeDirectoryState s,
+      boolean extendedWindow,
       boolean useAsyncIO,
       boolean useDirectIO)
       throws IOException {
-    this(path, s.ioExec, useAsyncIO, useDirectIO);
+    this(path, s.ioExec, extendedWindow, useAsyncIO, useDirectIO);
   }
 
   private static final Map<Integer, DirectBufferPool> POOLS_BY_BLOCK_SIZE =
@@ -141,7 +144,8 @@ public class CompressingDirectory extends FSDirectory {
   private final DirectBufferPool mainBufferPool;
   private final DirectBufferPool initialBlockBufferPool;
 
-  CompressingDirectory(Path path, ExecutorService ioExec, boolean useAsyncIO, boolean useDirectIO)
+  CompressingDirectory(
+      Path path, ExecutorService ioExec, boolean ext, boolean useAsyncIO, boolean useDirectIO)
       throws IOException {
     super(path, FSLockFactory.getDefault());
     this.blockSize = (int) (Files.getFileStore(path).getBlockSize());
@@ -153,6 +157,7 @@ public class CompressingDirectory extends FSDirectory {
             blockSize, (bs) -> new DirectBufferPool(bs, bs, 1));
     this.ioExec = ioExec;
     directoryPath = path;
+    this.ext = ext;
     this.useAsyncIO = useAsyncIO;
     this.useDirectIO = useDirectIO;
   }
@@ -209,6 +214,7 @@ public class CompressingDirectory extends FSDirectory {
         initialBlockBufferPool,
         ioExec,
         Integer.MAX_VALUE,
+        ext,
         useAsyncIO,
         useDirectIO);
   }
@@ -245,9 +251,10 @@ public class CompressingDirectory extends FSDirectory {
 
   static final class DirectIOIndexOutput extends IndexOutput {
     private final byte[] compressBuffer = new byte[COMPRESSION_BLOCK_SIZE];
-    private final LZ4.FastCompressionHashTable ht = new LZ4.FastCompressionHashTable();
+    private final LZ4.HighCompressionHashTable ht = new LZ4.HighCompressionHashTable();
     private final ByteBuffer preBuffer;
     private final AsyncDirectWriteHelper writeHelper;
+    private final boolean ext;
     private ByteBuffer buffer;
     private final BytesOut blockDeltas = new BytesOut();
     private int prevBlockSize = BLOCK_SIZE_ESTIMATE; // estimate 50% compression
@@ -285,6 +292,7 @@ public class CompressingDirectory extends FSDirectory {
         DirectBufferPool initialBlockBufferPool,
         ExecutorService ioExec,
         int expectLength,
+        boolean ext,
         boolean useAsyncIO,
         boolean useDirectIO)
         throws IOException {
@@ -306,6 +314,7 @@ public class CompressingDirectory extends FSDirectory {
         writeHelper.startSync();
       }
       isOpen = true;
+      this.ext = ext;
     }
 
     @Override
@@ -338,7 +347,7 @@ public class CompressingDirectory extends FSDirectory {
 
       preBuffer.rewind();
 
-      LZ4.compressWithDictionary(compressBuffer, 0, 0, COMPRESSION_BLOCK_SIZE, out, ht);
+      LZ4.compressWithDictionary(compressBuffer, 0, 0, COMPRESSION_BLOCK_SIZE, out, ht, ext);
       int nextBlockSize = out.resetSize();
       blockDeltas.writeZInt(nextBlockSize - prevBlockSize);
       prevBlockSize = nextBlockSize;
@@ -352,22 +361,27 @@ public class CompressingDirectory extends FSDirectory {
       int preBufferRemaining = preBuffer.remaining();
       if (preBufferRemaining > 0) {
         filePos += preBufferRemaining;
-        LZ4.compressWithDictionary(compressBuffer, 0, 0, preBufferRemaining, out, ht);
+        LZ4.compressWithDictionary(compressBuffer, 0, 0, preBufferRemaining, out, ht, ext);
       }
       int blockMapFooterSize = blockDeltas.transferTo(out);
+      int cDesc = COMPRESSION_TYPE.id & 0x7f;
+      if (ext) {
+        // if using extended lookback, set the ext feature bit
+        cDesc |= 0x80;
+      }
       if (wroteBlock) {
         writeHelper.flush(buffer, true);
         initialBlock.putLong(0, filePos);
         initialBlock.putInt(Long.BYTES, blockMapFooterSize);
         initialBlock.put(HEADER_SIZE - Integer.BYTES, (byte) COMPRESSION_BLOCK_TYPE.id);
-        initialBlock.put(HEADER_SIZE - Integer.BYTES + 1, (byte) COMPRESSION_TYPE.id);
+        initialBlock.put(HEADER_SIZE - Integer.BYTES + 1, (byte) cDesc);
         writeHelper.write(initialBlock, 0);
       } else {
         if (filePos > 0) {
           buffer.putLong(0, filePos);
           buffer.putInt(Long.BYTES, blockMapFooterSize);
           buffer.put(HEADER_SIZE - Integer.BYTES, (byte) COMPRESSION_BLOCK_TYPE.id);
-          buffer.put(HEADER_SIZE - Integer.BYTES + 1, (byte) COMPRESSION_TYPE.id);
+          buffer.put(HEADER_SIZE - Integer.BYTES + 1, (byte) cDesc);
         } else {
           assert filePos == 0 && buffer.position() == HEADER_SIZE;
           buffer.rewind();
@@ -493,14 +507,55 @@ public class CompressingDirectory extends FSDirectory {
 
   private static final int MIN_MATCH = 4;
 
+  private static int readVInt(byte[] compressed, int off, int[] size) throws IOException {
+    byte b = compressed[off++];
+    if (b >= 0) {
+      size[0] = 1;
+      return b;
+    }
+    int i = b & 0x7F;
+    b = compressed[off++];
+    i |= (b & 0x7F) << 7;
+    if (b >= 0) {
+      size[0] = 2;
+      return i;
+    }
+    b = compressed[off++];
+    i |= (b & 0x7F) << 14;
+    if (b >= 0) {
+      size[0] = 3;
+      return i;
+    }
+    b = compressed[off++];
+    i |= (b & 0x7F) << 21;
+    if (b >= 0) {
+      size[0] = 4;
+      return i;
+    }
+    b = compressed[off];
+    // Warning: the next ands use 0x0F / 0xF0 - beware copy/paste errors:
+    i |= (b & 0x0F) << 28;
+    if ((b & 0xF0) == 0) {
+      size[0] = 5;
+      return i;
+    }
+    throw new IOException("Invalid vInt detected (too many bits)");
+  }
+
   /**
    * Copied from {@link LZ4#decompress(DataInput, int, byte[], int)} because it's faster
    * decompressing from byte[] than from {@link DataInput}.
    */
   public static int decompress(
-      final byte[] compressed, int srcPos, final int decompressedLen, final byte[] dest, int dOff)
+      final byte[] compressed,
+      int srcPos,
+      final int decompressedLen,
+      final byte[] dest,
+      int dOff,
+      boolean ext)
       throws IOException {
     final int destEnd = dOff + decompressedLen;
+    final int[] vintSize = ext ? new int[1] : null;
 
     do {
       // literals
@@ -525,7 +580,13 @@ public class CompressingDirectory extends FSDirectory {
       }
 
       // matchs
-      final int matchDec = ((compressed[srcPos++] & 0xFF) | (compressed[srcPos++] << 8)) & 0xFFFF;
+      final int matchDec;
+      if (ext) {
+        matchDec = readVInt(compressed, srcPos, vintSize);
+        srcPos += vintSize[0];
+      } else {
+        matchDec = ((compressed[srcPos++] & 0xFF) | (compressed[srcPos++] << 8)) & 0xFFFF;
+      }
       assert matchDec > 0;
 
       int matchLen = token & 0x0F;

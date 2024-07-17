@@ -101,7 +101,7 @@ public class TeeDirectory extends BaseDirectory {
         content -> {
           assert content == naive;
           content.close();
-          content = new CompressingDirectory(compressedPath, ownState, true, true);
+          content = new CompressingDirectory(compressedPath, ownState, true, true, true);
           return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
         };
   }

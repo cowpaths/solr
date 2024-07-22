@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import java.util.Map;
 import org.apache.solr.SolrTestCaseJ4;
@@ -174,6 +175,7 @@ public class RequestHandlerBaseTest extends SolrTestCaseJ4 {
     when(metricsContext.timer(any(), any())).thenReturn(mock(Timer.class));
     when(metricsContext.meter(any(), any())).then(invocation -> mock(Meter.class));
     when(metricsContext.counter(any(), any())).thenReturn(mock(Counter.class));
+    when(metricsContext.getMetricRegistry()).thenReturn(mock(MetricRegistry.class));
 
     return new RequestHandlerBase.HandlerMetrics(metricsContext, "someBaseMetricPath");
   }

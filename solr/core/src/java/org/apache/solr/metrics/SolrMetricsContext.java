@@ -176,6 +176,10 @@ public class SolrMetricsContext {
     return metricManager.histogram(this, registryName, metricName, metricPath);
   }
 
+  public Histogram maxHistogram(String metricName, String... metricPath) {
+    return metricManager.maxHistogram(this, registryName, metricName, metricPath);
+  }
+
   /**
    * Get the {@link MetricRegistry} instance that is used for registering metrics in this context.
    */

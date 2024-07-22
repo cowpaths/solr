@@ -119,6 +119,7 @@ public class SolrMetricManager {
   private final MetricRegistry.MetricSupplier<Meter> meterSupplier;
   private final MetricRegistry.MetricSupplier<Timer> timerSupplier;
   private final MetricRegistry.MetricSupplier<Histogram> histogramSupplier;
+  private final MetricRegistry.MetricSupplier<Histogram> maxHistogramSupplier;
 
   public SolrMetricManager() {
     metricsConfig = new MetricsConfig.MetricsConfigBuilder().build();
@@ -126,6 +127,7 @@ public class SolrMetricManager {
     meterSupplier = MetricSuppliers.meterSupplier(null, null);
     timerSupplier = MetricSuppliers.timerSupplier(null, null);
     histogramSupplier = MetricSuppliers.histogramSupplier(null, null);
+    maxHistogramSupplier = MetricSuppliers.maxHistogramSupplier(null, null);
     registries = new ConcurrentHashMap<>();
     reporters = new HashMap<>();
     reportersLock = new ReentrantLock();
@@ -139,6 +141,8 @@ public class SolrMetricManager {
     timerSupplier = MetricSuppliers.timerSupplier(loader, metricsConfig.getTimerSupplier());
     histogramSupplier =
         MetricSuppliers.histogramSupplier(loader, metricsConfig.getHistogramSupplier());
+    maxHistogramSupplier =
+        MetricSuppliers.maxHistogramSupplier(loader, metricsConfig.getMaxHistogramSupplier());
     registries = new ConcurrentHashMap<>();
     reporters = new HashMap<>();
     reportersLock = new ReentrantLock();
@@ -151,6 +155,7 @@ public class SolrMetricManager {
     meterSupplier = template.meterSupplier;
     timerSupplier = template.timerSupplier;
     histogramSupplier = template.histogramSupplier;
+    maxHistogramSupplier = template.maxHistogramSupplier;
     registries = template.registries;
     reporters = template.reporters;
     reportersLock = template.reportersLock;
@@ -722,6 +727,15 @@ public class SolrMetricManager {
       context.registerMetricName(name);
     }
     return registry(registry).histogram(name, histogramSupplier);
+  }
+
+  public Histogram maxHistogram(
+      SolrMetricsContext context, String registry, String metricName, String... metricPath) {
+    final String name = mkName(metricName, metricPath);
+    if (context != null) {
+      context.registerMetricName(name);
+    }
+    return registry(registry).histogram(name, maxHistogramSupplier);
   }
 
   /**

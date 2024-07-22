@@ -18,11 +18,9 @@ package org.apache.solr.handler;
 
 import static org.apache.solr.core.RequestParams.USEPARAM;
 
-import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import java.lang.invoke.MethodHandles;
 import java.util.Collection;
@@ -40,8 +38,6 @@ import org.apache.solr.core.MetricsConfig;
 import org.apache.solr.core.PluginBag;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.MaxHistogram;
-import org.apache.solr.metrics.MetricSuppliers;
 import org.apache.solr.metrics.SolrDelegateMetricManager;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
@@ -200,20 +196,7 @@ public abstract class RequestHandlerBase
       requests = solrMetricsContext.counter("requests", metricPath);
       requestTimes = solrMetricsContext.timer("requestTimes", metricPath);
       totalTime = solrMetricsContext.counter("totalTime", metricPath);
-
-      // manually, since we can't use the default histogram supplier
-      String concurrencyMetricName = SolrMetricManager.mkName("concurrency", metricPath);
-      solrMetricsContext.registerMetricName(concurrencyMetricName);
-      SolrMetricManager metricMgr = solrMetricsContext.getMetricManager();
-      PluginInfo timerSupplier =
-          metricMgr == null ? null : metricMgr.getMetricsConfig().getTimerSupplier();
-      Clock clock = MetricSuppliers.getClock(timerSupplier, MetricSuppliers.CLOCK);
-      MetricRegistry.MetricSupplier<Histogram> concurrencyMetricSupplier =
-          () -> MaxHistogram.newInstance(clock);
-      concurrency =
-          solrMetricsContext
-              .getMetricRegistry()
-              .histogram(concurrencyMetricName, concurrencyMetricSupplier);
+      concurrency = solrMetricsContext.maxHistogram("concurrency", metricPath);
     }
   }
 

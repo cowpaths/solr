@@ -17,7 +17,7 @@
 package org.apache.solr.metrics;
 
 import com.codahale.metrics.Clock;
-import com.codahale.metrics.SlidingTimeWindowReservoir;
+import com.codahale.metrics.SlidingTimeWindowArrayReservoir;
 import com.codahale.metrics.Snapshot;
 import java.io.Closeable;
 import java.util.Random;
@@ -37,7 +37,7 @@ public class MaxHistogramTest extends SolrTestCaseJ4 {
     MaxHistogram h =
         MaxHistogram.newInstance(
             Clock.defaultClock(),
-            (clock) -> new SlidingTimeWindowReservoir(5, TimeUnit.SECONDS, clock));
+            (clock) -> new SlidingTimeWindowArrayReservoir(5, TimeUnit.SECONDS, clock));
     ExecutorService exec = ExecutorUtil.newMDCAwareCachedThreadPool("maxHist");
     Random r = random();
     int nThreads = r.nextInt(50);

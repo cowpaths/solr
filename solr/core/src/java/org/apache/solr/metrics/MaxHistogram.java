@@ -1,7 +1,6 @@
 package org.apache.solr.metrics;
 
 import com.codahale.metrics.Clock;
-import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Reservoir;
 import com.codahale.metrics.Snapshot;
@@ -25,9 +24,6 @@ import java.util.function.Function;
 public class MaxHistogram extends Histogram {
 
   private static final long INTERVAL = TimeUnit.SECONDS.toNanos(1);
-
-  private static final Function<Clock, Reservoir> DEFAULT_RESERVOIR_FUNCTION =
-      (clock) -> new ExponentiallyDecayingReservoir(1028, 0.015, clock);
 
   private final AtomicLong val = new AtomicLong();
 
@@ -59,23 +55,15 @@ public class MaxHistogram extends Histogram {
     }
   }
 
-  public static MaxHistogram newInstance() {
-    return newInstance(Clock.defaultClock(), DEFAULT_RESERVOIR_FUNCTION);
-  }
-
-  public static MaxHistogram newInstance(Clock defaultClock) {
-    return newInstance(defaultClock, DEFAULT_RESERVOIR_FUNCTION);
-  }
-
   public static MaxHistogram newInstance(
       Clock clock, Function<Clock, Reservoir> reservoirFunction) {
     RelayClock relayClock = new RelayClock(clock.getTick());
     return new MaxHistogram(reservoirFunction.apply(relayClock), relayClock, clock);
   }
 
-  private MaxHistogram(Reservoir reservoir, RelayClock relayClock, Clock clock) {
+  public MaxHistogram(Reservoir reservoir, Clock relayClock, Clock clock) {
     super(reservoir);
-    this.relayClock = relayClock;
+    this.relayClock = (RelayClock) relayClock;
     this.clock = clock;
     this.lastUpdate = new AtomicLong(clock.getTick());
   }

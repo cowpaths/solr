@@ -51,7 +51,7 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrConfig.UpdateHandlerInfo;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.SolrDelegateMetricManager;
+import org.apache.solr.metrics.SolrDelegateRegistryMetricsContext;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
@@ -201,12 +201,11 @@ public class DirectUpdateHandler2 extends UpdateHandler
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     if (core.getSolrConfig().getUpdateHandlerInfo().aggregateNodeLevelMetricsEnabled) {
       this.solrMetricsContext =
-          new SolrMetricsContext(
-              SolrDelegateMetricManager.delegatingMetricManager(
-                  parentContext.getMetricManager(),
-                  SolrMetricManager.getRegistryName(SolrInfoBean.Group.node)),
+          new SolrDelegateRegistryMetricsContext(
+              parentContext.getMetricManager(),
               parentContext.getRegistryName(),
-              SolrMetricProducer.getUniqueMetricTag(this, parentContext.getTag()));
+              SolrMetricProducer.getUniqueMetricTag(this, parentContext.getTag()),
+              SolrMetricManager.getRegistryName(SolrInfoBean.Group.node));
     } else {
       this.solrMetricsContext = parentContext.getChildContext(this);
     }

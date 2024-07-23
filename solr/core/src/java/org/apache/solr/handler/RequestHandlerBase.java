@@ -38,7 +38,7 @@ import org.apache.solr.core.MetricsConfig;
 import org.apache.solr.core.PluginBag;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.SolrDelegateMetricManager;
+import org.apache.solr.metrics.SolrDelegateRegistryMetricsContext;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
@@ -155,12 +155,11 @@ public abstract class RequestHandlerBase
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     if (aggregateNodeLevelMetricsEnabled) {
       this.solrMetricsContext =
-          new SolrMetricsContext(
-              SolrDelegateMetricManager.delegatingMetricManager(
-                  parentContext.getMetricManager(),
-                  SolrMetricManager.getRegistryName(SolrInfoBean.Group.node)),
+          new SolrDelegateRegistryMetricsContext(
+              parentContext.getMetricManager(),
               parentContext.getRegistryName(),
-              SolrMetricProducer.getUniqueMetricTag(this, parentContext.getTag()));
+              SolrMetricProducer.getUniqueMetricTag(this, parentContext.getTag()),
+              SolrMetricManager.getRegistryName(SolrInfoBean.Group.node));
     } else {
       this.solrMetricsContext = parentContext.getChildContext(this);
     }

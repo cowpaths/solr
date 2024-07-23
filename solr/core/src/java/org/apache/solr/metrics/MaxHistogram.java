@@ -23,7 +23,8 @@ import java.util.function.Function;
  */
 public class MaxHistogram extends Histogram {
 
-  private static final long INTERVAL = TimeUnit.SECONDS.toNanos(1);
+  private static final long INTERVAL_SECONDS = 1;
+  private static final long INTERVAL = TimeUnit.SECONDS.toNanos(INTERVAL_SECONDS);
 
   private final AtomicLong val = new AtomicLong();
 
@@ -32,6 +33,8 @@ public class MaxHistogram extends Histogram {
   private volatile long lastValue = 0;
 
   private final AtomicLong maxSinceLastUpdate = new AtomicLong(0);
+
+  private final long maxBackdateNanos;
 
   private final Clock clock;
 
@@ -56,13 +59,25 @@ public class MaxHistogram extends Histogram {
   }
 
   public static MaxHistogram newInstance(
-      Clock clock, Function<Clock, Reservoir> reservoirFunction) {
+      int maxBackdateSeconds, Clock clock, Function<Clock, Reservoir> reservoirFunction) {
     RelayClock relayClock = new RelayClock(clock.getTick());
-    return new MaxHistogram(reservoirFunction.apply(relayClock), relayClock, clock);
+    return new MaxHistogram(
+        maxBackdateSeconds, reservoirFunction.apply(relayClock), relayClock, clock);
   }
 
-  public MaxHistogram(Reservoir reservoir, Clock relayClock, Clock clock) {
+  public MaxHistogram(int maxBackdateSeconds, Reservoir reservoir, Clock relayClock, Clock clock) {
     super(reservoir);
+    if (maxBackdateSeconds == -1) {
+      this.maxBackdateNanos = Long.MAX_VALUE;
+    } else if (maxBackdateSeconds >= INTERVAL_SECONDS) {
+      this.maxBackdateNanos = TimeUnit.SECONDS.toNanos(maxBackdateSeconds);
+    } else {
+      throw new IllegalArgumentException(
+          "maxBackdate must be -1 (unlimited) or >= "
+              + INTERVAL_SECONDS
+              + "; found "
+              + maxBackdateSeconds);
+    }
     this.relayClock = (RelayClock) relayClock;
     this.clock = clock;
     this.lastUpdate = new AtomicLong(clock.getTick());
@@ -79,6 +94,13 @@ public class MaxHistogram extends Histogram {
     long now = clock.getTick();
     long diff = now - lastUpdate;
     if (diff >= INTERVAL) {
+      if (diff > maxBackdateNanos) {
+        // only update values as far back as `maxBackdateNanos`.
+        // This prevents a potential update storm after the value
+        // has not been updated in some time.
+        diff = maxBackdateNanos;
+        lastUpdate = now - maxBackdateNanos;
+      }
       int intervalCount = Math.toIntExact(diff / INTERVAL);
       long backdate = lastUpdate + (INTERVAL * intervalCount);
       if (this.lastUpdate.compareAndSet(lastUpdate, backdate)) {

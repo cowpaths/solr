@@ -36,6 +36,7 @@ public class MaxHistogramTest extends SolrTestCaseJ4 {
   public void test() throws Exception {
     MaxHistogram h =
         MaxHistogram.newInstance(
+            Integer.MAX_VALUE,
             Clock.defaultClock(),
             (clock) -> new SlidingTimeWindowArrayReservoir(5, TimeUnit.SECONDS, clock));
     ExecutorService exec = ExecutorUtil.newMDCAwareCachedThreadPool("maxHist");

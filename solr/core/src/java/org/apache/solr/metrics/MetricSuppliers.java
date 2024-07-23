@@ -315,7 +315,21 @@ public class MetricSuppliers {
     @Override
     public MaxHistogram newMetric() {
       Clock clock = MetricSuppliers.getClock(info, CLOCK);
-      return MaxHistogram.newInstance(clock, (c) -> MetricSuppliers.getReservoir(loader, info, c));
+      int maxBackdateSeconds;
+      Number tmp;
+      if (info == null || (tmp = (Number) info.initArgs.get("maxBackdateSeconds")) == null) {
+        if (info == null || (tmp = (Number) info.initArgs.get(RESERVOIR_WINDOW)) == null) {
+          // use default window if no explicitly configured window is available
+          maxBackdateSeconds = (int) DEFAULT_WINDOW;
+        } else {
+          // align to reservoir window if possible
+          maxBackdateSeconds = Math.toIntExact(Math.min(Integer.MAX_VALUE, tmp.longValue()));
+        }
+      } else {
+        maxBackdateSeconds = tmp.intValue();
+      }
+      return MaxHistogram.newInstance(
+          maxBackdateSeconds, clock, (c) -> MetricSuppliers.getReservoir(loader, info, c));
     }
   }
 

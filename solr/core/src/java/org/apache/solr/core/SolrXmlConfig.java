@@ -672,7 +672,8 @@ public class SolrXmlConfig {
     builder.setMeterSupplier(getPluginInfo(metrics.get("suppliers").get("meter"), false));
     builder.setTimerSupplier(getPluginInfo(metrics.get("suppliers").get("timer"), false));
     builder.setHistogramSupplier(getPluginInfo(metrics.get("suppliers").get("histogram"), false));
-    builder.setMaxHistogramSupplier(getPluginInfo(metrics.get("suppliers").get("maxHistogram"), false));
+    builder.setMaxHistogramSupplier(
+        getPluginInfo(metrics.get("suppliers").get("maxHistogram"), false));
 
     if (metrics.get("missingValues").exists()) {
       NamedList<Object> missingValues = DOMUtil.childNodesToNamedList(metrics.get("missingValues"));

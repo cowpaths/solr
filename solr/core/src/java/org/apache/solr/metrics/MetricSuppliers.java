@@ -296,12 +296,22 @@ public class MetricSuppliers {
     }
   }
 
-  /** Default supplier of {@link Histogram} instances, with configurable reservoir. */
+  /** interval at which {@link MaxHistogram} will record values */
+  private static final String INTERVAL_MILLIS = "intervalMillis";
+  /** limits value backfill of {@link MaxHistogram} */
+  private static final String MAX_BACKDATE_SECONDS = "maxBackdateSeconds";
+
+  private static final int DEFAULT_INTERVAL_MILLIS = 1000; // default to 1s
+
+  /**
+   * Default supplier of {@link Histogram} instances suitable to use as a {@link MaxHistogram}, with
+   * configurable reservoir.
+   */
   public static final class DefaultMaxHistogramSupplier
       implements MetricRegistry.MetricSupplier<Histogram>, PluginInfoInitialized {
 
     private PluginInfo info;
-    private SolrResourceLoader loader;
+    private final SolrResourceLoader loader;
 
     public DefaultMaxHistogramSupplier(SolrResourceLoader loader) {
       this.loader = loader;
@@ -317,7 +327,7 @@ public class MetricSuppliers {
       Clock clock = MetricSuppliers.getClock(info, CLOCK);
       int maxBackdateSeconds;
       Number tmp;
-      if (info == null || (tmp = (Number) info.initArgs.get("maxBackdateSeconds")) == null) {
+      if (info == null || (tmp = (Number) info.initArgs.get(MAX_BACKDATE_SECONDS)) == null) {
         if (info == null || (tmp = (Number) info.initArgs.get(RESERVOIR_WINDOW)) == null) {
           // use default window if no explicitly configured window is available
           maxBackdateSeconds = (int) DEFAULT_WINDOW;
@@ -328,8 +338,17 @@ public class MetricSuppliers {
       } else {
         maxBackdateSeconds = tmp.intValue();
       }
+      int intervalMillis;
+      if (info == null || (tmp = (Number) info.initArgs.get(INTERVAL_MILLIS)) == null) {
+        intervalMillis = DEFAULT_INTERVAL_MILLIS;
+      } else {
+        intervalMillis = tmp.intValue();
+      }
       return MaxHistogram.newInstance(
-          maxBackdateSeconds, clock, (c) -> MetricSuppliers.getReservoir(loader, info, c));
+          intervalMillis,
+          maxBackdateSeconds,
+          clock,
+          (c) -> MetricSuppliers.getReservoir(loader, info, c));
     }
   }
 
@@ -476,7 +495,8 @@ public class MetricSuppliers {
   }
 
   /**
-   * Create a {@link Histogram} supplier.
+   * Create a {@link Histogram} supplier that supplies histograms suitable to use as a {@link
+   * MaxHistogram}.
    *
    * @param info plugin configuration, or null for default
    * @return configured supplier instance, or default instance if configuration was invalid
@@ -497,7 +517,7 @@ public class MetricSuppliers {
         try {
           supplier = loader.newInstance(info.className, MetricRegistry.MetricSupplier.class);
         } catch (Exception e) {
-          log.warn("Error creating custom Histogram supplier (will use default): {}", info, e);
+          log.warn("Error creating custom MaxHistogram supplier (will use default): {}", info, e);
           supplier = new DefaultMaxHistogramSupplier(loader);
         }
       }

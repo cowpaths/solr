@@ -307,6 +307,8 @@ public class PrometheusMetricsServletTest {
             + "      \"UPDATE.updateHandler.commits\":{\"count\":33},"
             + "      \"UPDATE.updateHandler.cumulativeDeletesById\":{\"count\":14},\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesByQuery\":{\"count\":15},\n"
+            + "      \"UPDATE.updateHandler.cumulativeAdds\":{\"count\":150},\n"
+            + "      \"UPDATE.updateHandler.cumulativeErrors\":{\"count\":1},\n"
             + "      \"UPDATE.updateHandler.softAutoCommits\":16},\n"
             + "    \"solr.core.testdrive.shard1.replica_n1\":{\n"
             + "      \"INDEX.merge.errors\":17,\n"
@@ -328,6 +330,8 @@ public class PrometheusMetricsServletTest {
             + "      \"UPDATE.updateHandler.commits\":{\"count\":34},"
             + "      \"UPDATE.updateHandler.cumulativeDeletesById\":{\"count\":30},\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesByQuery\":{\"count\":31},\n"
+            + "      \"UPDATE.updateHandler.cumulativeAdds\":{\"count\":191},\n"
+            + "      \"UPDATE.updateHandler.cumulativeErrors\":{\"count\":3},\n"
             + "      \"UPDATE.updateHandler.softAutoCommits\":32}}}";
     String output =
         "# HELP merges_major cumulative number of major merges across cores\n"
@@ -374,7 +378,13 @@ public class PrometheusMetricsServletTest {
             + "deletes_by_id 44\n"
             + "# HELP deletes_by_query cumulative number of deletes by query across cores\n"
             + "# TYPE deletes_by_query counter\n"
-            + "deletes_by_query 46\n";
+            + "deletes_by_query 46\n"
+            + "# HELP doc_adds cumulative number of docs added across cores\n"
+            + "# TYPE doc_adds counter\n"
+            + "doc_adds 341\n"
+            + "# HELP update_errors cumulative number of errors during updates across cores\n"
+            + "# TYPE update_errors counter\n"
+            + "update_errors 4\n";
     assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(), json, 14, output);
   }
 
@@ -396,6 +406,8 @@ public class PrometheusMetricsServletTest {
             + "      \"UPDATE.updateHandler.autoCommits\":4,\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesById\":{\"count\":5},\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesByQuery\":{\"count\":6},\n"
+            + "      \"UPDATE.updateHandler.cumulativeAdds\":{\"count\":0},\n"
+            + "      \"UPDATE.updateHandler.cumulativeErrors\":{\"count\":0},\n"
             + "      \"UPDATE.updateHandler.softAutoCommits\":7},\n"
             + "    \"solr.core.testdrive.shard1.replica_n1\":{\n"
             + "      \"QUERY./get.requestTimes\":{\"count\":32},\n"
@@ -407,6 +419,8 @@ public class PrometheusMetricsServletTest {
             + "      \"UPDATE.updateHandler.autoCommits\":11,\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesById\":{\"count\":12},\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesByQuery\":{\"count\":13},\n"
+            + "      \"UPDATE.updateHandler.cumulativeAdds\":{\"count\":0},\n"
+            + "      \"UPDATE.updateHandler.cumulativeErrors\":{\"count\":0},\n"
             + "      \"UPDATE.updateHandler.softAutoCommits\":14},\n"
             + "    \"solr.core.loadtest.shard1_0.replica_n7\":{\n"
             + "      \"QUERY./get.requestTimes\":{\"count\":35},\n"
@@ -418,6 +432,8 @@ public class PrometheusMetricsServletTest {
             + "      \"UPDATE.updateHandler.autoCommits\":18,\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesById\":{\"count\":19},\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesByQuery\":{\"count\":20},\n"
+            + "      \"UPDATE.updateHandler.cumulativeAdds\":{\"count\":0},\n"
+            + "      \"UPDATE.updateHandler.cumulativeErrors\":{\"count\":0},\n"
             + "      \"UPDATE.updateHandler.softAutoCommits\":21},\n"
             + "    \"solr.core.local.shard1.replica_n1\":{\n"
             + "      \"QUERY./get.requestTimes\":{\"count\":38},\n"
@@ -429,6 +445,8 @@ public class PrometheusMetricsServletTest {
             + "      \"UPDATE.updateHandler.autoCommits\":25,\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesById\":{\"count\":26},\n"
             + "      \"UPDATE.updateHandler.cumulativeDeletesByQuery\":{\"count\":27},\n"
+            + "      \"UPDATE.updateHandler.cumulativeAdds\":{\"count\":0},\n"
+            + "      \"UPDATE.updateHandler.cumulativeErrors\":{\"count\":0},\n"
             + "      \"UPDATE.updateHandler.softAutoCommits\":28}}}";
     String output =
         "# HELP merges_major cumulative number of major merges across cores\n"
@@ -475,7 +493,13 @@ public class PrometheusMetricsServletTest {
             + "deletes_by_id 62\n"
             + "# HELP deletes_by_query cumulative number of deletes by query across cores\n"
             + "# TYPE deletes_by_query counter\n"
-            + "deletes_by_query 66\n";
+            + "deletes_by_query 66\n"
+            + "# HELP doc_adds cumulative number of docs added across cores\n"
+            + "# TYPE doc_adds counter\n"
+            + "doc_adds 0\n"
+            + "# HELP update_errors cumulative number of errors during updates across cores\n"
+            + "# TYPE update_errors counter\n"
+            + "update_errors 0\n";
     assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(), json, 25, output);
   }
 }

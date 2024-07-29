@@ -65,6 +65,7 @@ public class QueryRateLimiter extends RequestRateLimiter {
       rateLimiterMeta = null;
     } else {
       rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
+      rateLimiterMeta.configBytes = configInput;
     }
 
     if (rateLimiterConfig == null || rateLimiterConfig.shouldUpdate(rateLimiterMeta)) {

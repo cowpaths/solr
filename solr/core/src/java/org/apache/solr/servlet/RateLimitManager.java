@@ -74,7 +74,7 @@ public class RateLimitManager implements ClusterPropertiesListener {
             if (newConfig == null) {
               return v;
             } else {
-              return new QueryRateLimiter(newConfig);
+              return new QueryRateLimiter(newConfig, newConfig.definition.configBytes);
             }
           } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -183,10 +183,12 @@ public class RateLimitManager implements ClusterPropertiesListener {
 
     public RateLimitManager build() {
       RateLimitManager rateLimitManager = new RateLimitManager();
-
-      rateLimitManager.registerRequestRateLimiter(
-          new QueryRateLimiter(solrZkClient), SolrRequest.SolrRequestType.QUERY);
-
+      Map<SolrRequest.SolrRequestType, QueryRateLimiter> configs =
+          QueryRateLimiter.read(solrZkClient);
+      for (Map.Entry<SolrRequest.SolrRequestType, QueryRateLimiter> e : configs.entrySet()) {
+        rateLimitManager.registerRequestRateLimiter(
+            e.getValue(), SolrRequest.SolrRequestType.QUERY);
+      }
       return rateLimitManager;
     }
   }

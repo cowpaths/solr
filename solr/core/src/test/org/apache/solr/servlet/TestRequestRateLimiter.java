@@ -615,33 +615,36 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
       }
     }
   }
+
+  @Test
   public void testMultipleRequestRateLimiters() throws Exception {
     Map<String, Object> props = new HashMap<>(cluster.getZkStateReader().getClusterProperties());
     props.put(
-            RL_CONFIG_KEY,
-            Utils.fromJSONString(
-                    "[\n"
-                            + "  {\n"
-                            + "    \"type\": \"QUERY\",\n"
-                            + "    \"enabled\": true,\n"
-                            + "    \"guaranteedSlots\": 5,\n"
-                            + "    \"allowedRequests\": 20,\n"
-                            + "    \"slotAcquisitionTimeoutInMS\": 70\n"
-                            + "  },\n"
-                            + "  {\n"
-                            + "    \"type\": \"UPDATE\",\n"
-                            + "    \"enabled\": true,\n"
-                            + "    \"guaranteedSlots\": 8,\n"
-                            + "    \"allowedRequests\": 10,\n"
-                            + "    \"slotAcquisitionTimeoutInMS\": 70\n"
-                            + "  }\n"
-                            + "]"));
-    if(cluster.getZkClient().exists(ZkStateReader.CLUSTER_PROPS, true)){
+        RL_CONFIG_KEY,
+        Utils.fromJSONString(
+            "[\n"
+                + "  {\n"
+                + "    \"type\": \"QUERY\",\n"
+                + "    \"enabled\": true,\n"
+                + "    \"guaranteedSlots\": 5,\n"
+                + "    \"allowedRequests\": 20,\n"
+                + "    \"slotAcquisitionTimeoutInMS\": 70\n"
+                + "  },\n"
+                + "  {\n"
+                + "    \"type\": \"UPDATE\",\n"
+                + "    \"enabled\": true,\n"
+                + "    \"guaranteedSlots\": 8,\n"
+                + "    \"allowedRequests\": 10,\n"
+                + "    \"slotAcquisitionTimeoutInMS\": 70\n"
+                + "  }\n"
+                + "]"));
+    if (cluster.getZkClient().exists(ZkStateReader.CLUSTER_PROPS, true)) {
       cluster.getZkClient().setData(ZkStateReader.CLUSTER_PROPS, Utils.toJSON(props), true);
 
     } else {
-      cluster.getZkClient().create(ZkStateReader.CLUSTER_PROPS,
-              Utils.toJSON(props), CreateMode.PERSISTENT, true);
+      cluster
+          .getZkClient()
+          .create(ZkStateReader.CLUSTER_PROPS, Utils.toJSON(props), CreateMode.PERSISTENT, true);
     }
   }
 }

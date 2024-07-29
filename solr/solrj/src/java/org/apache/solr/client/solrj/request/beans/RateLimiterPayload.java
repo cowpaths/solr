@@ -36,6 +36,8 @@ public class RateLimiterPayload implements ReflectMapWriter {
 
   @JsonProperty public String type = SolrRequest.SolrRequestType.QUERY.toString();
 
+  public byte[] configBytes;
+
   public RateLimiterPayload copy() {
     RateLimiterPayload result = new RateLimiterPayload();
 

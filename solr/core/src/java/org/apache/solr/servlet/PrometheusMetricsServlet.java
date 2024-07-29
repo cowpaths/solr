@@ -566,7 +566,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     CoresMetricsApiCaller() {
       super(
           "core",
-          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits",
+          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits,UPDATE.updateHandler.cumulativeAdds,UPDATE.updateHandler.cumulativeDeletesById,UPDATE.updateHandler.cumulativeErrors",
           "count");
     }
 
@@ -612,6 +612,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       long deleteById = 0;
       long deleteByQuery = 0;
       long softAutoCommit = 0;
+      long adds = 0;
+      long updateErrors = 0;
       for (JsonNode core : metrics) {
         mergeMajor += getNumber(core, "INDEX.merge.major", property).longValue();
         mergeMajorDocs += getNumber(core, "INDEX.merge.major.running.docs").longValue();
@@ -629,6 +631,9 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
             getNumber(core, "UPDATE.updateHandler.cumulativeDeletesById", property).longValue();
         deleteByQuery +=
             getNumber(core, "UPDATE.updateHandler.cumulativeDeletesByQuery", property).longValue();
+        adds += getNumber(core, "UPDATE.updateHandler.cumulativeAdds", property).longValue();
+        updateErrors +=
+            getNumber(core, "UPDATE.updateHandler.cumulativeErrors", property).longValue();
         softAutoCommit += getNumber(core, "UPDATE.updateHandler.softAutoCommits").longValue();
       }
       results.add(
@@ -721,6 +726,18 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               PrometheusMetricType.COUNTER,
               "cumulative number of deletes by query across cores",
               deleteByQuery));
+      results.add(
+          new PrometheusMetric(
+              "doc_adds",
+              PrometheusMetricType.COUNTER,
+              "cumulative number of docs added across cores",
+              adds));
+      results.add(
+          new PrometheusMetric(
+              "update_errors",
+              PrometheusMetricType.COUNTER,
+              "cumulative number of errors during updates across cores",
+              updateErrors));
     }
   }
 

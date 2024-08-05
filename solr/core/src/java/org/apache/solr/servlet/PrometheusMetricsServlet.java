@@ -33,10 +33,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javax.servlet.ServletOutputStream;
@@ -50,6 +52,7 @@ import org.apache.solr.client.solrj.cloud.SolrCloudManager;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.storage.CompressingDirectory;
 import org.slf4j.Logger;
@@ -75,6 +78,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               new OsMetricsApiCaller(),
               new ThreadMetricsApiCaller(),
               new StatusCodeMetricsApiCaller(),
+              new AggregateMetricsApiCaller(),
               new CoresMetricsApiCaller()));
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
@@ -559,6 +563,83 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
+  enum CoreMetric {
+    SELECT(
+        "QUERY./select.requestTimes",
+        "top_level_requests_select",
+        "cumulative number of top-level selects across cores"),
+    SUBSHARD_SELECT(
+        "QUERY./select[shard].requestTimes",
+        "sub_shard_requests_get",
+        "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores"),
+    UPDATE(
+        "UPDATE./update.requestTimes",
+        "distributed_requests_update",
+        "cumulative number of distributed updates across cores"),
+    LOCAL_UPDATE(
+        "UPDATE./update[local].requestTimes",
+        "local_requests_update",
+        "cumulative number of local updates across cores");
+    final String key, metricName, desc;
+
+    CoreMetric(String key, String metricName, String desc) {
+      this.key = key;
+      this.metricName = metricName;
+      this.desc = desc;
+    }
+
+    long readMissing(JsonNode core, Set<String> aggregateValsFound) throws IOException {
+      if (aggregateValsFound.contains(key)) {
+        return 0;
+      }
+      return getNumber(core, key, "count").longValue();
+    }
+
+    PrometheusMetric createPrometheusMetric(Number value) {
+      return new PrometheusMetric(
+          metricName, PrometheusMetricType.COUNTER, desc, value.longValue());
+    }
+
+    void addMissing(Set<String> aggregateValsFound, List<PrometheusMetric> results, long val) {
+      if (aggregateValsFound.contains(key)) return;
+      results.add(createPrometheusMetric(val));
+    }
+  }
+
+  static class AggregateMetricsApiCaller extends MetricsApiCaller {
+    private static final Map<String, CoreMetric> props = new HashMap<>();
+
+    static {
+      for (CoreMetric metric : CoreMetric.values()) {
+        props.put(metric.key, metric);
+      }
+    }
+
+    /*"metrics":{
+    "solr.node":{
+    "QUERY./select.requestTimes":{"count":2},
+    "QUERY./select[shard].requestTimes":{"count":0},
+    "UPDATE./update.requestTimes":{"count":2},
+    "UPDATE./update[local].requestTimes":{"count":0}}}}*/
+    AggregateMetricsApiCaller() {
+      super("solr.node", StrUtils.join(props.keySet(), ','), "count");
+    }
+
+    @Override
+    protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
+      Set<String> aggregateValsFound = new HashSet<>();
+      originalRequest.setAttribute("aggregateValsFound", aggregateValsFound);
+      JsonNode nodeMetrics = metrics.path("solr.node");
+      for (CoreMetric metric : CoreMetric.values()) {
+        Number value = getNumber(nodeMetrics, metric.key, property);
+        if (!INVALID_NUMBER.equals(value)) {
+          aggregateValsFound.add(metric.key);
+          results.add(metric.createPrometheusMetric(value));
+        }
+      }
+    }
+  }
+
   // Aggregating across all the cores on the node.
   // Report only local requests, excluding forwarded requests to other nodes.
   static class CoresMetricsApiCaller extends MetricsApiCaller {
@@ -595,8 +676,12 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "UPDATE.updateHandler.softAutoCommits":0},
       ...
      */
+
     @Override
     protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
+      Set<String> aggregateValsFound =
+          (Set<String>) originalRequest.getAttribute("aggregateValsFound");
+      if (aggregateValsFound == null) aggregateValsFound = Collections.emptySet();
       long mergeMajor = 0;
       long mergeMajorDocs = 0;
       long mergeMinor = 0;
@@ -619,10 +704,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         mergeMinorDocs += getNumber(core, "INDEX.merge.minor.running.docs").longValue();
         distribGet += getNumber(core, "QUERY./get.requestTimes", property).longValue();
         localGet += getNumber(core, "QUERY./get[shard].requestTimes", property).longValue();
-        distribSelect += getNumber(core, "QUERY./select.requestTimes", property).longValue();
-        localSelect += getNumber(core, "QUERY./select[shard].requestTimes", property).longValue();
-        distribUpdate += getNumber(core, "UPDATE./update.requestTimes", property).longValue();
-        localUpdate += getNumber(core, "UPDATE./update[local].requestTimes", property).longValue();
+        distribSelect += CoreMetric.SELECT.readMissing(core, aggregateValsFound);
+        localSelect += CoreMetric.SUBSHARD_SELECT.readMissing(core, aggregateValsFound);
+        distribUpdate += CoreMetric.UPDATE.readMissing(core, aggregateValsFound);
+        localUpdate += CoreMetric.LOCAL_UPDATE.readMissing(core, aggregateValsFound);
         hardAutoCommit += getNumber(core, "UPDATE.updateHandler.autoCommits").longValue();
         commit += getNumber(core, "UPDATE.updateHandler.commits", property).longValue();
         deleteById +=
@@ -667,30 +752,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               PrometheusMetricType.COUNTER,
               "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores",
               localGet));
-      results.add(
-          new PrometheusMetric(
-              "top_level_requests_select",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of top-level selects across cores",
-              distribSelect));
-      results.add(
-          new PrometheusMetric(
-              "sub_shard_requests_select",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of sub (spawned by re-distributing a top-level req) selects across cores",
-              localSelect));
-      results.add(
-          new PrometheusMetric(
-              "distributed_requests_update",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of distributed updates across cores",
-              distribUpdate));
-      results.add(
-          new PrometheusMetric(
-              "local_requests_update",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of local updates across cores",
-              localUpdate));
+      CoreMetric.SELECT.addMissing(aggregateValsFound, results, distribSelect);
+      CoreMetric.SUBSHARD_SELECT.addMissing(aggregateValsFound, results, localSelect);
+      CoreMetric.UPDATE.addMissing(aggregateValsFound, results, distribUpdate);
+      CoreMetric.LOCAL_UPDATE.addMissing(aggregateValsFound, results, localUpdate);
       results.add(
           new PrometheusMetric(
               "auto_commits_hard",
@@ -808,6 +873,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     protected final String group;
     protected final String prefix;
     protected final String property;
+    HttpServletRequest originalRequest;
 
     MetricsApiCaller(String group, String prefix, String property) {
       this.group = group;
@@ -819,6 +885,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     void call(
         AtomicInteger qTime, List<PrometheusMetric> results, HttpServletRequest originalRequest)
         throws IOException, UnavailableException {
+      this.originalRequest = originalRequest;
       SolrDispatchFilter filter = getSolrDispatchFilter(originalRequest);
       CoreContainer cores = filter.getCores();
       HttpServletRequest request = new MetricsApiRequest(originalRequest, group, prefix, property);

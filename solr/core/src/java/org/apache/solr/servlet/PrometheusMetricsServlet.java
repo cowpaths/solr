@@ -570,7 +570,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "cumulative number of top-level selects across cores"),
     SUBSHARD_SELECT(
         "QUERY./select[shard].requestTimes",
-        "sub_shard_requests_get",
+        "sub_shard_requests_select",
         "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores"),
     UPDATE(
         "UPDATE./update.requestTimes",

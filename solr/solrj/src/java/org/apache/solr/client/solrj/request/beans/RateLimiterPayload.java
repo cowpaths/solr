@@ -18,6 +18,8 @@
 package org.apache.solr.client.solrj.request.beans;
 
 import java.util.Objects;
+
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.common.annotation.JsonProperty;
 import org.apache.solr.common.util.ReflectMapWriter;
 
@@ -33,6 +35,9 @@ public class RateLimiterPayload implements ReflectMapWriter {
 
   @JsonProperty public Integer slotAcquisitionTimeoutInMS;
 
+  @JsonProperty public String type = SolrRequest.SolrRequestType.QUERY.toString();
+
+  public byte[] configBytes;
   public RateLimiterPayload copy() {
     RateLimiterPayload result = new RateLimiterPayload();
 

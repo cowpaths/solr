@@ -91,6 +91,7 @@ public class SolrIndexConfig implements MapSerializable {
   public final PluginInfo mergedSegmentWarmerInfo;
 
   public InfoStream infoStream = InfoStream.NO_OUTPUT;
+  public final boolean aggregateNodeLevelMetricsEnabled;
   private ConfigNode node;
 
   /** Internal constructor for setting defaults based on Lucene Version */
@@ -107,6 +108,7 @@ public class SolrIndexConfig implements MapSerializable {
     mergedSegmentWarmerInfo = null;
     // enable coarse-grained metrics by default
     metricsInfo = new PluginInfo("metrics", Collections.emptyMap(), null, null);
+    this.aggregateNodeLevelMetricsEnabled = false;
   }
 
   private ConfigNode get(String s) {
@@ -194,6 +196,7 @@ public class SolrIndexConfig implements MapSerializable {
         "Beginning with Solr 5.0, <checkIntegrityAtMerge> option is no longer supported and should be removed from solrconfig.xml (these integrity checks are now automatic)",
         get("checkIntegrityAtMerge").isNull(),
         true);
+    aggregateNodeLevelMetricsEnabled = node.boolAttr("aggregateNodeLevelMetricsEnabled", false);
   }
 
   @Override

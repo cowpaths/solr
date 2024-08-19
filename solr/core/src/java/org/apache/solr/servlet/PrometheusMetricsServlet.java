@@ -579,20 +579,54 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     LOCAL_UPDATE(
         "UPDATE./update[local].requestTimes",
         "local_requests_update",
-        "cumulative number of local updates across cores");
-    final String key, metricName, desc;
+        "cumulative number of local updates across cores"),
+    GET(
+        "QUERY./get.requestTimes",
+        "top_level_requests_get",
+        "cumulative number of top-level gets across cores"),
+    GET_SUBSHARD(
+        "QUERY./get[shard].requestTimes",
+        "sub_shard_requests_get",
+        "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores"),
+    COMMITS("UPDATE.updateHandler.commits", "commits", "cumulative number of commits across cores"),
+    DEL_BY_ID(
+        "UPDATE.updateHandler.cumulativeDeletesById",
+        "deletes_by_id",
+        "cumulative number of deletes by id across cores"),
+    DEL_BY_Q(
+        "UPDATE.updateHandler.cumulativeDeletesByQuery",
+        "deletes_by_query",
+        "cumulative number of deletes by query across cores"),
+    AUTOCOMMIT(
+        "UPDATE.updateHandler.autoCommits",
+        "auto_commits_hard",
+        "cumulative number of hard auto commits across cores",
+        null),
+    SOFT_AUTOCOMMIT(
+        "UPDATE.updateHandler.softAutoCommits",
+        "auto_commits_soft",
+        "cumulative number of soft auto commits across cores",
+        null);
+    final String key, metricName, desc, property;
 
     CoreMetric(String key, String metricName, String desc) {
+      this(key, metricName, desc, "count");
+    }
+
+    CoreMetric(String key, String metricName, String desc, String property) {
       this.key = key;
       this.metricName = metricName;
       this.desc = desc;
+      this.property = property;
     }
 
     long readMissing(JsonNode core, Set<String> aggregateValsFound) throws IOException {
       if (aggregateValsFound.contains(key)) {
         return 0;
       }
-      return getNumber(core, key, "count").longValue();
+      return property == null
+          ? getNumber(core, key).longValue()
+          : getNumber(core, key, "count").longValue();
     }
 
     PrometheusMetric createPrometheusMetric(Number value) {
@@ -678,6 +712,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
      */
 
     @Override
+    @SuppressWarnings("unchecked")
     protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
       Set<String> aggregateValsFound =
           (Set<String>) originalRequest.getAttribute("aggregateValsFound");
@@ -702,19 +737,15 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         mergeMajorDocs += getNumber(core, "INDEX.merge.major.running.docs").longValue();
         mergeMinor += getNumber(core, "INDEX.merge.minor", property).longValue();
         mergeMinorDocs += getNumber(core, "INDEX.merge.minor.running.docs").longValue();
-        distribGet += getNumber(core, "QUERY./get.requestTimes", property).longValue();
-        localGet += getNumber(core, "QUERY./get[shard].requestTimes", property).longValue();
+        distribGet += CoreMetric.GET.readMissing(core, aggregateValsFound);
+        localGet += CoreMetric.GET_SUBSHARD.readMissing(core, aggregateValsFound);
         distribSelect += CoreMetric.SELECT.readMissing(core, aggregateValsFound);
         localSelect += CoreMetric.SUBSHARD_SELECT.readMissing(core, aggregateValsFound);
         distribUpdate += CoreMetric.UPDATE.readMissing(core, aggregateValsFound);
         localUpdate += CoreMetric.LOCAL_UPDATE.readMissing(core, aggregateValsFound);
-        hardAutoCommit += getNumber(core, "UPDATE.updateHandler.autoCommits").longValue();
-        commit += getNumber(core, "UPDATE.updateHandler.commits", property).longValue();
-        deleteById +=
-            getNumber(core, "UPDATE.updateHandler.cumulativeDeletesById", property).longValue();
-        deleteByQuery +=
-            getNumber(core, "UPDATE.updateHandler.cumulativeDeletesByQuery", property).longValue();
-        softAutoCommit += getNumber(core, "UPDATE.updateHandler.softAutoCommits").longValue();
+        commit += CoreMetric.COMMITS.readMissing(core, aggregateValsFound);
+        deleteById += CoreMetric.DEL_BY_ID.readMissing(core, aggregateValsFound);
+        deleteByQuery += CoreMetric.DEL_BY_Q.readMissing(core, aggregateValsFound);
       }
       results.add(
           new PrometheusMetric(
@@ -740,52 +771,17 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               PrometheusMetricType.GAUGE,
               "current number of docs in minor merges across cores",
               mergeMinorDocs));
-      results.add(
-          new PrometheusMetric(
-              "top_level_requests_get",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of top-level gets across cores",
-              distribGet));
-      results.add(
-          new PrometheusMetric(
-              "sub_shard_requests_get",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores",
-              localGet));
+      CoreMetric.GET.addMissing(aggregateValsFound, results, distribGet);
+      CoreMetric.GET_SUBSHARD.addMissing(aggregateValsFound, results, distribGet);
       CoreMetric.SELECT.addMissing(aggregateValsFound, results, distribSelect);
       CoreMetric.SUBSHARD_SELECT.addMissing(aggregateValsFound, results, localSelect);
       CoreMetric.UPDATE.addMissing(aggregateValsFound, results, distribUpdate);
       CoreMetric.LOCAL_UPDATE.addMissing(aggregateValsFound, results, localUpdate);
-      results.add(
-          new PrometheusMetric(
-              "auto_commits_hard",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of hard auto commits across cores",
-              hardAutoCommit));
-      results.add(
-          new PrometheusMetric(
-              "auto_commits_soft",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of soft auto commits across cores",
-              softAutoCommit));
-      results.add(
-          new PrometheusMetric(
-              "commits",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of commits across cores",
-              commit));
-      results.add(
-          new PrometheusMetric(
-              "deletes_by_id",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of deletes by id across cores",
-              deleteById));
-      results.add(
-          new PrometheusMetric(
-              "deletes_by_query",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of deletes by query across cores",
-              deleteByQuery));
+      CoreMetric.COMMITS.addMissing(aggregateValsFound, results, commit);
+      CoreMetric.DEL_BY_ID.addMissing(aggregateValsFound, results, deleteById);
+      CoreMetric.DEL_BY_Q.addMissing(aggregateValsFound, results, deleteByQuery);
+      CoreMetric.AUTOCOMMIT.addMissing(aggregateValsFound, results, hardAutoCommit);
+      CoreMetric.SOFT_AUTOCOMMIT.addMissing(aggregateValsFound, results, softAutoCommit);
     }
   }
 

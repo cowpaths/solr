@@ -626,7 +626,42 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     CUMULATIVE_ERRS(
         "UPDATE.updateHandler.cumulativeErrors",
         "update_errors",
-        "cumulative number of errors during updates across cores");
+        "cumulative number of errors during updates across cores"),
+    CUMULATIVE_ADDS(
+        "UPDATE.updateHandler.cumulativeAdds",
+        "cumulative_errors",
+        "cumulative number of doc adds across cores"),
+
+    CUMULATIVE_DEL_BY_ID(
+            "UPDATE.updateHandler.cumulativeDeletesById",
+        "cumulative_delete_by_id",
+        "cumulative number delete by id across cores"),
+
+    CUMULATIVE_DEL_BY_Q(
+            "UPDATE.updateHandler.cumulativeDeletesByQuery",
+        "cumulative_delete_by_q",
+        "cumulative number delete by queries across cores"),
+
+    MERGES(
+            "UPDATE.updateHandler.merges",
+        "merges",
+        "cumulative number of merges across cores"),
+    OPTIMIZE(
+            "UPDATE.updateHandler.optimizes",
+        "optimizes",
+        "cumulative number of optimizes across cores"),
+
+    SPLITS(
+            "UPDATE.updateHandler.optimizes",
+        "splits",
+        "cumulative number of splits across cores"),
+
+    EXPUNGE_DEL(
+            "UPDATE.updateHandler.expungeDeletes",
+        "expunge_deletes",
+        "cumulative number of expungeDeletes across cores")
+
+    ;
     final String key, metricName, desc, property;
 
     CoreMetric(String key, String metricName, String desc) {

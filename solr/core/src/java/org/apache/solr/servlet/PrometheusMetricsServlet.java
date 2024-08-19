@@ -606,7 +606,27 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "UPDATE.updateHandler.softAutoCommits",
         "auto_commits_soft",
         "cumulative number of soft auto commits across cores",
-        null);
+        null),
+    MAJOR_MERGE("INDEX.merge.major",
+            "merges_major",
+            "cumulative number of major merges across cores"),
+    MAJOR_MERGE_RUNNING_DOCS("INDEX.merge.major.running.docs",
+            "merges_major_current_docs",
+            "current number of docs in major merges across cores"),
+    MINOR_MERGE("INDEX.merge.minor",
+            "merges_minor",
+            "cumulative number of minor merges across cores"),
+    MINOR_MERGE_RUNNING_DOCS("INDEX.merge.minor.running.docs",
+            "merges_minor_current_docs",
+            "current number of docs in minor merges across cores"),
+    CUMULATIVE_DOC_ADDS("UPDATE.updateHandler.cumulativeAdds",
+            "doc_adds",
+            "cumulative number of docs added across cores"),
+    CUMULATIVE_ERRS("UPDATE.updateHandler.cumulativeErrors",
+            "update_errors",
+            "cumulative number of errors during updates across cores")
+    ;
+
     final String key, metricName, desc, property;
 
     CoreMetric(String key, String metricName, String desc) {
@@ -681,7 +701,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     CoresMetricsApiCaller() {
       super(
           "core",
-          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits",
+          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits,UPDATE.updateHandler.cumulativeAdds,UPDATE.updateHandler.cumulativeDeletesById,UPDATE.updateHandler.cumulativeErrors",
           "count");
     }
 
@@ -732,11 +752,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       long deleteById = 0;
       long deleteByQuery = 0;
       long softAutoCommit = 0;
+      long adds = 0;
+      long updateErrors = 0;
       for (JsonNode core : metrics) {
-        mergeMajor += getNumber(core, "INDEX.merge.major", property).longValue();
-        mergeMajorDocs += getNumber(core, "INDEX.merge.major.running.docs").longValue();
-        mergeMinor += getNumber(core, "INDEX.merge.minor", property).longValue();
-        mergeMinorDocs += getNumber(core, "INDEX.merge.minor.running.docs").longValue();
+        mergeMajor += CoreMetric.MAJOR_MERGE.readMissing(core, aggregateValsFound);
+        mergeMajorDocs += CoreMetric.MAJOR_MERGE_RUNNING_DOCS.readMissing(core, aggregateValsFound);
+        mergeMinor += CoreMetric.MINOR_MERGE.readMissing(core, aggregateValsFound);
+        mergeMinorDocs += CoreMetric.MINOR_MERGE_RUNNING_DOCS.readMissing(core, aggregateValsFound);
         distribGet += CoreMetric.GET.readMissing(core, aggregateValsFound);
         localGet += CoreMetric.GET_SUBSHARD.readMissing(core, aggregateValsFound);
         distribSelect += CoreMetric.SELECT.readMissing(core, aggregateValsFound);
@@ -746,31 +768,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         commit += CoreMetric.COMMITS.readMissing(core, aggregateValsFound);
         deleteById += CoreMetric.DEL_BY_ID.readMissing(core, aggregateValsFound);
         deleteByQuery += CoreMetric.DEL_BY_Q.readMissing(core, aggregateValsFound);
+        adds +=  CoreMetric.CUMULATIVE_DOC_ADDS.readMissing(core, aggregateValsFound);
+        updateErrors += CoreMetric.CUMULATIVE_ERRS.readMissing(core, aggregateValsFound);
       }
-      results.add(
-          new PrometheusMetric(
-              "merges_major",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of major merges across cores",
-              mergeMajor));
-      results.add(
-          new PrometheusMetric(
-              "merges_major_current_docs",
-              PrometheusMetricType.GAUGE,
-              "current number of docs in major merges across cores",
-              mergeMajorDocs));
-      results.add(
-          new PrometheusMetric(
-              "merges_minor",
-              PrometheusMetricType.COUNTER,
-              "cumulative number of minor merges across cores",
-              mergeMinor));
-      results.add(
-          new PrometheusMetric(
-              "merges_minor_current_docs",
-              PrometheusMetricType.GAUGE,
-              "current number of docs in minor merges across cores",
-              mergeMinorDocs));
+      CoreMetric.MAJOR_MERGE.addMissing(aggregateValsFound, results, mergeMajor);
+      CoreMetric.MAJOR_MERGE_RUNNING_DOCS.addMissing(aggregateValsFound, results, mergeMajorDocs);
+      CoreMetric.MINOR_MERGE.addMissing(aggregateValsFound, results, mergeMinor);
+      CoreMetric.MINOR_MERGE_RUNNING_DOCS.addMissing(aggregateValsFound, results, mergeMinorDocs);
       CoreMetric.GET.addMissing(aggregateValsFound, results, distribGet);
       CoreMetric.GET_SUBSHARD.addMissing(aggregateValsFound, results, distribGet);
       CoreMetric.SELECT.addMissing(aggregateValsFound, results, distribSelect);
@@ -782,6 +786,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       CoreMetric.DEL_BY_Q.addMissing(aggregateValsFound, results, deleteByQuery);
       CoreMetric.AUTOCOMMIT.addMissing(aggregateValsFound, results, hardAutoCommit);
       CoreMetric.SOFT_AUTOCOMMIT.addMissing(aggregateValsFound, results, softAutoCommit);
+      CoreMetric.CUMULATIVE_DOC_ADDS.addMissing(aggregateValsFound, results, adds);
+      CoreMetric.CUMULATIVE_ERRS.addMissing(aggregateValsFound, results, updateErrors);
     }
   }
 

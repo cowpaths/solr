@@ -607,26 +607,26 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "auto_commits_soft",
         "cumulative number of soft auto commits across cores",
         null),
-    MAJOR_MERGE("INDEX.merge.major",
-            "merges_major",
-            "cumulative number of major merges across cores"),
-    MAJOR_MERGE_RUNNING_DOCS("INDEX.merge.major.running.docs",
-            "merges_major_current_docs",
-            "current number of docs in major merges across cores"),
-    MINOR_MERGE("INDEX.merge.minor",
-            "merges_minor",
-            "cumulative number of minor merges across cores"),
-    MINOR_MERGE_RUNNING_DOCS("INDEX.merge.minor.running.docs",
-            "merges_minor_current_docs",
-            "current number of docs in minor merges across cores"),
-    CUMULATIVE_DOC_ADDS("UPDATE.updateHandler.cumulativeAdds",
-            "doc_adds",
-            "cumulative number of docs added across cores"),
-    CUMULATIVE_ERRS("UPDATE.updateHandler.cumulativeErrors",
-            "update_errors",
-            "cumulative number of errors during updates across cores")
-    ;
-
+    MAJOR_MERGE(
+        "INDEX.merge.major", "merges_major", "cumulative number of major merges across cores"),
+    MAJOR_MERGE_RUNNING_DOCS(
+        "INDEX.merge.major.running.docs",
+        "merges_major_current_docs",
+        "current number of docs in major merges across cores"),
+    MINOR_MERGE(
+        "INDEX.merge.minor", "merges_minor", "cumulative number of minor merges across cores"),
+    MINOR_MERGE_RUNNING_DOCS(
+        "INDEX.merge.minor.running.docs",
+        "merges_minor_current_docs",
+        "current number of docs in minor merges across cores"),
+    CUMULATIVE_DOC_ADDS(
+        "UPDATE.updateHandler.cumulativeAdds",
+        "doc_adds",
+        "cumulative number of docs added across cores"),
+    CUMULATIVE_ERRS(
+        "UPDATE.updateHandler.cumulativeErrors",
+        "update_errors",
+        "cumulative number of errors during updates across cores");
     final String key, metricName, desc, property;
 
     CoreMetric(String key, String metricName, String desc) {
@@ -658,6 +658,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       if (aggregateValsFound.contains(key)) return;
       results.add(createPrometheusMetric(val));
     }
+    static String mergedKeys() {
+      List<String> allKeys = new ArrayList<>();
+      for (CoreMetric m : CoreMetric.values()) {
+        allKeys.add(m.key);
+      }
+      return StrUtils.join(allKeys, ',');
+    }
   }
 
   static class AggregateMetricsApiCaller extends MetricsApiCaller {
@@ -676,7 +683,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     "UPDATE./update.requestTimes":{"count":2},
     "UPDATE./update[local].requestTimes":{"count":0}}}}*/
     AggregateMetricsApiCaller() {
-      super("solr.node", StrUtils.join(props.keySet(), ','), "count");
+      super("solr.node", CoreMetric.mergedKeys(), "count");
     }
 
     @Override
@@ -685,12 +692,36 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       originalRequest.setAttribute("aggregateValsFound", aggregateValsFound);
       JsonNode nodeMetrics = metrics.path("solr.node");
       for (CoreMetric metric : CoreMetric.values()) {
-        Number value = getNumber(nodeMetrics, metric.key, property);
+        Number value =
+            metric.property == null
+                ? getNumber(nodeMetrics, metric.key)
+                : getNumber(nodeMetrics, metric.key, property);
         if (!INVALID_NUMBER.equals(value)) {
           aggregateValsFound.add(metric.key);
           results.add(metric.createPrometheusMetric(value));
         }
       }
+    }
+  }
+
+  static class MetricInfo {
+    final CoreMetric metric;
+    final Set<String> aggregateValsFound;
+    final List<PrometheusMetric> results;
+    long value;
+
+    MetricInfo(CoreMetric metric, Set<String> aggregateValsFound, List<PrometheusMetric> results) {
+      this.metric = metric;
+      this.aggregateValsFound = aggregateValsFound;
+      this.results = results;
+    }
+
+    void readMissing(JsonNode core) throws IOException {
+      value = metric.readMissing(core, aggregateValsFound);
+    }
+
+    public void addMissing() {
+      metric.addMissing(aggregateValsFound, results, value);
     }
   }
 
@@ -701,7 +732,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     CoresMetricsApiCaller() {
       super(
           "core",
-          "INDEX.merge.,QUERY./get.requestTimes,QUERY./get[shard].requestTimes,QUERY./select.requestTimes,QUERY./select[shard].requestTimes,UPDATE./update.requestTimes,UPDATE./update[local].requestTimes,UPDATE.updateHandler.autoCommits,UPDATE.updateHandler.commits,UPDATE.updateHandler.cumulativeDeletesBy,UPDATE.updateHandler.softAutoCommits,UPDATE.updateHandler.cumulativeAdds,UPDATE.updateHandler.cumulativeDeletesById,UPDATE.updateHandler.cumulativeErrors",
+          CoreMetric.mergedKeys() ,
           "count");
     }
 
@@ -737,57 +768,21 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       Set<String> aggregateValsFound =
           (Set<String>) originalRequest.getAttribute("aggregateValsFound");
       if (aggregateValsFound == null) aggregateValsFound = Collections.emptySet();
-      long mergeMajor = 0;
-      long mergeMajorDocs = 0;
-      long mergeMinor = 0;
-      long mergeMinorDocs = 0;
-      long distribGet = 0;
-      long localGet = 0;
-      long distribSelect = 0;
-      long localSelect = 0;
-      long distribUpdate = 0;
-      long localUpdate = 0;
-      long hardAutoCommit = 0;
-      long commit = 0;
-      long deleteById = 0;
-      long deleteByQuery = 0;
-      long softAutoCommit = 0;
-      long adds = 0;
-      long updateErrors = 0;
-      for (JsonNode core : metrics) {
-        mergeMajor += CoreMetric.MAJOR_MERGE.readMissing(core, aggregateValsFound);
-        mergeMajorDocs += CoreMetric.MAJOR_MERGE_RUNNING_DOCS.readMissing(core, aggregateValsFound);
-        mergeMinor += CoreMetric.MINOR_MERGE.readMissing(core, aggregateValsFound);
-        mergeMinorDocs += CoreMetric.MINOR_MERGE_RUNNING_DOCS.readMissing(core, aggregateValsFound);
-        distribGet += CoreMetric.GET.readMissing(core, aggregateValsFound);
-        localGet += CoreMetric.GET_SUBSHARD.readMissing(core, aggregateValsFound);
-        distribSelect += CoreMetric.SELECT.readMissing(core, aggregateValsFound);
-        localSelect += CoreMetric.SUBSHARD_SELECT.readMissing(core, aggregateValsFound);
-        distribUpdate += CoreMetric.UPDATE.readMissing(core, aggregateValsFound);
-        localUpdate += CoreMetric.LOCAL_UPDATE.readMissing(core, aggregateValsFound);
-        commit += CoreMetric.COMMITS.readMissing(core, aggregateValsFound);
-        deleteById += CoreMetric.DEL_BY_ID.readMissing(core, aggregateValsFound);
-        deleteByQuery += CoreMetric.DEL_BY_Q.readMissing(core, aggregateValsFound);
-        adds +=  CoreMetric.CUMULATIVE_DOC_ADDS.readMissing(core, aggregateValsFound);
-        updateErrors += CoreMetric.CUMULATIVE_ERRS.readMissing(core, aggregateValsFound);
+
+      List<MetricInfo> infos = new ArrayList<>();
+      for (CoreMetric c : CoreMetric.values()) {
+        infos.add(new MetricInfo(c, aggregateValsFound, results));
       }
-      CoreMetric.MAJOR_MERGE.addMissing(aggregateValsFound, results, mergeMajor);
-      CoreMetric.MAJOR_MERGE_RUNNING_DOCS.addMissing(aggregateValsFound, results, mergeMajorDocs);
-      CoreMetric.MINOR_MERGE.addMissing(aggregateValsFound, results, mergeMinor);
-      CoreMetric.MINOR_MERGE_RUNNING_DOCS.addMissing(aggregateValsFound, results, mergeMinorDocs);
-      CoreMetric.GET.addMissing(aggregateValsFound, results, distribGet);
-      CoreMetric.GET_SUBSHARD.addMissing(aggregateValsFound, results, distribGet);
-      CoreMetric.SELECT.addMissing(aggregateValsFound, results, distribSelect);
-      CoreMetric.SUBSHARD_SELECT.addMissing(aggregateValsFound, results, localSelect);
-      CoreMetric.UPDATE.addMissing(aggregateValsFound, results, distribUpdate);
-      CoreMetric.LOCAL_UPDATE.addMissing(aggregateValsFound, results, localUpdate);
-      CoreMetric.COMMITS.addMissing(aggregateValsFound, results, commit);
-      CoreMetric.DEL_BY_ID.addMissing(aggregateValsFound, results, deleteById);
-      CoreMetric.DEL_BY_Q.addMissing(aggregateValsFound, results, deleteByQuery);
-      CoreMetric.AUTOCOMMIT.addMissing(aggregateValsFound, results, hardAutoCommit);
-      CoreMetric.SOFT_AUTOCOMMIT.addMissing(aggregateValsFound, results, softAutoCommit);
-      CoreMetric.CUMULATIVE_DOC_ADDS.addMissing(aggregateValsFound, results, adds);
-      CoreMetric.CUMULATIVE_ERRS.addMissing(aggregateValsFound, results, updateErrors);
+
+      for (JsonNode core : metrics) {
+        for (MetricInfo m : infos) {
+          m.readMissing(core);
+        }
+      }
+
+      for (MetricInfo m : infos) {
+        m.addMissing();
+      }
     }
   }
 

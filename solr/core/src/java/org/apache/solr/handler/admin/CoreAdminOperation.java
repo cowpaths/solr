@@ -381,9 +381,13 @@ public enum CoreAdminOperation implements CoreAdminOp {
                     LukeRequestHandler.getIndexInfo(searcher.get().getIndexReader());
                 long size = core.getIndexSize();
                 long onDiskSize = core.getOnDiskSize();
-                indexInfo.add("onDiskSizeInBytes", onDiskSize);
+                String readableSize = NumberUtils.readableSize(size);
+                // avoid re-parsing size if we don't need to, since it's a somewhat expensive operation
+                String readableOnDiskSize = size == onDiskSize ? readableSize : NumberUtils.readableSize(onDiskSize);
                 indexInfo.add("sizeInBytes", size);
                 indexInfo.add("size", NumberUtils.readableSize(size));
+                indexInfo.add("onDiskSizeInBytes", onDiskSize);
+                indexInfo.add("onDiskSize", readableOnDiskSize);
                 info.add("index", indexInfo);
               } finally {
                 searcher.decref();

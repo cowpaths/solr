@@ -51,16 +51,22 @@ public class SizeAwareDirectory extends FilterDirectory
   private volatile long reconciledTimeNanos;
   private volatile LongAdder size = new LongAdder();
   private volatile LongAdder onDiskSize = new LongAdder();
-  private volatile LongObjectProcedure<String> sizeWriter = (size, name) -> this.size.add(size);
+  private volatile SizeWriter sizeWriter = (size, onDiskSize, name) -> {
+    this.size.add(size);
+    this.onDiskSize.add(onDiskSize);
+  };
 
-  private final ConcurrentHashMap<String, Long> fileSizeMap = new ConcurrentHashMap<>();
-  private final ConcurrentHashMap<String, Long> onDiskFileSizeMap = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Sizes> fileSizeMap = new ConcurrentHashMap<>();
 
   private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs =
       new ConcurrentHashMap<>();
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   private final Future<Sizes>[] computingSize = new Future[1];
+
+  private interface SizeWriter {
+    void apply(long size, long onDiskSize, String name);
+  }
 
   private static class Sizes {
     long size;
@@ -86,16 +92,15 @@ public class SizeAwareDirectory extends FilterDirectory
   public long ramBytesUsed() {
     return BASE_RAM_BYTES_USED
         + RamUsageEstimator.sizeOfMap(fileSizeMap)
-        + RamUsageEstimator.sizeOfMap(onDiskFileSizeMap)
         + RamUsageEstimator.sizeOfMap(liveOutputs);
   }
 
   @Override
   public long fileLength(String name) throws IOException {
-    Long ret = fileSizeMap.get(name);
+    Sizes ret = fileSizeMap.get(name);
     SizeAccountingIndexOutput live;
     if (ret != null) {
-      return ret;
+      return ret.size;
     } else if ((live = liveOutputs.get(name)) != null) {
       return live.backing.getFilePointer();
     } else {
@@ -106,10 +111,19 @@ public class SizeAwareDirectory extends FilterDirectory
 
   @Override
   public long onDiskFileLength(String name) throws IOException {
-    if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
+    Sizes ret = fileSizeMap.get(name);
+    SizeAccountingIndexOutput live;
+    if (ret != null) {
+      return ret.size;
+    } else if ((live = liveOutputs.get(name)) != null) {
+      return live.backing.getFilePointer();
+    } else if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
+      // fallback delegate to wrapped Directory
       return ((DirectoryFactory.OnDiskSizeDirectory) in).onDiskFileLength(name);
+    } else {
+      // fallback delegate to wrapped Directory
+      return fileLength(name);
     }
-    return fileLength(name);
   }
 
   @Override
@@ -160,10 +174,10 @@ public class SizeAwareDirectory extends FilterDirectory
       LongAdder recomputeSize = new LongAdder();
       LongAdder recomputeOnDiskSize = new LongAdder();
       Set<String> recomputed = ConcurrentHashMap.newKeySet();
-      LongObjectProcedure<String> dualSizeWriter =
-          (fileSize, name) -> {
+      SizeWriter dualSizeWriter =
+          (fileSize, onDiskFileSize, name) -> {
             size.add(fileSize);
-            recomputeOnDiskSize.add(fileSize);
+            onDiskSize.add(onDiskFileSize);
             if (fileSize >= 0 || recomputed.remove(name)) {
               // if it's a removal, we only want to adjust if we've already
               // incorporated this file in our count!
@@ -186,13 +200,11 @@ public class SizeAwareDirectory extends FilterDirectory
           if (fileSize > 0) {
             // whether the file exists or not, we don't care about it if it has zero size.
             // more often though, 0 size means the file isn't there.
-            fileSizeMap.put(file, fileSize);
-            onDiskFileSizeMap.put(file, onDiskFileSize);
+            fileSizeMap.put(file, new Sizes(fileSize, onDiskFileSize));
             if (DirectoryFactory.sizeOf(in, file) == 0) {
               // during reconciliation, we have to check for file presence _after_ adding
               // to the map, to prevent a race condition that could leak entries into `fileSizeMap`
               fileSizeMap.remove(file);
-              onDiskFileSizeMap.remove(file);
             }
           }
         }
@@ -223,10 +235,10 @@ public class SizeAwareDirectory extends FilterDirectory
         ret = extant;
       } else {
         // swap the new objects into place
-        LongObjectProcedure<String> replaceSizeWriter =
-            (size, name) -> {
+        SizeWriter replaceSizeWriter =
+            (size, onDiskSize, name) -> {
               recomputeSize.add(size);
-              recomputeOnDiskSize.add(size);
+              recomputeOnDiskSize.add(onDiskSize);
             };
         sizeWriter = replaceSizeWriter;
         size = recomputeSize;
@@ -278,9 +290,9 @@ public class SizeAwareDirectory extends FilterDirectory
     try {
       in.deleteFile(name);
     } finally {
-      Long fileSize = fileSizeMap.remove(name);
+      Sizes fileSize = fileSizeMap.remove(name);
       if (fileSize != null) {
-        sizeWriter.apply(-fileSize, name);
+        sizeWriter.apply(-fileSize.size, -fileSize.onDiskSize, name);
       }
     }
   }
@@ -314,18 +326,18 @@ public class SizeAwareDirectory extends FilterDirectory
 
     private final IndexOutput backing;
 
-    private final ConcurrentHashMap<String, Long> fileSizeMap;
+    private final ConcurrentHashMap<String, Sizes> fileSizeMap;
 
     private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs;
 
-    private volatile LongObjectProcedure<String> sizeWriter;
+    private volatile SizeWriter sizeWriter;
 
     private SizeAccountingIndexOutput(
         String name,
         IndexOutput backing,
-        ConcurrentHashMap<String, Long> fileSizeMap,
+        ConcurrentHashMap<String, Sizes> fileSizeMap,
         ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs,
-        LongObjectProcedure<String> sizeWriter) {
+        SizeWriter sizeWriter) {
       super("byteSize(" + name + ")", name);
       this.name = name;
       this.backing = backing;
@@ -334,7 +346,7 @@ public class SizeAwareDirectory extends FilterDirectory
       this.fileSizeMap = fileSizeMap;
     }
 
-    public long setSizeWriter(LongObjectProcedure<String> sizeWriter) {
+    public long setSizeWriter(SizeWriter sizeWriter) {
       if (this.sizeWriter == sizeWriter) {
         return 0;
       } else {
@@ -349,7 +361,8 @@ public class SizeAwareDirectory extends FilterDirectory
     @SuppressWarnings("try")
     public void close() throws IOException {
       try (backing) {
-        fileSizeMap.put(name, backing.getFilePointer());
+        // TODO: get onDiskSize correctly here
+        fileSizeMap.put(name, new Sizes(backing.getFilePointer(), backing.getFilePointer()));
       } finally {
         liveOutputs.remove(name);
       }
@@ -368,13 +381,13 @@ public class SizeAwareDirectory extends FilterDirectory
     @Override
     public void writeByte(byte b) throws IOException {
       backing.writeByte(b);
-      sizeWriter.apply(1, name);
+      sizeWriter.apply(1, 1, name);
     }
 
     @Override
     public void writeBytes(byte[] b, int offset, int length) throws IOException {
       backing.writeBytes(b, offset, length);
-      sizeWriter.apply(length, name);
+      sizeWriter.apply(length, length, name);
     }
 
     @Override
@@ -387,7 +400,7 @@ public class SizeAwareDirectory extends FilterDirectory
   @Override
   public void rename(String source, String dest) throws IOException {
     in.rename(source, dest);
-    Long extant = fileSizeMap.put(dest, fileSizeMap.remove(source));
+    Sizes extant = fileSizeMap.put(dest, fileSizeMap.remove(source));
     assert extant == null; // it's illegal for dest to already exist
   }
 }

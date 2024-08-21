@@ -114,7 +114,7 @@ public class SizeAwareDirectory extends FilterDirectory
     Sizes ret = fileSizeMap.get(name);
     SizeAccountingIndexOutput live;
     if (ret != null) {
-      return ret.size;
+      return ret.onDiskSize;
     } else if ((live = liveOutputs.get(name)) != null) {
       return live.backing.getFilePointer();
     } else if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
@@ -331,6 +331,7 @@ public class SizeAwareDirectory extends FilterDirectory
     private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs;
 
     private volatile SizeWriter sizeWriter;
+
 
     private SizeAccountingIndexOutput(
         String name,

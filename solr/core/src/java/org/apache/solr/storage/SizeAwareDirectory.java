@@ -116,6 +116,9 @@ public class SizeAwareDirectory extends FilterDirectory
     if (ret != null) {
       return ret.onDiskSize;
     } else if ((live = liveOutputs.get(name)) != null) {
+      if (live.backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
+        return ((CompressingDirectory.SizeReportingIndexOutput) live.backing).getBytesWritten();
+      }
       return live.backing.getFilePointer();
     } else if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
       // fallback delegate to wrapped Directory
@@ -361,10 +364,17 @@ public class SizeAwareDirectory extends FilterDirectory
     @Override
     @SuppressWarnings("try")
     public void close() throws IOException {
+      long size = backing.getFilePointer();
       try (backing) {
-        // TODO: get onDiskSize correctly here
-        fileSizeMap.put(name, new Sizes(backing.getFilePointer(), backing.getFilePointer()));
+        // TODO
       } finally {
+        long onDiskSize = size;
+        if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
+          onDiskSize = ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
+        }
+        // we don't know onDiskSize until the file is closed, so write it here
+        sizeWriter.apply(size, onDiskSize, name);
+        fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
         liveOutputs.remove(name);
       }
     }
@@ -382,13 +392,13 @@ public class SizeAwareDirectory extends FilterDirectory
     @Override
     public void writeByte(byte b) throws IOException {
       backing.writeByte(b);
-      sizeWriter.apply(1, 1, name);
+      sizeWriter.apply(1, 0, name);
     }
 
     @Override
     public void writeBytes(byte[] b, int offset, int length) throws IOException {
       backing.writeBytes(b, offset, length);
-      sizeWriter.apply(length, length, name);
+      sizeWriter.apply(length, 0, name);
     }
 
     @Override

@@ -415,7 +415,7 @@ public class TeeDirectory extends BaseDirectory implements DirectoryFactory.OnDi
     return new TeeIndexOutput(a, b);
   }
 
-  private static final class TeeIndexOutput extends IndexOutput {
+  private static final class TeeIndexOutput extends IndexOutput implements CompressingDirectory.SizeReportingIndexOutput {
     private final IndexOutput primary;
     private final IndexOutput secondary;
 
@@ -455,6 +455,17 @@ public class TeeDirectory extends BaseDirectory implements DirectoryFactory.OnDi
     @Override
     public long getChecksum() throws IOException {
       return primary.getChecksum();
+    }
+
+    @Override
+    public long getBytesWritten() {
+      if (primary instanceof CompressingDirectory.SizeReportingIndexOutput) {
+        return ((CompressingDirectory.SizeReportingIndexOutput) primary).getBytesWritten();
+      } else if (secondary instanceof CompressingDirectory.SizeReportingIndexOutput) {
+        return ((CompressingDirectory.SizeReportingIndexOutput) secondary).getBytesWritten();
+      } else {
+        return getFilePointer();
+      }
     }
   }
 

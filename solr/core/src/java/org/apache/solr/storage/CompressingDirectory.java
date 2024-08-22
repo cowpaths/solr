@@ -252,7 +252,11 @@ public class CompressingDirectory extends FSDirectory
     }
   }
 
-  static final class DirectIOIndexOutput extends IndexOutput {
+  public interface SizeReportingIndexOutput {
+    long getBytesWritten();
+  }
+
+  static final class DirectIOIndexOutput extends IndexOutput implements SizeReportingIndexOutput {
     private final byte[] compressBuffer = new byte[COMPRESSION_BLOCK_SIZE];
     private final LZ4.FastCompressionHashTable ht = new LZ4.FastCompressionHashTable();
     private final ByteBuffer preBuffer;
@@ -273,6 +277,7 @@ public class CompressingDirectory extends FSDirectory
     static final int HEADER_SIZE = 16; // 16 bytes
 
     private long filePos;
+    private long bytesWritten;
     private boolean isOpen;
 
     private final DirectBufferPool initialBlockBufferPool;
@@ -349,6 +354,7 @@ public class CompressingDirectory extends FSDirectory
 
       LZ4.compressWithDictionary(compressBuffer, 0, 0, COMPRESSION_BLOCK_SIZE, out, ht);
       int nextBlockSize = out.resetSize();
+      bytesWritten += nextBlockSize;
       blockDeltas.writeZInt(nextBlockSize - prevBlockSize);
       prevBlockSize = nextBlockSize;
       filePos += COMPRESSION_BLOCK_SIZE;
@@ -365,6 +371,7 @@ public class CompressingDirectory extends FSDirectory
       }
       int blockMapFooterSize = blockDeltas.transferTo(out);
       if (wroteBlock) {
+        bytesWritten += buffer.position();
         writeHelper.flush(buffer, true);
         initialBlock.putLong(0, filePos);
         initialBlock.putInt(Long.BYTES, blockMapFooterSize);
@@ -382,8 +389,13 @@ public class CompressingDirectory extends FSDirectory
           buffer.rewind();
           buffer.limit(0);
         }
+        bytesWritten += buffer.position();
         writeHelper.flush(buffer, true);
       }
+    }
+
+    public long getBytesWritten() {
+      return bytesWritten;
     }
 
     private final SizeTrackingDataOutput out = new SizeTrackingDataOutput();

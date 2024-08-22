@@ -373,7 +373,7 @@ public class SizeAwareDirectory extends FilterDirectory
           onDiskSize = ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
         }
         // we don't know onDiskSize until the file is closed, so write it here
-        sizeWriter.apply(size, onDiskSize, name);
+        sizeWriter.apply(0, onDiskSize, name);
         fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
         liveOutputs.remove(name);
       }

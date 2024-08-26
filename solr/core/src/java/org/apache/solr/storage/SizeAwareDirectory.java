@@ -17,7 +17,6 @@
 
 package org.apache.solr.storage;
 
-import com.carrotsearch.hppc.procedures.LongObjectProcedure;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.Set;
@@ -68,13 +67,18 @@ public class SizeAwareDirectory extends FilterDirectory
     void apply(long size, long onDiskSize, String name);
   }
 
-  private static class Sizes {
+  private static class Sizes implements Accountable {
     long size;
     long onDiskSize;
 
     Sizes(long size, long onDiskSize) {
       this.size = size;
       this.onDiskSize = onDiskSize;
+    }
+
+    @Override
+    public long ramBytesUsed() {
+      return RamUsageEstimator.shallowSizeOfInstance(Sizes.class);
     }
   }
 
@@ -185,21 +189,21 @@ public class SizeAwareDirectory extends FilterDirectory
               // if it's a removal, we only want to adjust if we've already
               // incorporated this file in our count!
               recomputeSize.add(fileSize);
-              recomputeOnDiskSize.add(fileSize);
+              recomputeOnDiskSize.add(onDiskFileSize);
             }
           };
       sizeWriter = dualSizeWriter;
       for (final String file : files) {
-        long fileSize, onDiskFileSize;
+        Sizes sizes;
         recomputed.add(file);
         SizeAccountingIndexOutput liveOutput = liveOutputs.get(file);
         if (liveOutput != null) {
           // get fileSize already written at this moment
-          fileSize = liveOutput.setSizeWriter(dualSizeWriter);
-          onDiskFileSize = fileSize;
+          sizes = liveOutput.setSizeWriter(dualSizeWriter);
         } else {
-          fileSize = DirectoryFactory.sizeOf(in, file);
-          onDiskFileSize = DirectoryFactory.onDiskSizeOf(in, file);
+          long fileSize = DirectoryFactory.sizeOf(in, file);
+          long onDiskFileSize = DirectoryFactory.onDiskSizeOf(in, file);
+          sizes = new Sizes(fileSize, onDiskFileSize);
           if (fileSize > 0) {
             // whether the file exists or not, we don't care about it if it has zero size.
             // more often though, 0 size means the file isn't there.
@@ -211,8 +215,8 @@ public class SizeAwareDirectory extends FilterDirectory
             }
           }
         }
-        recomputeSize.add(fileSize);
-        recomputeOnDiskSize.add(onDiskFileSize);
+        recomputeSize.add(sizes.size);
+        recomputeOnDiskSize.add(sizes.onDiskSize);
         // TODO: do we really need to check for overflow here?
         //        if (recomputeSize < 0) {
         //          break;
@@ -350,14 +354,18 @@ public class SizeAwareDirectory extends FilterDirectory
       this.fileSizeMap = fileSizeMap;
     }
 
-    public long setSizeWriter(SizeWriter sizeWriter) {
+    public Sizes setSizeWriter(SizeWriter sizeWriter) {
       if (this.sizeWriter == sizeWriter) {
-        return 0;
+        return new Sizes(0, 0);
       } else {
         // NOTE: there's an unavoidable race condition between these two
         // lines, and this ordering may occasionally overestimate directory size.
         this.sizeWriter = sizeWriter;
-        return backing.getFilePointer();
+        long onDiskSize = this.getFilePointer();
+        if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
+          onDiskSize = ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
+        }
+        return new Sizes(this.getFilePointer(), onDiskSize);
       }
     }
 

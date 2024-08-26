@@ -459,9 +459,7 @@ public class TeeDirectory extends BaseDirectory implements DirectoryFactory.OnDi
 
     @Override
     public long getBytesWritten() {
-      if (primary instanceof CompressingDirectory.SizeReportingIndexOutput) {
-        return ((CompressingDirectory.SizeReportingIndexOutput) primary).getBytesWritten();
-      } else if (secondary instanceof CompressingDirectory.SizeReportingIndexOutput) {
+      if (secondary instanceof CompressingDirectory.SizeReportingIndexOutput) {
         return ((CompressingDirectory.SizeReportingIndexOutput) secondary).getBytesWritten();
       } else {
         return getFilePointer();

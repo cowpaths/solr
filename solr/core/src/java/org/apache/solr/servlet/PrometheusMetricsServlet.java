@@ -703,6 +703,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   }
 
   static class AggregateMetricsApiCaller extends MetricsApiCaller {
+    static  final ThreadLocal<Set<String>> AGGREGATE_VALS = new ThreadLocal<>();
     private static final Map<String, CoreMetric> props = new HashMap<>();
 
     static {
@@ -724,7 +725,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     @Override
     protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
       Set<String> aggregateValsFound = new HashSet<>();
-      originalRequest.setAttribute("aggregateValsFound", aggregateValsFound);
+      AGGREGATE_VALS.set(aggregateValsFound);
       JsonNode nodeMetrics = metrics.path("solr.node");
       for (CoreMetric metric : CoreMetric.values()) {
         Number value =
@@ -798,12 +799,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
      */
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
-      Set<String> aggregateValsFound =
-          (Set<String>) originalRequest.getAttribute("aggregateValsFound");
+      Set<String> aggregateValsFound = AggregateMetricsApiCaller.AGGREGATE_VALS.get();
+      AggregateMetricsApiCaller.AGGREGATE_VALS.remove();
       if (aggregateValsFound == null) aggregateValsFound = Collections.emptySet();
-
       List<MetricInfo> infos = new ArrayList<>();
       for (CoreMetric c : CoreMetric.values()) {
         infos.add(new MetricInfo(c, aggregateValsFound, results));
@@ -905,7 +904,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     protected final String group;
     protected final String prefix;
     protected final String property;
-    HttpServletRequest originalRequest;
 
     MetricsApiCaller(String group, String prefix, String property) {
       this.group = group;
@@ -917,7 +915,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     void call(
         AtomicInteger qTime, List<PrometheusMetric> results, HttpServletRequest originalRequest)
         throws IOException, UnavailableException {
-      this.originalRequest = originalRequest;
       SolrDispatchFilter filter = getSolrDispatchFilter(originalRequest);
       CoreContainer cores = filter.getCores();
       HttpServletRequest request = new MetricsApiRequest(originalRequest, group, prefix, property);

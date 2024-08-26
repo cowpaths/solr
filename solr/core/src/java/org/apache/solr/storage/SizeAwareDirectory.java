@@ -25,6 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.LongAdder;
+
+import org.apache.jute.Index;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
@@ -339,6 +341,8 @@ public class SizeAwareDirectory extends FilterDirectory
 
     private volatile SizeWriter sizeWriter;
 
+    private long lastBytesWritten = 0;
+
 
     private SizeAccountingIndexOutput(
         String name,
@@ -378,7 +382,8 @@ public class SizeAwareDirectory extends FilterDirectory
       } finally {
         long onDiskSize = size;
         if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
-          onDiskSize = ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
+          long finalBytesWritten = getBytesWritten(backing);
+          onDiskSize = finalBytesWritten - lastBytesWritten;
         }
         // we don't know onDiskSize until the file is closed, so write it here
         sizeWriter.apply(0, onDiskSize, name);
@@ -400,13 +405,24 @@ public class SizeAwareDirectory extends FilterDirectory
     @Override
     public void writeByte(byte b) throws IOException {
       backing.writeByte(b);
-      sizeWriter.apply(1, 0, name);
+      long postBytesWritten = getBytesWritten(backing);
+      sizeWriter.apply(1, postBytesWritten - lastBytesWritten, name);
+      lastBytesWritten = postBytesWritten;
+    }
+
+    private long getBytesWritten(IndexOutput out) {
+      if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
+         return ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
+      }
+      return 0;
     }
 
     @Override
     public void writeBytes(byte[] b, int offset, int length) throws IOException {
       backing.writeBytes(b, offset, length);
-      sizeWriter.apply(length, 0, name);
+      long postBytesWritten = getBytesWritten(backing);
+      sizeWriter.apply(length, postBytesWritten - lastBytesWritten, name);
+      lastBytesWritten = postBytesWritten;
     }
 
     @Override

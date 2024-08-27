@@ -385,7 +385,7 @@ public class SizeAwareDirectory extends FilterDirectory
           long finalBytesWritten = getBytesWritten(backing);
           onDiskSize = finalBytesWritten - lastBytesWritten;
         }
-        // we don't know onDiskSize until the file is closed, so write it here
+        // logical size should already be set through writeByte(s), but we need to finalize the on-disk size here
         sizeWriter.apply(0, onDiskSize, name);
         fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
         liveOutputs.remove(name);

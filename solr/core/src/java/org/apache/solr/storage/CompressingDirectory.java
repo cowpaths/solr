@@ -172,8 +172,7 @@ public class CompressingDirectory extends FSDirectory
 
   @Override
   public long onDiskFileLength(String name) throws IOException {
-    Path path = directoryPath.resolve(name);
-    return FileUtils.sizeOf(path.toFile());
+    return Files.size(directoryPath.resolve(name));
   }
 
   public static long readLengthFromHeader(Path path) throws IOException {
@@ -394,6 +393,7 @@ public class CompressingDirectory extends FSDirectory
       }
     }
 
+    @Override
     public long getBytesWritten() {
       return bytesWritten;
     }

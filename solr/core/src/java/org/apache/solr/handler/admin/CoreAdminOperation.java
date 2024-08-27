@@ -382,7 +382,6 @@ public enum CoreAdminOperation implements CoreAdminOp {
                 long size = core.getIndexSize();
                 long onDiskSize = core.getOnDiskSize();
                 String readableSize = NumberUtils.readableSize(size);
-                // avoid re-parsing size if we don't need to, since it's a somewhat expensive operation
                 String readableOnDiskSize = size == onDiskSize ? readableSize : NumberUtils.readableSize(onDiskSize);
                 indexInfo.add("sizeInBytes", size);
                 indexInfo.add("size", NumberUtils.readableSize(size));

@@ -70,6 +70,9 @@ public class SizeAwareDirectory extends FilterDirectory
   }
 
   private static class Sizes implements Accountable {
+    private static final long RAM_BYTES_USED =
+            RamUsageEstimator.shallowSizeOfInstance(SizeAccountingIndexOutput.class);
+
     long size;
     long onDiskSize;
 
@@ -80,7 +83,7 @@ public class SizeAwareDirectory extends FilterDirectory
 
     @Override
     public long ramBytesUsed() {
-      return RamUsageEstimator.shallowSizeOfInstance(Sizes.class);
+      return RAM_BYTES_USED;
     }
   }
 
@@ -209,7 +212,7 @@ public class SizeAwareDirectory extends FilterDirectory
           if (fileSize > 0) {
             // whether the file exists or not, we don't care about it if it has zero size.
             // more often though, 0 size means the file isn't there.
-            fileSizeMap.put(file, new Sizes(fileSize, onDiskFileSize));
+            fileSizeMap.put(file, sizes);
             if (DirectoryFactory.sizeOf(in, file) == 0) {
               // during reconciliation, we have to check for file presence _after_ adding
               // to the map, to prevent a race condition that could leak entries into `fileSizeMap`

@@ -25,8 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.LongAdder;
-
-import org.apache.jute.Index;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
@@ -52,10 +50,11 @@ public class SizeAwareDirectory extends FilterDirectory
   private volatile long reconciledTimeNanos;
   private volatile LongAdder size = new LongAdder();
   private volatile LongAdder onDiskSize = new LongAdder();
-  private volatile SizeWriter sizeWriter = (size, onDiskSize, name) -> {
-    this.size.add(size);
-    this.onDiskSize.add(onDiskSize);
-  };
+  private volatile SizeWriter sizeWriter =
+      (size, onDiskSize, name) -> {
+        this.size.add(size);
+        this.onDiskSize.add(onDiskSize);
+      };
 
   private final ConcurrentHashMap<String, Sizes> fileSizeMap = new ConcurrentHashMap<>();
 
@@ -71,7 +70,7 @@ public class SizeAwareDirectory extends FilterDirectory
 
   private static class Sizes implements Accountable {
     private static final long RAM_BYTES_USED =
-            RamUsageEstimator.shallowSizeOfInstance(SizeAccountingIndexOutput.class);
+        RamUsageEstimator.shallowSizeOfInstance(SizeAccountingIndexOutput.class);
 
     long size;
     long onDiskSize;
@@ -346,7 +345,6 @@ public class SizeAwareDirectory extends FilterDirectory
 
     private long lastBytesWritten = 0;
 
-
     private SizeAccountingIndexOutput(
         String name,
         IndexOutput backing,
@@ -388,7 +386,8 @@ public class SizeAwareDirectory extends FilterDirectory
           long finalBytesWritten = getBytesWritten(backing);
           onDiskSize = finalBytesWritten - lastBytesWritten;
         }
-        // logical size should already be set through writeByte(s), but we need to finalize the on-disk size here
+        // logical size should already be set through writeByte(s), but we need to finalize the
+        // on-disk size here
         sizeWriter.apply(0, onDiskSize, name);
         fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
         liveOutputs.remove(name);
@@ -415,7 +414,7 @@ public class SizeAwareDirectory extends FilterDirectory
 
     private long getBytesWritten(IndexOutput out) {
       if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
-         return ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
+        return ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
       }
       return 0;
     }

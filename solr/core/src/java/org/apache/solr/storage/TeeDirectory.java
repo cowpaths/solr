@@ -415,7 +415,8 @@ public class TeeDirectory extends BaseDirectory implements DirectoryFactory.OnDi
     return new TeeIndexOutput(a, b);
   }
 
-  private static final class TeeIndexOutput extends IndexOutput implements CompressingDirectory.SizeReportingIndexOutput {
+  private static final class TeeIndexOutput extends IndexOutput
+      implements CompressingDirectory.SizeReportingIndexOutput {
     private final IndexOutput primary;
     private final IndexOutput secondary;
 

@@ -408,8 +408,8 @@ public class SizeAwareDirectory extends FilterDirectory
     public void writeByte(byte b) throws IOException {
       backing.writeByte(b);
       long postBytesWritten = getBytesWritten(backing);
-      sizeWriter.apply(1, postBytesWritten - lastBytesWritten, name);
-      lastBytesWritten = postBytesWritten;
+      sizeWriter.apply(1, 0, name);
+//      lastBytesWritten = postBytesWritten;
     }
 
     private long getBytesWritten(IndexOutput out) {
@@ -423,8 +423,8 @@ public class SizeAwareDirectory extends FilterDirectory
     public void writeBytes(byte[] b, int offset, int length) throws IOException {
       backing.writeBytes(b, offset, length);
       long postBytesWritten = getBytesWritten(backing);
-      sizeWriter.apply(length, postBytesWritten - lastBytesWritten, name);
-      lastBytesWritten = postBytesWritten;
+      sizeWriter.apply(length, 0, name);
+//      lastBytesWritten = postBytesWritten;
     }
 
     @Override

@@ -189,7 +189,7 @@ public class SizeAwareDirectory extends FilterDirectory
           (fileSize, onDiskFileSize, name) -> {
             size.add(fileSize);
             onDiskSize.add(onDiskFileSize);
-            if (fileSize >= 0 || recomputed.remove(name)) {
+            if (fileSize >= 0 || onDiskFileSize >= 0 || recomputed.remove(name)) {
               // if it's a removal, we only want to adjust if we've already
               // incorporated this file in our count!
               recomputeSize.add(fileSize);
@@ -230,8 +230,11 @@ public class SizeAwareDirectory extends FilterDirectory
       Sizes ret = new Sizes(recomputeSize.sum(), recomputeOnDiskSize.sum());
       Sizes extant = new Sizes(size.sum(), onDiskSize.sum());
       long diff = extant.size - ret.size;
+      long onDiskDiff = extant.onDiskSize - ret.onDiskSize;
       boolean initializing = !initialized;
-      if (!initializing && Math.abs(diff) < reconcileThreshold) {
+      if (!initializing
+          && Math.abs(diff) < reconcileThreshold
+          && Math.abs(onDiskDiff) < reconcileThreshold) {
         double ratio = (double) extant.size / ret.size;
         if (log.isInfoEnabled()) {
           log.info(
@@ -268,12 +271,14 @@ public class SizeAwareDirectory extends FilterDirectory
           }
         } else {
           double ratio = (double) extant.size / ret.size;
+          double onDiskRatio = (double) extant.onDiskSize / ret.onDiskSize;
           log.warn(
-              "reconcile size {} => {}  (diff {}; ratio {}; overhead {})",
+              "reconcile size {} => {}  (diff {}; ratio {}; onDiskRatio {}; overhead {})",
               extant,
               ret,
               humanReadableByteDiff(diff),
               ratio,
+              onDiskRatio,
               RamUsageEstimator.humanReadableUnits(ramBytesUsed()));
         }
       }
@@ -384,11 +389,11 @@ public class SizeAwareDirectory extends FilterDirectory
         long onDiskSize = size;
         if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
           long finalBytesWritten = getBytesWritten(backing);
-          onDiskSize = finalBytesWritten - lastBytesWritten;
+          onDiskSize = finalBytesWritten;
+          // logical size should already be set through writeByte(s), but we need to finalize the
+          // on-disk size here
+          sizeWriter.apply(0, finalBytesWritten - lastBytesWritten, name);
         }
-        // logical size should already be set through writeByte(s), but we need to finalize the
-        // on-disk size here
-        sizeWriter.apply(0, onDiskSize, name);
         fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
         liveOutputs.remove(name);
       }

@@ -26,13 +26,12 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.SuppressForbidden;
 
 public class TolerantShardHandlerWrapper extends ShardHandler {
   private final HttpShardHandler delegate;
   long start = System.currentTimeMillis();
   private final int maxWaitMillis;
-
-  private Set<String> slowReplicas = new HashSet<>();
 
   private static class CancellableWithStart implements Cancellable {
     private final Cancellable cancellable;
@@ -49,6 +48,7 @@ public class TolerantShardHandlerWrapper extends ShardHandler {
     }
   }
 
+  @SuppressForbidden(reason = "Need currentTimeMillis")
   public TolerantShardHandlerWrapper(HttpShardHandler delegate, int maxWait) {
     this.delegate = delegate;
     this.maxWaitMillis = maxWait;
@@ -91,11 +91,13 @@ public class TolerantShardHandlerWrapper extends ShardHandler {
     return delegate.getShardHandlerFactory();
   }
 
+  @SuppressForbidden(reason = "Need currentTimeMillis")
   private ShardResponse take() {
     try {
       while (delegate.pending.get() > 0) {
         long currTime = System.currentTimeMillis();
         long timeOut = Math.max(maxWaitMillis - (currTime - start), 5);
+        //this uses poll() instead of take() so that we can exit earlier with timeout
         ShardResponse rsp = delegate.responses.poll(timeOut, TimeUnit.MILLISECONDS);
         if (rsp == null) {
           // atleast one node is getting delayed

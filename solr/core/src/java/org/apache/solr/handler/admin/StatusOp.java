@@ -29,7 +29,6 @@ import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.core.CoreContainer;
-import org.apache.solr.core.NodeConfig;
 
 class StatusOp implements CoreAdminHandler.CoreAdminOp {
   @Override

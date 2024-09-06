@@ -79,9 +79,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         new OsMetricsApiCaller(),
         new ThreadMetricsApiCaller(),
         new StatusCodeMetricsApiCaller(),
-        aggregateMetricsApiCaller,
-        new CoresMetricsApiCaller(
-            Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
+        aggregateMetricsApiCaller
+//      ,  new CoresMetricsApiCaller(
+//            Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics))
+        );
   }
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
@@ -795,7 +796,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
 
     PrometheusMetric createPrometheusMetric(Number value) {
-      return new PrometheusMetric(metricName, metricType, desc, value.longValue());
+      return createPrometheusMetric(value, null);
+    }
+    PrometheusMetric createPrometheusMetric(Number value, String descriptionSuffix) {
+      return new PrometheusMetric(metricName, metricType, desc + (descriptionSuffix != null ? descriptionSuffix : ""), value.longValue());
     }
   }
 
@@ -827,7 +831,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       for (CoreMetric metric : CoreMetric.values()) {
         Number value = getNumber(metricsNode, buildQueryKey(metric));
         if (!INVALID_NUMBER.equals(value)) {
-          results.add(metric.createPrometheusMetric(value));
+          results.add(metric.createPrometheusMetric(value, "[node aggregated]"));
         } else {
           missingCoreMetrics.add(metric);
         }

@@ -40,7 +40,7 @@ import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MINOR_
 import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MINOR_MERGE_RUNNING_DOCS;
 import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SELECT;
 import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SOFT_AUTOCOMMIT;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SUBSHARD_SELECT;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SELECT_SUBSHARD;
 import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.UPDATE;
 
 public class PrometheusMetricsServletTest {
@@ -403,7 +403,7 @@ public class PrometheusMetricsServletTest {
             + "# HELP update_errors cumulative number of errors during updates across cores\n"
             + "# TYPE update_errors counter\n"
             + "update_errors 4\n";
-    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(List.of(MAJOR_MERGE, MAJOR_MERGE_RUNNING_DOCS, MINOR_MERGE, MINOR_MERGE_RUNNING_DOCS, GET, GET_SUBSHARD, SELECT, SUBSHARD_SELECT, UPDATE, LOCAL_UPDATE, AUTOCOMMIT, SOFT_AUTOCOMMIT, COMMITS, DEL_BY_ID, DEL_BY_Q, CUMULATIVE_DOC_ADDS, CUMULATIVE_ERRS)), json, 14, output);
+    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(List.of(MAJOR_MERGE, MAJOR_MERGE_RUNNING_DOCS, MINOR_MERGE, MINOR_MERGE_RUNNING_DOCS, GET, GET_SUBSHARD, SELECT, SELECT_SUBSHARD, UPDATE, LOCAL_UPDATE, AUTOCOMMIT, SOFT_AUTOCOMMIT, COMMITS, DEL_BY_ID, DEL_BY_Q, CUMULATIVE_DOC_ADDS, CUMULATIVE_ERRS)), json, 14, output);
   }
 
   @Test
@@ -503,6 +503,6 @@ public class PrometheusMetricsServletTest {
             + "# HELP update_errors cumulative number of errors during updates across cores\n"
             + "# TYPE update_errors counter\n"
             + "update_errors 0\n";
-    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(List.of(MAJOR_MERGE, MAJOR_MERGE_RUNNING_DOCS, MINOR_MERGE, MINOR_MERGE_RUNNING_DOCS, GET, GET_SUBSHARD, SELECT, SUBSHARD_SELECT, UPDATE, LOCAL_UPDATE, AUTOCOMMIT, SOFT_AUTOCOMMIT, COMMITS, DEL_BY_ID, DEL_BY_Q, CUMULATIVE_DOC_ADDS, CUMULATIVE_ERRS)), json, 25, output);
+    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(List.of(MAJOR_MERGE, MAJOR_MERGE_RUNNING_DOCS, MINOR_MERGE, MINOR_MERGE_RUNNING_DOCS, GET, GET_SUBSHARD, SELECT, SELECT_SUBSHARD, UPDATE, LOCAL_UPDATE, AUTOCOMMIT, SOFT_AUTOCOMMIT, COMMITS, DEL_BY_ID, DEL_BY_Q, CUMULATIVE_DOC_ADDS, CUMULATIVE_ERRS)), json, 25, output);
   }
 }

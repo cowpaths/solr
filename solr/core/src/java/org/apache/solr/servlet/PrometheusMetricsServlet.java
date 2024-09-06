@@ -812,7 +812,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     "UPDATE./update.requestTimes":{"count":2},
     "UPDATE./update[local].requestTimes":{"count":0}}}}*/
     AggregateMetricsApiCaller() {
-      super("solr.node", buildPrefix(), buildProperty());
+      super("solr.node,core", buildPrefix(), buildProperty());
     }
 
     //    private static String buildQueryKey(CoreMetric metric) {
@@ -1110,22 +1110,23 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   private abstract static class MetricsByPrefixApiCaller extends MetricsApiCaller {
     protected final String group;
     protected final String prefix;
-    protected final String property;
+    protected final String[] properties;
 
-    MetricsByPrefixApiCaller(String group, String prefix, String property) {
+    MetricsByPrefixApiCaller(String group, String prefix, String... properties) {
       this.group = group;
       this.prefix = prefix;
-      this.property = property;
+      this.properties = properties;
     }
 
     @Override
     protected String buildQueryString() {
+      String propertyClause = String.join("&property", Arrays.stream(properties).map(p -> URLEncoder.encode(p, StandardCharsets.UTF_8)).collect(Collectors.toSet()));
       return String.format(
           Locale.ROOT,
-          "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
+          "wt=json&indent=false&compact=true&group=%s&prefix=%s%s",
           URLEncoder.encode(group, StandardCharsets.UTF_8),
           URLEncoder.encode(prefix, StandardCharsets.UTF_8),
-          URLEncoder.encode(property, StandardCharsets.UTF_8));
+          propertyClause);
     }
   }
 

@@ -72,13 +72,16 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   private final List<MetricsApiCaller> callers = getCallers();
 
   private List<MetricsApiCaller> getCallers() {
+    AggregateMetricsApiCaller aggregateMetricsApiCaller = new AggregateMetricsApiCaller();
     return List.of(
-        new GarbageCollectorMetricsApiCaller(),
-        new MemoryMetricsApiCaller(),
-        new OsMetricsApiCaller(),
-        new ThreadMetricsApiCaller(),
-        new StatusCodeMetricsApiCaller(),
-        new AggregateMetricsApiCaller());
+            new GarbageCollectorMetricsApiCaller(),
+            new MemoryMetricsApiCaller(),
+            new OsMetricsApiCaller(),
+            new ThreadMetricsApiCaller(),
+            new StatusCodeMetricsApiCaller(),
+            aggregateMetricsApiCaller,
+            new CoresMetricsApiCaller(
+                    Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
   }
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =

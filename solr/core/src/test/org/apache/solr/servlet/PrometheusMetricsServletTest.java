@@ -16,24 +16,6 @@
  */
 package org.apache.solr.servlet;
 
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.AUTOCOMMIT;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.COMMITS;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.CUMULATIVE_DOC_ADDS;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.CUMULATIVE_ERRS;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.DEL_BY_ID;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.DEL_BY_Q;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.GET;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.GET_SUBSHARD;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.LOCAL_UPDATE;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MAJOR_MERGE;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MAJOR_MERGE_RUNNING_DOCS;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MINOR_MERGE;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MINOR_MERGE_RUNNING_DOCS;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SELECT;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SELECT_SUBSHARD;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SOFT_AUTOCOMMIT;
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.UPDATE;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -404,28 +386,7 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 4\n";
     assertMetricsApiCaller(
-        new PrometheusMetricsServlet.CoresMetricsApiCaller(
-            List.of(
-                MAJOR_MERGE,
-                MAJOR_MERGE_RUNNING_DOCS,
-                MINOR_MERGE,
-                MINOR_MERGE_RUNNING_DOCS,
-                GET,
-                GET_SUBSHARD,
-                SELECT,
-                SELECT_SUBSHARD,
-                UPDATE,
-                LOCAL_UPDATE,
-                AUTOCOMMIT,
-                SOFT_AUTOCOMMIT,
-                COMMITS,
-                DEL_BY_ID,
-                DEL_BY_Q,
-                CUMULATIVE_DOC_ADDS,
-                CUMULATIVE_ERRS)),
-        json,
-        14,
-        output);
+        new PrometheusMetricsServlet.AggregateMetricsApiCaller(), json, 14, output);
   }
 
   @Test
@@ -526,27 +487,6 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 0\n";
     assertMetricsApiCaller(
-        new PrometheusMetricsServlet.CoresMetricsApiCaller(
-            List.of(
-                MAJOR_MERGE,
-                MAJOR_MERGE_RUNNING_DOCS,
-                MINOR_MERGE,
-                MINOR_MERGE_RUNNING_DOCS,
-                GET,
-                GET_SUBSHARD,
-                SELECT,
-                SELECT_SUBSHARD,
-                UPDATE,
-                LOCAL_UPDATE,
-                AUTOCOMMIT,
-                SOFT_AUTOCOMMIT,
-                COMMITS,
-                DEL_BY_ID,
-                DEL_BY_Q,
-                CUMULATIVE_DOC_ADDS,
-                CUMULATIVE_ERRS)),
-        json,
-        25,
-        output);
+        new PrometheusMetricsServlet.AggregateMetricsApiCaller(), json, 25, output);
   }
 }

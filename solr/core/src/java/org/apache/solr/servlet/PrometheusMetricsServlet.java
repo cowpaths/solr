@@ -564,6 +564,66 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   }
 
   enum CoreMetric {
+    MAJOR_MERGE(
+        "INDEX.merge.major", "merges_major", "cumulative number of major merges across cores"),
+    MAJOR_MERGE_RUNNING_DOCS(
+        "INDEX.merge.major.running.docs",
+        "merges_major_current_docs",
+        "current number of docs in major merges across cores",
+        null,
+        PrometheusMetricType.GAUGE),
+    MINOR_MERGE(
+        "INDEX.merge.minor", "merges_minor", "cumulative number of minor merges across cores"),
+    MINOR_MERGE_RUNNING_DOCS(
+        "INDEX.merge.minor.running.docs",
+        "merges_minor_current_docs",
+        "current number of docs in minor merges across cores",
+        null,
+        PrometheusMetricType.GAUGE),
+    GET(
+        "QUERY./get.requestTimes",
+        "top_level_requests_get",
+        "cumulative number of top-level gets across cores"),
+    GET_DURATION_P50(
+        "QUERY./get.requestTimes",
+        "top_level_requests_get_duration_p50",
+        "top-level gets p50 duration",
+        "median_ms",
+        PrometheusMetricType.GAUGE),
+    GET_DURATION_P95(
+        "QUERY./get.requestTimes",
+        "top_level_requests_get_duration_p95",
+        "top-level gets p95 duration",
+        "p95_ms",
+        PrometheusMetricType.GAUGE),
+    GET_DURATION_P99(
+        "QUERY./get.requestTimes",
+        "top_level_requests_get_duration_p99",
+        "top-level gets p99 duration",
+        "p99_ms",
+        PrometheusMetricType.GAUGE),
+    GET_SUBSHARD(
+        "QUERY./get[shard].requestTimes",
+        "sub_shard_requests_get",
+        "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores"),
+    GET_SUBSHARD_DURATION_P50(
+        "QUERY./get[shard].requestTimes",
+        "sub_shard_requests_get_duration_p50",
+        "sub shard gets p50 duration",
+        "median_ms",
+        PrometheusMetricType.GAUGE),
+    GET_SUBSHARD_DURATION_P95(
+        "QUERY./get[shard].requestTimes",
+        "sub_shard_requests_get_duration_p95",
+        "sub shard gets p95 duration",
+        "p95_ms",
+        PrometheusMetricType.GAUGE),
+    GET_SUBSHARD_DURATION_P99(
+        "QUERY./get[shard].requestTimes",
+        "sub_shard_requests_get_duration_p99",
+        "sub shard gets p99 duration",
+        "p99_ms",
+        PrometheusMetricType.GAUGE),
     SELECT(
         "QUERY./select.requestTimes",
         "top_level_requests_select",
@@ -652,59 +712,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "local updates p99 duration",
         "p99_ms",
         PrometheusMetricType.GAUGE),
-    GET(
-        "QUERY./get.requestTimes",
-        "top_level_requests_get",
-        "cumulative number of top-level gets across cores"),
-    GET_DURATION_P50(
-        "QUERY./get.requestTimes",
-        "top_level_requests_get_duration_p50",
-        "top-level gets p50 duration",
-        "median_ms",
-        PrometheusMetricType.GAUGE),
-    GET_DURATION_P95(
-        "QUERY./get.requestTimes",
-        "top_level_requests_get_duration_p95",
-        "top-level gets p95 duration",
-        "p95_ms",
-        PrometheusMetricType.GAUGE),
-    GET_DURATION_P99(
-        "QUERY./get.requestTimes",
-        "top_level_requests_get_duration_p99",
-        "top-level gets p99 duration",
-        "p99_ms",
-        PrometheusMetricType.GAUGE),
-    GET_SUBSHARD(
-        "QUERY./get[shard].requestTimes",
-        "sub_shard_requests_get",
-        "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores"),
-    GET_SUBSHARD_DURATION_P50(
-        "QUERY./get[shard].requestTimes",
-        "sub_shard_requests_get_duration_p50",
-        "sub shard gets p50 duration",
-        "median_ms",
-        PrometheusMetricType.GAUGE),
-    GET_SUBSHARD_DURATION_P95(
-        "QUERY./get[shard].requestTimes",
-        "sub_shard_requests_get_duration_p95",
-        "sub shard gets p95 duration",
-        "p95_ms",
-        PrometheusMetricType.GAUGE),
-    GET_SUBSHARD_DURATION_P99(
-        "QUERY./get[shard].requestTimes",
-        "sub_shard_requests_get_duration_p99",
-        "sub shard gets p99 duration",
-        "p99_ms",
-        PrometheusMetricType.GAUGE),
-    COMMITS("UPDATE.updateHandler.commits", "commits", "cumulative number of commits across cores"),
-    DEL_BY_ID(
-        "UPDATE.updateHandler.cumulativeDeletesById",
-        "deletes_by_id",
-        "cumulative number of deletes by id across cores"),
-    DEL_BY_Q(
-        "UPDATE.updateHandler.cumulativeDeletesByQuery",
-        "deletes_by_query",
-        "cumulative number of deletes by query across cores"),
     AUTOCOMMIT(
         "UPDATE.updateHandler.autoCommits",
         "auto_commits_hard",
@@ -717,23 +724,15 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "cumulative number of soft auto commits across cores",
         null,
         PrometheusMetricType.COUNTER),
-
-    MAJOR_MERGE(
-        "INDEX.merge.major", "merges_major", "cumulative number of major merges across cores"),
-    MAJOR_MERGE_RUNNING_DOCS(
-        "INDEX.merge.major.running.docs",
-        "merges_major_current_docs",
-        "current number of docs in major merges across cores",
-        null,
-        PrometheusMetricType.GAUGE),
-    MINOR_MERGE(
-        "INDEX.merge.minor", "merges_minor", "cumulative number of minor merges across cores"),
-    MINOR_MERGE_RUNNING_DOCS(
-        "INDEX.merge.minor.running.docs",
-        "merges_minor_current_docs",
-        "current number of docs in minor merges across cores",
-        null,
-        PrometheusMetricType.GAUGE),
+    COMMITS("UPDATE.updateHandler.commits", "commits", "cumulative number of commits across cores"),
+    CUMULATIVE_DEL_BY_ID(
+        "UPDATE.updateHandler.cumulativeDeletesById",
+        "deletes_by_id",
+        "cumulative number of deletes by id across cores"),
+    CUMULATIVE_DEL_BY_Q(
+        "UPDATE.updateHandler.cumulativeDeletesByQuery",
+        "deletes_by_query",
+        "cumulative number of deletes by query across cores"),
     CUMULATIVE_DOC_ADDS(
         "UPDATE.updateHandler.cumulativeAdds",
         "doc_adds",
@@ -742,16 +741,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "UPDATE.updateHandler.cumulativeErrors",
         "update_errors",
         "cumulative number of errors during updates across cores"),
-    CUMULATIVE_DEL_BY_ID(
-        "UPDATE.updateHandler.cumulativeDeletesById",
-        "cumulative_delete_by_id",
-        "cumulative number delete by id across cores"),
-
-    CUMULATIVE_DEL_BY_Q(
-        "UPDATE.updateHandler.cumulativeDeletesByQuery",
-        "cumulative_delete_by_q",
-        "cumulative number delete by queries across cores"),
-
     MERGES("UPDATE.updateHandler.merges", "merges", "cumulative number of merges across cores"),
     OPTIMIZE(
         "UPDATE.updateHandler.optimizes",
@@ -804,21 +793,43 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
+  /**
+   * A caller that fetch metrics from both groups "solr.node" (node aggregated metrics) and "core"
+   * (per core metrics) and match it to all the values in enum CoreMetric. The goal is to provide
+   * node level metrics on the CoreMetric values.
+   *
+   * <p>It first iterates on the "solr.node" metrics, if a core metric is not found there, then it
+   * will look it up per core and sum them up as the node metrics.
+   */
   static class AggregateMetricsApiCaller extends MetricsByPrefixApiCaller {
-    /*"metrics":{
-    "solr.node":{
+    /*
+    "metrics":{
+    "solr.node":{ //node aggregated metrics
     "QUERY./select.requestTimes":{"count":2},
     "QUERY./select[shard].requestTimes":{"count":0},
     "UPDATE./update.requestTimes":{"count":2},
-    "UPDATE./update[local].requestTimes":{"count":0}}}}*/
+    "UPDATE./update[local].requestTimes":{"count":0}
+    ...
+    },
+    "solr.core.loadtest.shard1_1.replica_n8":{ //pre core metrics
+    "QUERY./select.requestTimes":{"count":1},
+    "QUERY./select[shard].requestTimes":{"count":0},
+    "UPDATE./update.requestTimes":{"count":1},
+    "UPDATE./update[local].requestTimes":{"count":0}
+    ...
+    },
+    "solr.core.loadtest.shard2_1.replica_n10":{
+    "QUERY./select.requestTimes":{"count":0},
+    "QUERY./select[shard].requestTimes":{"count":0},
+    "UPDATE./update.requestTimes":{"count":1},
+    "UPDATE./update[local].requestTimes":{"count":0}
+    ...
+    },
+    ...
+    */
     AggregateMetricsApiCaller() {
       super("solr.node,core", buildPrefix(), buildProperty());
     }
-
-    //    private static String buildQueryKey(CoreMetric metric) {
-    //      return "solr.node:" + metric.key + (metric.property != null ? (":" + metric.property) :
-    // "");
-    //    }
 
     private static String buildPrefix() {
       return String.join(
@@ -865,92 +876,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         JsonNode coreMetricNode = entry.getValue();
         for (CoreMetric missingCoreMetric :
             missingCoreMetrics) { // only iterate on those that aren't accounted for by "solr.node"
-          Number val =
-              missingCoreMetric.property != null
-                  ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property)
-                  : getNumber(coreMetricNode, missingCoreMetric.key);
-          if (!val.equals(INVALID_NUMBER)) {
-            accumulative.put(
-                missingCoreMetric,
-                accumulative.getOrDefault(missingCoreMetric, 0L) + val.longValue());
-          }
-        }
-      }
-
-      for (Map.Entry<CoreMetric, Long> coreMetricEntry : accumulative.entrySet()) {
-        CoreMetric coreMetric = coreMetricEntry.getKey();
-        Long accumulativeVal = coreMetricEntry.getValue();
-        results.add(coreMetric.createPrometheusMetric(accumulativeVal));
-      }
-    }
-  }
-
-  /**
-   * Collector that get metrics from all the cores and then sum those metrics by CoreMetric key.
-   *
-   * <p>This runs after AggregateMetricsApiCaller and pick up whatever is missing from it by reading
-   * missingCoreMetricsView.
-   *
-   * <p>Therefore, this has dependency on AggregateMetricsApiCaller and should not be executed
-   * concurrently with it.
-   */
-  static class CoresMetricsApiCaller extends MetricsApiCaller {
-    private final List<CoreMetric> missingCoreMetricsView;
-
-    CoresMetricsApiCaller(List<CoreMetric> missingCoreMetricsView) {
-      this.missingCoreMetricsView = missingCoreMetricsView;
-    }
-
-    @Override
-    protected String buildQueryString() {
-      List<String> prefixes = new ArrayList<>();
-      List<String> properties = new ArrayList<>();
-      for (CoreMetric missingMetric : missingCoreMetricsView) {
-        prefixes.add(missingMetric.key);
-        if (missingMetric.property != null) {
-          properties.add(missingMetric.property);
-        }
-      }
-
-      return String.format(
-          Locale.ROOT,
-          "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
-          "core",
-          URLEncoder.encode(String.join(",", prefixes), StandardCharsets.UTF_8),
-          URLEncoder.encode(String.join(",", properties), StandardCharsets.UTF_8));
-    }
-
-    /*
-    "metrics":{
-      "solr.core.loadtest.shard1_1.replica_n8":{
-        "INDEX.merge.errors":0,
-        "INDEX.merge.major":{"count":0},
-        "INDEX.merge.major.running":0,
-        "INDEX.merge.major.running.docs":0,
-        "INDEX.merge.major.running.segments":0,
-        "INDEX.merge.minor":{"count":0},
-        "INDEX.merge.minor.running":0,
-        "INDEX.merge.minor.running.docs":0,
-        "INDEX.merge.minor.running.segments":0,
-        "QUERY./get.requestTimes":{"count":0},
-        "QUERY./get[shard].requestTimes":{"count":0},
-        "QUERY./select.requestTimes":{"count":2},
-        "QUERY./select[shard].requestTimes":{"count":0},
-        "UPDATE./update.requestTimes":{"count":0},
-        "UPDATE./update[local].requestTimes":{"count":0},
-        "UPDATE.updateHandler.autoCommits":0,
-        "UPDATE.updateHandler.commits":{"count":14877},
-        "UPDATE.updateHandler.cumulativeDeletesById":{"count":0},
-        "UPDATE.updateHandler.cumulativeDeletesByQuery":{"count":0},
-        "UPDATE.updateHandler.softAutoCommits":0},
-      ...
-     */
-
-    @Override
-    protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
-      Map<CoreMetric, Long> accumulative = new LinkedHashMap<>();
-      for (CoreMetric missingCoreMetric : missingCoreMetricsView) {
-        for (JsonNode coreMetricNode : metrics) {
           Number val =
               missingCoreMetric.property != null
                   ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property)
@@ -1091,28 +1016,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         throws IOException;
 
     protected abstract String buildQueryString();
-  }
-
-  private abstract static class MetricsByKeyApiCaller extends MetricsApiCaller {
-    private final String group;
-    private final String[] keys;
-
-    private MetricsByKeyApiCaller(String group, String[] keys) {
-      this.group = group;
-      this.keys = keys;
-    }
-
-    @Override
-    protected String buildQueryString() {
-      String keyClause =
-          Arrays.stream(keys)
-              .reduce("", (s, key) -> s + "&key=" + URLEncoder.encode(key, StandardCharsets.UTF_8));
-      return String.format(
-          Locale.ROOT,
-          "wt=json&indent=false&compact=true&group=%s%s",
-          URLEncoder.encode(group, StandardCharsets.UTF_8),
-          keyClause);
-    }
   }
 
   private abstract static class MetricsByPrefixApiCaller extends MetricsApiCaller {

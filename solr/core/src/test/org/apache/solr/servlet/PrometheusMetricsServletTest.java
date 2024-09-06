@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
@@ -386,7 +387,7 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 4\n";
     assertMetricsApiCaller(
-        new PrometheusMetricsServlet.AggregateMetricsApiCaller(), json, 14, output);
+            new PrometheusMetricsServlet.CoresMetricsApiCaller(Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())), json, 14, output);
   }
 
   @Test
@@ -487,6 +488,6 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 0\n";
     assertMetricsApiCaller(
-        new PrometheusMetricsServlet.AggregateMetricsApiCaller(), json, 25, output);
+        new PrometheusMetricsServlet.CoresMetricsApiCaller(Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())), json, 25, output);
   }
 }

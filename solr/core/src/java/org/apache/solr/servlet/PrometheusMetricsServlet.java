@@ -72,13 +72,16 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   private final List<MetricsApiCaller> callers = getCallers();
 
   private List<MetricsApiCaller> getCallers() {
+    AggregateMetricsApiCaller aggregateMetricsApiCaller = new AggregateMetricsApiCaller();
     return List.of(
-        new GarbageCollectorMetricsApiCaller(),
-        new MemoryMetricsApiCaller(),
-        new OsMetricsApiCaller(),
-        new ThreadMetricsApiCaller(),
-        new StatusCodeMetricsApiCaller(),
-        new AggregateMetricsApiCaller());
+            new GarbageCollectorMetricsApiCaller(),
+            new MemoryMetricsApiCaller(),
+            new OsMetricsApiCaller(),
+            new ThreadMetricsApiCaller(),
+            new StatusCodeMetricsApiCaller(),
+            aggregateMetricsApiCaller,
+            new CoresMetricsApiCaller(
+                    Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
   }
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
@@ -827,8 +830,9 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     },
     ...
     */
+    List<CoreMetric> missingCoreMetrics = new ArrayList<>();
     AggregateMetricsApiCaller() {
-      super("solr.node,core", buildPrefix(), buildProperty());
+      super("solr.node", buildPrefix(), buildProperty());
     }
 
     private static String buildPrefix() {
@@ -847,7 +851,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
     @Override
     protected void handle(List<PrometheusMetric> results, JsonNode metricsNode) throws IOException {
-      List<CoreMetric> missingCoreMetrics = new ArrayList<>();
+      missingCoreMetrics.clear();
       JsonNode nodeMetricNode = metricsNode.get("solr.node");
 
       if (nodeMetricNode != null) {
@@ -867,23 +871,90 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
             "Cannot find the solr.node metrics, going to fall back to getting metrics from all cores");
         missingCoreMetrics.addAll(Arrays.asList(CoreMetric.values()));
       }
+    }
+  }
 
-      Map<CoreMetric, Long> accumulative = new LinkedHashMap<>();
-      for (Map.Entry<String, JsonNode> entry : metricsNode.properties()) {
-        if ("solr.node".equals(entry.getKey())) { // this one is not a core
-          continue;
+  /**
+   * Collector that get metrics from all the cores and then sum those metrics by CoreMetric key.
+   *
+   * <p>This runs after AggregateMetricsApiCaller and pick up whatever is missing from it by reading
+   * missingCoreMetricsView.
+   *
+   * <p>Therefore, this has dependency on AggregateMetricsApiCaller and should not be executed
+   * concurrently with it.
+   */
+  static class CoresMetricsApiCaller extends MetricsApiCaller {
+    private final List<CoreMetric> missingCoreMetricsView;
+
+    CoresMetricsApiCaller(List<CoreMetric> missingCoreMetricsView) {
+      this.missingCoreMetricsView = missingCoreMetricsView;
+    }
+
+    @Override
+    protected String buildQueryString() {
+      List<String> prefixes = new ArrayList<>();
+      List<String> properties = new ArrayList<>();
+      for (CoreMetric missingMetric : missingCoreMetricsView) {
+        prefixes.add(missingMetric.key);
+        if (missingMetric.property != null) {
+          properties.add(missingMetric.property);
         }
-        JsonNode coreMetricNode = entry.getValue();
-        for (CoreMetric missingCoreMetric :
-            missingCoreMetrics) { // only iterate on those that aren't accounted for by "solr.node"
+      }
+
+      String propertyClause =
+              String.join(
+                      "&property=",
+                      properties.stream()
+                              .map(p -> URLEncoder.encode(p, StandardCharsets.UTF_8))
+                              .collect(Collectors.toSet()));
+      return String.format(
+              Locale.ROOT,
+              "wt=json&indent=false&compact=true&group=%s&prefix=%s%s",
+              "core",
+              URLEncoder.encode(String.join(",", prefixes), StandardCharsets.UTF_8),
+              propertyClause);
+    }
+
+    
+    /*
+    "metrics":{
+      "solr.core.loadtest.shard1_1.replica_n8":{
+        "INDEX.merge.errors":0,
+        "INDEX.merge.major":{"count":0},
+        "INDEX.merge.major.running":0,
+        "INDEX.merge.major.running.docs":0,
+        "INDEX.merge.major.running.segments":0,
+        "INDEX.merge.minor":{"count":0},
+        "INDEX.merge.minor.running":0,
+        "INDEX.merge.minor.running.docs":0,
+        "INDEX.merge.minor.running.segments":0,
+        "QUERY./get.requestTimes":{"count":0},
+        "QUERY./get[shard].requestTimes":{"count":0},
+        "QUERY./select.requestTimes":{"count":2},
+        "QUERY./select[shard].requestTimes":{"count":0},
+        "UPDATE./update.requestTimes":{"count":0},
+        "UPDATE./update[local].requestTimes":{"count":0},
+        "UPDATE.updateHandler.autoCommits":0,
+        "UPDATE.updateHandler.commits":{"count":14877},
+        "UPDATE.updateHandler.cumulativeDeletesById":{"count":0},
+        "UPDATE.updateHandler.cumulativeDeletesByQuery":{"count":0},
+        "UPDATE.updateHandler.softAutoCommits":0},
+      ...
+     */
+
+    @Override
+    protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
+      Map<CoreMetric, Long> accumulative = new LinkedHashMap<>();
+      for (CoreMetric missingCoreMetric : missingCoreMetricsView) {
+        for (JsonNode coreMetricNode : metrics) {
           Number val =
-              missingCoreMetric.property != null
-                  ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property)
-                  : getNumber(coreMetricNode, missingCoreMetric.key);
+                  missingCoreMetric.property != null
+                          ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property)
+                          : getNumber(coreMetricNode, missingCoreMetric.key);
           if (!val.equals(INVALID_NUMBER)) {
             accumulative.put(
-                missingCoreMetric,
-                accumulative.getOrDefault(missingCoreMetric, 0L) + val.longValue());
+                    missingCoreMetric,
+                    accumulative.getOrDefault(missingCoreMetric, 0L) + val.longValue());
           }
         }
       }

@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.UnavailableException;
 import javax.servlet.WriteListener;
@@ -79,10 +78,9 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         new OsMetricsApiCaller(),
         new ThreadMetricsApiCaller(),
         new StatusCodeMetricsApiCaller(),
-        aggregateMetricsApiCaller
-//      ,  new CoresMetricsApiCaller(
-//            Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics))
-        );
+        aggregateMetricsApiCaller,
+        new CoresMetricsApiCaller(
+            Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
   }
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
@@ -798,8 +796,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     PrometheusMetric createPrometheusMetric(Number value) {
       return createPrometheusMetric(value, null);
     }
+
     PrometheusMetric createPrometheusMetric(Number value, String descriptionSuffix) {
-      return new PrometheusMetric(metricName, metricType, desc + (descriptionSuffix != null ? descriptionSuffix : ""), value.longValue());
+      return new PrometheusMetric(
+          metricName,
+          metricType,
+          desc + (descriptionSuffix != null ? descriptionSuffix : ""),
+          value.longValue());
     }
   }
 
@@ -867,11 +870,11 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       }
 
       return String.format(
-              Locale.ROOT,
-              "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
-              "core",
-              URLEncoder.encode(String.join(",", prefixes), StandardCharsets.UTF_8),
-              URLEncoder.encode(String.join(",", properties), StandardCharsets.UTF_8));
+          Locale.ROOT,
+          "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
+          "core",
+          URLEncoder.encode(String.join(",", prefixes), StandardCharsets.UTF_8),
+          URLEncoder.encode(String.join(",", properties), StandardCharsets.UTF_8));
     }
 
     /*

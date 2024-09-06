@@ -838,17 +838,25 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     protected void handle(List<PrometheusMetric> results, JsonNode metricsNode) throws IOException {
       List<CoreMetric> missingCoreMetrics = new ArrayList<>();
       JsonNode nodeMetricNode = metricsNode.get("solr.node");
-      for (CoreMetric metric : CoreMetric.values()) {
-        Number value =
-            metric.property != null
-                ? getNumber(nodeMetricNode, metric.key, metric.property)
-                : getNumber(nodeMetricNode, metric.key);
-        if (!INVALID_NUMBER.equals(value)) {
-          results.add(metric.createPrometheusMetric(value, "[node aggregated]"));
-        } else {
-          missingCoreMetrics.add(metric);
+
+      if (nodeMetricNode != null) {
+        for (CoreMetric metric : CoreMetric.values()) {
+          Number value =
+              metric.property != null
+                  ? getNumber(nodeMetricNode, metric.key, metric.property)
+                  : getNumber(nodeMetricNode, metric.key);
+          if (!INVALID_NUMBER.equals(value)) {
+            results.add(metric.createPrometheusMetric(value, "[node aggregated]"));
+          } else {
+            missingCoreMetrics.add(metric);
+          }
         }
+      } else {
+        log.warn(
+            "Cannot find the solr.node metrics, going to fall back to getting metrics from all cores");
+        missingCoreMetrics.addAll(Arrays.asList(CoreMetric.values()));
       }
+
       Map<CoreMetric, Long> accumulative = new LinkedHashMap<>();
       for (Map.Entry<String, JsonNode> entry : metricsNode.properties()) {
         if ("solr.node".equals(entry.getKey())) { // this one is not a core

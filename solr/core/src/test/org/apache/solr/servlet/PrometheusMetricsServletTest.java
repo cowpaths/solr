@@ -25,7 +25,23 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
 import org.junit.Test;
 
-import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.*;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.AUTOCOMMIT;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.COMMITS;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.CUMULATIVE_DOC_ADDS;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.CUMULATIVE_ERRS;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.DEL_BY_ID;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.DEL_BY_Q;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.GET;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.GET_SUBSHARD;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.LOCAL_UPDATE;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MAJOR_MERGE;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MAJOR_MERGE_RUNNING_DOCS;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MINOR_MERGE;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.MINOR_MERGE_RUNNING_DOCS;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SELECT;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SOFT_AUTOCOMMIT;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.SUBSHARD_SELECT;
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.UPDATE;
 
 public class PrometheusMetricsServletTest {
 

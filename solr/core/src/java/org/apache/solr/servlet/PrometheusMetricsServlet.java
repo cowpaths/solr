@@ -33,14 +33,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.UnavailableException;
 import javax.servlet.WriteListener;
@@ -52,7 +52,6 @@ import org.apache.solr.client.solrj.cloud.SolrCloudManager;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.storage.CompressingDirectory;
 import org.slf4j.Logger;
@@ -70,16 +69,19 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   // failing the call.
   private static final Integer INVALID_NUMBER = -1;
 
-  private final List<MetricsApiCaller> callers =
-      Collections.unmodifiableList(
-          Arrays.asList(
-              new GarbageCollectorMetricsApiCaller(),
-              new MemoryMetricsApiCaller(),
-              new OsMetricsApiCaller(),
-              new ThreadMetricsApiCaller(),
-              new StatusCodeMetricsApiCaller(),
-              new AggregateMetricsApiCaller(),
-              new CoresMetricsApiCaller()));
+  private final List<MetricsApiCaller> callers = getCallers();
+  private List<MetricsApiCaller> getCallers() {
+    AggregateMetricsApiCaller aggregateMetricsApiCaller = new AggregateMetricsApiCaller();
+    return List.of(
+                    new GarbageCollectorMetricsApiCaller(),
+                    new MemoryMetricsApiCaller(),
+                    new OsMetricsApiCaller(),
+                    new ThreadMetricsApiCaller(),
+                    new StatusCodeMetricsApiCaller(),
+                    aggregateMetricsApiCaller,
+                    new CoresMetricsApiCaller(Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
+  }
+
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
       Map.of(
@@ -253,7 +255,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
-  static class GarbageCollectorMetricsApiCaller extends MetricsApiCaller {
+  static class GarbageCollectorMetricsApiCaller extends MetricsByPrefixApiCaller {
 
     GarbageCollectorMetricsApiCaller() {
       super("jvm", "gc.G1-,memory.pools.G1-", "");
@@ -351,7 +353,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
-  static class MemoryMetricsApiCaller extends MetricsApiCaller {
+  static class MemoryMetricsApiCaller extends MetricsByPrefixApiCaller {
 
     MemoryMetricsApiCaller() {
       super("jvm", "memory.heap.,memory.non-heap.", "");
@@ -401,7 +403,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
-  static class OsMetricsApiCaller extends MetricsApiCaller {
+  static class OsMetricsApiCaller extends MetricsByPrefixApiCaller {
 
     OsMetricsApiCaller() {
       super("jvm", "os.", "");
@@ -444,7 +446,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
-  static class ThreadMetricsApiCaller extends MetricsApiCaller {
+  static class ThreadMetricsApiCaller extends MetricsByPrefixApiCaller {
 
     ThreadMetricsApiCaller() {
       super("jvm", "threads.", "");
@@ -512,7 +514,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
-  static class StatusCodeMetricsApiCaller extends MetricsApiCaller {
+  static class StatusCodeMetricsApiCaller extends MetricsByPrefixApiCaller {
 
     StatusCodeMetricsApiCaller() {
       super("jetty", "org.eclipse.jetty.server.handler.DefaultHandler.", "count");
@@ -571,7 +573,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     SUBSHARD_SELECT(
         "QUERY./select[shard].requestTimes",
         "sub_shard_requests_select",
-        "cumulative number of sub (spawned by re-distributing a top-level req) gets across cores"),
+        "cumulative number of sub (spawned by re-distributing a top-level req) selects across cores"),
     UPDATE(
         "UPDATE./update.requestTimes",
         "distributed_requests_update",
@@ -601,24 +603,31 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "UPDATE.updateHandler.autoCommits",
         "auto_commits_hard",
         "cumulative number of hard auto commits across cores",
-        null),
+            null,
+            PrometheusMetricType.COUNTER),
     SOFT_AUTOCOMMIT(
         "UPDATE.updateHandler.softAutoCommits",
         "auto_commits_soft",
         "cumulative number of soft auto commits across cores",
-        null),
+            null,
+            PrometheusMetricType.COUNTER),
+
     MAJOR_MERGE(
         "INDEX.merge.major", "merges_major", "cumulative number of major merges across cores"),
     MAJOR_MERGE_RUNNING_DOCS(
         "INDEX.merge.major.running.docs",
         "merges_major_current_docs",
-        "current number of docs in major merges across cores"),
+        "current number of docs in major merges across cores",
+            null,
+            PrometheusMetricType.GAUGE),
     MINOR_MERGE(
         "INDEX.merge.minor", "merges_minor", "cumulative number of minor merges across cores"),
     MINOR_MERGE_RUNNING_DOCS(
         "INDEX.merge.minor.running.docs",
         "merges_minor_current_docs",
-        "current number of docs in minor merges across cores"),
+        "current number of docs in minor merges across cores",
+            null,
+            PrometheusMetricType.GAUGE),
     CUMULATIVE_DOC_ADDS(
         "UPDATE.updateHandler.cumulativeAdds",
         "doc_adds",
@@ -627,11 +636,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         "UPDATE.updateHandler.cumulativeErrors",
         "update_errors",
         "cumulative number of errors during updates across cores"),
-    CUMULATIVE_ADDS(
-        "UPDATE.updateHandler.cumulativeAdds",
-        "cumulative_errors",
-        "cumulative number of doc adds across cores"),
-
     CUMULATIVE_DEL_BY_ID(
             "UPDATE.updateHandler.cumulativeDeletesById",
         "cumulative_delete_by_id",
@@ -663,54 +667,37 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
     ;
     final String key, metricName, desc, property;
+    private final PrometheusMetricType metricType;
+    private static final Map<String, CoreMetric> lookup = new HashMap<>();
 
-    CoreMetric(String key, String metricName, String desc) {
-      this(key, metricName, desc, "count");
+    static {
+      for (CoreMetric e : CoreMetric.values()) {
+        lookup.put(e.key, e);
+      }
     }
 
-    CoreMetric(String key, String metricName, String desc, String property) {
+
+
+    CoreMetric(String key, String metricName, String desc) {
+      this(key, metricName, desc, "count", PrometheusMetricType.COUNTER);
+    }
+
+    CoreMetric(String key, String metricName, String desc, String property, PrometheusMetricType metricType) {
       this.key = key;
       this.metricName = metricName;
       this.desc = desc;
       this.property = property;
-    }
-
-    long readMissing(JsonNode core, Set<String> aggregateValsFound) throws IOException {
-      if (aggregateValsFound.contains(key)) {
-        return 0;
-      }
-      return property == null
-          ? getNumber(core, key).longValue()
-          : getNumber(core, key, "count").longValue();
+      this.metricType = metricType;
     }
 
     PrometheusMetric createPrometheusMetric(Number value) {
       return new PrometheusMetric(
-          metricName, PrometheusMetricType.COUNTER, desc, value.longValue());
-    }
-
-    void addMissing(Set<String> aggregateValsFound, List<PrometheusMetric> results, long val) {
-      if (aggregateValsFound.contains(key)) return;
-      results.add(createPrometheusMetric(val));
-    }
-    static String mergedKeys() {
-      List<String> allKeys = new ArrayList<>();
-      for (CoreMetric m : CoreMetric.values()) {
-        allKeys.add(m.key);
-      }
-      return StrUtils.join(allKeys, ',');
+          metricName, metricType, desc, value.longValue());
     }
   }
 
-  static class AggregateMetricsApiCaller extends MetricsApiCaller {
-    static  final ThreadLocal<Set<String>> AGGREGATE_VALS = new ThreadLocal<>();
-    private static final Map<String, CoreMetric> props = new HashMap<>();
-
-    static {
-      for (CoreMetric metric : CoreMetric.values()) {
-        props.put(metric.key, metric);
-      }
-    }
+  static class AggregateMetricsApiCaller extends MetricsByKeyApiCaller {
+    List<CoreMetric> missingCoreMetrics = new ArrayList<>();
 
     /*"metrics":{
     "solr.node":{
@@ -719,58 +706,66 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     "UPDATE./update.requestTimes":{"count":2},
     "UPDATE./update[local].requestTimes":{"count":0}}}}*/
     AggregateMetricsApiCaller() {
-      super("solr.node", CoreMetric.mergedKeys(), "count");
+      super("solr.node", buildKeys());
     }
 
+    private static String buildQueryKey(CoreMetric metric) {
+      return "solr.node:" + metric.key + (metric.property != null ? (":" + metric.property) : "");
+    }
+    private static String[] buildKeys() {
+      return Arrays.stream(CoreMetric.values()).map(m -> buildQueryKey(m)).toArray(String[]::new);
+    }
     @Override
-    protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
-      Set<String> aggregateValsFound = new HashSet<>();
-      AGGREGATE_VALS.set(aggregateValsFound);
-      JsonNode nodeMetrics = metrics.path("solr.node");
+    protected void handle(List<PrometheusMetric> results, JsonNode metricsNode) throws IOException {
+      missingCoreMetrics.clear();
+
       for (CoreMetric metric : CoreMetric.values()) {
-        Number value =
-            metric.property == null
-                ? getNumber(nodeMetrics, metric.key)
-                : getNumber(nodeMetrics, metric.key, property);
+        Number value = getNumber(metricsNode, buildQueryKey(metric));
         if (!INVALID_NUMBER.equals(value)) {
-          aggregateValsFound.add(metric.key);
           results.add(metric.createPrometheusMetric(value));
+        } else {
+          missingCoreMetrics.add(metric);
         }
       }
     }
   }
 
-  static class MetricInfo {
-    final CoreMetric metric;
-    final Set<String> aggregateValsFound;
-    final List<PrometheusMetric> results;
-    long value;
 
-    MetricInfo(CoreMetric metric, Set<String> aggregateValsFound, List<PrometheusMetric> results) {
-      this.metric = metric;
-      this.aggregateValsFound = aggregateValsFound;
-      this.results = results;
-    }
-
-    void readMissing(JsonNode core) throws IOException {
-      value = metric.readMissing(core, aggregateValsFound);
-    }
-
-    public void addMissing() {
-      metric.addMissing(aggregateValsFound, results, value);
-    }
-  }
-
-  // Aggregating across all the cores on the node.
-  // Report only local requests, excluding forwarded requests to other nodes.
+  /**
+   * Collector that get metrics from all the cores and then sum those metrics by CoreMetric key.
+   * <p>
+   * This runs after AggregateMetricsApiCaller and pick up whatever is missing from it by reading missingCoreMetricsView.
+   * <p>
+   * Therefore, this has dependency on AggregateMetricsApiCaller and should not be executed concurrently with it.
+   */
   static class CoresMetricsApiCaller extends MetricsApiCaller {
+    private final List<CoreMetric> missingCoreMetricsView;
+    private static final Pattern SPECIAL_REGEX_CHARS = Pattern.compile("[{}()\\[\\].+*?^$\\\\|]");
 
-    CoresMetricsApiCaller() {
-      super(
-          "core",
-          CoreMetric.mergedKeys() ,
-          "count");
+    CoresMetricsApiCaller(List<CoreMetric> missingCoreMetricsView) {
+      this.missingCoreMetricsView = missingCoreMetricsView;
     }
+
+    private static String escapeSpecialRegexChars(String str) {
+      return SPECIAL_REGEX_CHARS.matcher(str).replaceAll("\\\\$0");
+    }
+
+    @Override
+    protected String buildQueryString() {
+      StringBuilder keyClause = new StringBuilder();
+      for (CoreMetric missingMetric : missingCoreMetricsView) {
+        keyClause.append("&expr=.*:").append(escapeSpecialRegexChars(URLEncoder.encode(missingMetric.key, StandardCharsets.UTF_8)));
+        if (missingMetric.property != null) {
+          keyClause.append(":" + missingMetric.property);
+        }
+      }
+      return String.format(
+              Locale.ROOT,
+              "wt=json&indent=false&compact=true&group=%s%s",
+              URLEncoder.encode("core", StandardCharsets.UTF_8),
+              keyClause);
+    }
+
 
     /*
     "metrics":{
@@ -800,22 +795,20 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
     @Override
     protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
-      Set<String> aggregateValsFound = AggregateMetricsApiCaller.AGGREGATE_VALS.get();
-      AggregateMetricsApiCaller.AGGREGATE_VALS.remove();
-      if (aggregateValsFound == null) aggregateValsFound = Collections.emptySet();
-      List<MetricInfo> infos = new ArrayList<>();
-      for (CoreMetric c : CoreMetric.values()) {
-        infos.add(new MetricInfo(c, aggregateValsFound, results));
-      }
-
-      for (JsonNode core : metrics) {
-        for (MetricInfo m : infos) {
-          m.readMissing(core);
+      Map<CoreMetric, Long> accumulative = new LinkedHashMap<>();
+      for (CoreMetric missingCoreMetric : missingCoreMetricsView) {
+        for (JsonNode coreMetricNode : metrics) {
+          Number val = missingCoreMetric.property != null ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property) : getNumber(coreMetricNode, missingCoreMetric.key);
+          if (!val.equals(INVALID_NUMBER)) {
+            accumulative.put(missingCoreMetric, accumulative.getOrDefault(missingCoreMetric, 0L) + val.longValue());
+          }
         }
       }
 
-      for (MetricInfo m : infos) {
-        m.addMissing();
+      for (Map.Entry<CoreMetric, Long> coreMetricEntry : accumulative.entrySet()) {
+        CoreMetric coreMetric = coreMetricEntry.getKey();
+        Long accumulativeVal = coreMetricEntry.getValue();
+        results.add(coreMetric.createPrometheusMetric(accumulativeVal));
       }
     }
   }
@@ -881,7 +874,9 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     for (String name : names) {
       node = node.path(name);
     }
-    if (node.isNumber()) {
+    if (node.isMissingNode()) {
+      return INVALID_NUMBER;
+    } else if (node.isNumber()) {
       return node.numberValue();
     } else {
       log.warn("node {} does not have a number at the path {}.", originalNode, names);
@@ -901,15 +896,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
   abstract static class MetricsApiCaller {
 
-    protected final String group;
-    protected final String prefix;
-    protected final String property;
 
-    MetricsApiCaller(String group, String prefix, String property) {
-      this.group = group;
-      this.prefix = prefix;
-      this.property = property;
-    }
 
     // use HttpSolrCall to simulate a call to the metrics api.
     void call(
@@ -917,7 +904,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
         throws IOException, UnavailableException {
       SolrDispatchFilter filter = getSolrDispatchFilter(originalRequest);
       CoreContainer cores = filter.getCores();
-      HttpServletRequest request = new MetricsApiRequest(originalRequest, group, prefix, property);
+      HttpServletRequest request = new MetricsApiRequest(originalRequest, buildQueryString());
       MetricsApiResponse response = new MetricsApiResponse();
       SolrDispatchFilter.Action action =
           new HttpSolrCall(filter, cores, request, response, false).call();
@@ -946,6 +933,50 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
     protected abstract void handle(List<PrometheusMetric> results, JsonNode metrics)
         throws IOException;
+
+    protected abstract String buildQueryString();
+  }
+
+  private static abstract class MetricsByKeyApiCaller extends MetricsApiCaller {
+    private final String group;
+    private final String[] keys;
+
+    private MetricsByKeyApiCaller(String group, String[] keys) {
+      this.group = group;
+      this.keys = keys;
+    }
+
+    @Override
+    protected String buildQueryString() {
+      String keyClause = Arrays.stream(keys).reduce("", (s, key) -> s + "&key=" + URLEncoder.encode(key, StandardCharsets.UTF_8));
+      return String.format(
+                Locale.ROOT,
+                "wt=json&indent=false&compact=true&group=%s%s",
+                URLEncoder.encode(group, StandardCharsets.UTF_8),
+                keyClause);
+    }
+  }
+
+  private static abstract class MetricsByPrefixApiCaller extends MetricsApiCaller {
+    protected final String group;
+    protected final String prefix;
+    protected final String property;
+
+    MetricsByPrefixApiCaller(String group, String prefix, String property) {
+      this.group = group;
+      this.prefix = prefix;
+      this.property = property;
+    }
+
+    @Override
+    protected String buildQueryString() {
+      return String.format(
+                      Locale.ROOT,
+                      "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
+                      URLEncoder.encode(group, StandardCharsets.UTF_8),
+                      URLEncoder.encode(prefix, StandardCharsets.UTF_8),
+                      URLEncoder.encode(property, StandardCharsets.UTF_8));
+    }
   }
 
   // represents a request to e.g.,
@@ -956,16 +987,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     private final String queryString;
     private final Map<String, Object> attributes = new HashMap<>();
 
-    MetricsApiRequest(HttpServletRequest request, String group, String prefix, String property)
+    MetricsApiRequest(HttpServletRequest request, String queryString)
         throws IOException {
       super(request);
-      queryString =
-          String.format(
-              Locale.ROOT,
-              "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
-              URLEncoder.encode(group, StandardCharsets.UTF_8.name()),
-              URLEncoder.encode(prefix, StandardCharsets.UTF_8.name()),
-              URLEncoder.encode(property, StandardCharsets.UTF_8.name()));
+      this.queryString = queryString;
     }
 
     @Override

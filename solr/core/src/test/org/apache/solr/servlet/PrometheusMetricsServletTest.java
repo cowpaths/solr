@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static org.apache.solr.servlet.PrometheusMetricsServlet.CoreMetric.*;
+
 public class PrometheusMetricsServletTest {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -385,7 +387,7 @@ public class PrometheusMetricsServletTest {
             + "# HELP update_errors cumulative number of errors during updates across cores\n"
             + "# TYPE update_errors counter\n"
             + "update_errors 4\n";
-    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(), json, 14, output);
+    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(List.of(MAJOR_MERGE, MAJOR_MERGE_RUNNING_DOCS, MINOR_MERGE, MINOR_MERGE_RUNNING_DOCS, GET, GET_SUBSHARD, SELECT, SUBSHARD_SELECT, UPDATE, LOCAL_UPDATE, AUTOCOMMIT, SOFT_AUTOCOMMIT, COMMITS, DEL_BY_ID, DEL_BY_Q, CUMULATIVE_DOC_ADDS, CUMULATIVE_ERRS)), json, 14, output);
   }
 
   @Test
@@ -449,19 +451,7 @@ public class PrometheusMetricsServletTest {
             + "      \"UPDATE.updateHandler.cumulativeErrors\":{\"count\":0},\n"
             + "      \"UPDATE.updateHandler.softAutoCommits\":28}}}";
     String output =
-        "# HELP merges_major cumulative number of major merges across cores\n"
-            + "# TYPE merges_major counter\n"
-            + "merges_major -4\n"
-            + "# HELP merges_major_current_docs current number of docs in major merges across cores\n"
-            + "# TYPE merges_major_current_docs gauge\n"
-            + "merges_major_current_docs -4\n"
-            + "# HELP merges_minor cumulative number of minor merges across cores\n"
-            + "# TYPE merges_minor counter\n"
-            + "merges_minor -4\n"
-            + "# HELP merges_minor_current_docs current number of docs in minor merges across cores\n"
-            + "# TYPE merges_minor_current_docs gauge\n"
-            + "merges_minor_current_docs -4\n"
-            + "# HELP top_level_requests_get cumulative number of top-level gets across cores\n"
+            "# HELP top_level_requests_get cumulative number of top-level gets across cores\n"
             + "# TYPE top_level_requests_get counter\n"
             + "top_level_requests_get 134\n"
             + "# HELP sub_shard_requests_get cumulative number of sub (spawned by re-distributing a top-level req) gets across cores\n"
@@ -485,9 +475,6 @@ public class PrometheusMetricsServletTest {
             + "# HELP auto_commits_soft cumulative number of soft auto commits across cores\n"
             + "# TYPE auto_commits_soft counter\n"
             + "auto_commits_soft 70\n"
-            + "# HELP commits cumulative number of commits across cores\n"
-            + "# TYPE commits counter\n"
-            + "commits -4\n"
             + "# HELP deletes_by_id cumulative number of deletes by id across cores\n"
             + "# TYPE deletes_by_id counter\n"
             + "deletes_by_id 62\n"
@@ -500,6 +487,6 @@ public class PrometheusMetricsServletTest {
             + "# HELP update_errors cumulative number of errors during updates across cores\n"
             + "# TYPE update_errors counter\n"
             + "update_errors 0\n";
-    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(), json, 25, output);
+    assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(List.of(MAJOR_MERGE, MAJOR_MERGE_RUNNING_DOCS, MINOR_MERGE, MINOR_MERGE_RUNNING_DOCS, GET, GET_SUBSHARD, SELECT, SUBSHARD_SELECT, UPDATE, LOCAL_UPDATE, AUTOCOMMIT, SOFT_AUTOCOMMIT, COMMITS, DEL_BY_ID, DEL_BY_Q, CUMULATIVE_DOC_ADDS, CUMULATIVE_ERRS)), json, 25, output);
   }
 }

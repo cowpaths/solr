@@ -1028,7 +1028,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       this.group = group;
       this.prefix = prefix;
       this.properties = properties;
-      this.property = properties.length > 1 ? properties[0] : null;
+      this.property = properties.length > 0 ? properties[0] : null;
     }
 
     @Override

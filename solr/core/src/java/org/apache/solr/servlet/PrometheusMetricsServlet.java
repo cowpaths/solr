@@ -1111,16 +1111,23 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     protected final String group;
     protected final String prefix;
     protected final String[] properties;
+    protected final String property; // for backward compatibility
 
     MetricsByPrefixApiCaller(String group, String prefix, String... properties) {
       this.group = group;
       this.prefix = prefix;
       this.properties = properties;
+      this.property = properties.length > 1 ? properties[0] : null;
     }
 
     @Override
     protected String buildQueryString() {
-      String propertyClause = String.join("&property", Arrays.stream(properties).map(p -> URLEncoder.encode(p, StandardCharsets.UTF_8)).collect(Collectors.toSet()));
+      String propertyClause =
+          String.join(
+              "&property=",
+              Arrays.stream(properties)
+                  .map(p -> URLEncoder.encode(p, StandardCharsets.UTF_8))
+                  .collect(Collectors.toSet()));
       return String.format(
           Locale.ROOT,
           "wt=json&indent=false&compact=true&group=%s&prefix=%s%s",

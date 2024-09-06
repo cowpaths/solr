@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.UnavailableException;
 import javax.servlet.WriteListener;
@@ -71,16 +72,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   private final List<MetricsApiCaller> callers = getCallers();
 
   private List<MetricsApiCaller> getCallers() {
-    AggregateMetricsApiCaller aggregateMetricsApiCaller = new AggregateMetricsApiCaller();
     return List.of(
         new GarbageCollectorMetricsApiCaller(),
         new MemoryMetricsApiCaller(),
         new OsMetricsApiCaller(),
         new ThreadMetricsApiCaller(),
         new StatusCodeMetricsApiCaller(),
-        aggregateMetricsApiCaller,
-        new CoresMetricsApiCaller(
-            Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
+        new AggregateMetricsApiCaller());
   }
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
@@ -806,9 +804,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     }
   }
 
-  static class AggregateMetricsApiCaller extends MetricsByKeyApiCaller {
-    List<CoreMetric> missingCoreMetrics = new ArrayList<>();
-
+  static class AggregateMetricsApiCaller extends MetricsByPrefixApiCaller {
     /*"metrics":{
     "solr.node":{
     "QUERY./select.requestTimes":{"count":2},
@@ -816,28 +812,67 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     "UPDATE./update.requestTimes":{"count":2},
     "UPDATE./update[local].requestTimes":{"count":0}}}}*/
     AggregateMetricsApiCaller() {
-      super("solr.node", buildKeys());
+      super("solr.node", buildPrefix(), buildProperty());
     }
 
-    private static String buildQueryKey(CoreMetric metric) {
-      return "solr.node:" + metric.key + (metric.property != null ? (":" + metric.property) : "");
+    //    private static String buildQueryKey(CoreMetric metric) {
+    //      return "solr.node:" + metric.key + (metric.property != null ? (":" + metric.property) :
+    // "");
+    //    }
+
+    private static String buildPrefix() {
+      return String.join(
+          ",", Arrays.stream(CoreMetric.values()).map(m -> m.key).toArray(String[]::new));
     }
 
-    private static String[] buildKeys() {
-      return Arrays.stream(CoreMetric.values()).map(m -> buildQueryKey(m)).toArray(String[]::new);
+    private static String buildProperty() {
+      return String.join(
+          ",",
+          Arrays.stream(CoreMetric.values())
+              .filter(m -> m.property != null)
+              .map(m -> m.property)
+              .collect(Collectors.toSet()));
     }
 
     @Override
     protected void handle(List<PrometheusMetric> results, JsonNode metricsNode) throws IOException {
-      missingCoreMetrics.clear();
-
+      List<CoreMetric> missingCoreMetrics = new ArrayList<>();
+      JsonNode nodeMetricNode = metricsNode.get("solr.node");
       for (CoreMetric metric : CoreMetric.values()) {
-        Number value = getNumber(metricsNode, buildQueryKey(metric));
+        Number value =
+            metric.property != null
+                ? getNumber(nodeMetricNode, metric.key, metric.property)
+                : getNumber(nodeMetricNode, metric.key);
         if (!INVALID_NUMBER.equals(value)) {
           results.add(metric.createPrometheusMetric(value, "[node aggregated]"));
         } else {
           missingCoreMetrics.add(metric);
         }
+      }
+      Map<CoreMetric, Long> accumulative = new LinkedHashMap<>();
+      for (Map.Entry<String, JsonNode> entry : metricsNode.properties()) {
+        if ("solr.node".equals(entry.getKey())) { // this one is not a core
+          continue;
+        }
+        JsonNode coreMetricNode = entry.getValue();
+        for (CoreMetric missingCoreMetric :
+            missingCoreMetrics) { // only iterate on those that aren't accounted for by "solr.node"
+          Number val =
+              missingCoreMetric.property != null
+                  ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property)
+                  : getNumber(coreMetricNode, missingCoreMetric.key);
+          if (!val.equals(INVALID_NUMBER)) {
+            accumulative.put(
+                missingCoreMetric,
+                accumulative.getOrDefault(missingCoreMetric, 0L) + val.longValue());
+          }
+        }
+      }
+
+      for (Map.Entry<CoreMetric, Long> coreMetricEntry : accumulative.entrySet()) {
+        CoreMetric coreMetric = coreMetricEntry.getKey();
+        Long accumulativeVal = coreMetricEntry.getValue();
+        results.add(coreMetric.createPrometheusMetric(accumulativeVal));
       }
     }
   }

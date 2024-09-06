@@ -850,34 +850,28 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
    */
   static class CoresMetricsApiCaller extends MetricsApiCaller {
     private final List<CoreMetric> missingCoreMetricsView;
-    private static final Pattern SPECIAL_REGEX_CHARS = Pattern.compile("[{}()\\[\\].+*?^$\\\\|]");
 
     CoresMetricsApiCaller(List<CoreMetric> missingCoreMetricsView) {
       this.missingCoreMetricsView = missingCoreMetricsView;
     }
 
-    private static String escapeSpecialRegexChars(String str) {
-      return SPECIAL_REGEX_CHARS.matcher(str).replaceAll("\\\\$0");
-    }
-
     @Override
     protected String buildQueryString() {
-      StringBuilder keyClause = new StringBuilder();
+      List<String> prefixes = new ArrayList<>();
+      List<String> properties = new ArrayList<>();
       for (CoreMetric missingMetric : missingCoreMetricsView) {
-        keyClause
-            .append("&expr=.*:")
-            .append(
-                escapeSpecialRegexChars(
-                    URLEncoder.encode(missingMetric.key, StandardCharsets.UTF_8)));
+        prefixes.add(missingMetric.key);
         if (missingMetric.property != null) {
-          keyClause.append(":" + missingMetric.property);
+          properties.add(missingMetric.property);
         }
       }
+
       return String.format(
-          Locale.ROOT,
-          "wt=json&indent=false&compact=true&group=%s%s",
-          URLEncoder.encode("core", StandardCharsets.UTF_8),
-          keyClause);
+              Locale.ROOT,
+              "wt=json&indent=false&compact=true&group=%s&prefix=%s&property=%s",
+              "core",
+              URLEncoder.encode(String.join(",", prefixes), StandardCharsets.UTF_8),
+              URLEncoder.encode(String.join(",", properties), StandardCharsets.UTF_8));
     }
 
     /*

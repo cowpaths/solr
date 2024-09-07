@@ -387,7 +387,11 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 4\n";
     assertMetricsApiCaller(
-            new PrometheusMetricsServlet.CoresMetricsApiCaller(Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())), json, 14, output);
+        new PrometheusMetricsServlet.CoresMetricsApiCaller(
+            Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())),
+        json,
+        14,
+        output);
   }
 
   @Test
@@ -488,6 +492,10 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 0\n";
     assertMetricsApiCaller(
-        new PrometheusMetricsServlet.CoresMetricsApiCaller(Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())), json, 25, output);
+        new PrometheusMetricsServlet.CoresMetricsApiCaller(
+            Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())),
+        json,
+        25,
+        output);
   }
 }

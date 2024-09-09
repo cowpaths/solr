@@ -74,14 +74,14 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   private List<MetricsApiCaller> getCallers() {
     AggregateMetricsApiCaller aggregateMetricsApiCaller = new AggregateMetricsApiCaller();
     return List.of(
-            new GarbageCollectorMetricsApiCaller(),
-            new MemoryMetricsApiCaller(),
-            new OsMetricsApiCaller(),
-            new ThreadMetricsApiCaller(),
-            new StatusCodeMetricsApiCaller(),
-            aggregateMetricsApiCaller,
-            new CoresMetricsApiCaller(
-                    Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
+        new GarbageCollectorMetricsApiCaller(),
+        new MemoryMetricsApiCaller(),
+        new OsMetricsApiCaller(),
+        new ThreadMetricsApiCaller(),
+        new StatusCodeMetricsApiCaller(),
+        aggregateMetricsApiCaller,
+        new CoresMetricsApiCaller(
+            Collections.unmodifiableList(aggregateMetricsApiCaller.missingCoreMetrics)));
   }
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
@@ -831,6 +831,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     ...
     */
     List<CoreMetric> missingCoreMetrics = new ArrayList<>();
+
     AggregateMetricsApiCaller() {
       super("solr.node", buildPrefix(), buildProperty());
     }
@@ -902,20 +903,19 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       }
 
       String propertyClause =
-              String.join(
-                      "&property=",
-                      properties.stream()
-                              .map(p -> URLEncoder.encode(p, StandardCharsets.UTF_8))
-                              .collect(Collectors.toSet()));
+          String.join(
+              "&property=",
+              properties.stream()
+                  .map(p -> URLEncoder.encode(p, StandardCharsets.UTF_8))
+                  .collect(Collectors.toSet()));
       return String.format(
-              Locale.ROOT,
-              "wt=json&indent=false&compact=true&group=%s&prefix=%s%s",
-              "core",
-              URLEncoder.encode(String.join(",", prefixes), StandardCharsets.UTF_8),
-              propertyClause);
+          Locale.ROOT,
+          "wt=json&indent=false&compact=true&group=%s&prefix=%s%s",
+          "core",
+          URLEncoder.encode(String.join(",", prefixes), StandardCharsets.UTF_8),
+          propertyClause);
     }
 
-    
     /*
     "metrics":{
       "solr.core.loadtest.shard1_1.replica_n8":{
@@ -948,13 +948,13 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       for (CoreMetric missingCoreMetric : missingCoreMetricsView) {
         for (JsonNode coreMetricNode : metrics) {
           Number val =
-                  missingCoreMetric.property != null
-                          ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property)
-                          : getNumber(coreMetricNode, missingCoreMetric.key);
+              missingCoreMetric.property != null
+                  ? getNumber(coreMetricNode, missingCoreMetric.key, missingCoreMetric.property)
+                  : getNumber(coreMetricNode, missingCoreMetric.key);
           if (!val.equals(INVALID_NUMBER)) {
             accumulative.put(
-                    missingCoreMetric,
-                    accumulative.getOrDefault(missingCoreMetric, 0L) + val.longValue());
+                missingCoreMetric,
+                accumulative.getOrDefault(missingCoreMetric, 0L) + val.longValue());
           }
         }
       }

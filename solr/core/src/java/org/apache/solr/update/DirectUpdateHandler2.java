@@ -213,7 +213,8 @@ public class DirectUpdateHandler2 extends UpdateHandler
     }
     commitCommands = solrMetricsContext.meter("commits", getCategory().toString(), scope);
     hardAutoCommitCounts = solrMetricsContext.meter("autoCommits", getCategory().toString(), scope);
-    softAutoCommitCounts = solrMetricsContext.meter("softAutoCommits", getCategory().toString(), scope);
+    softAutoCommitCounts =
+        solrMetricsContext.meter("softAutoCommits", getCategory().toString(), scope);
 
     if (commitTracker.getDocsUpperBound() > 0) {
       solrMetricsContext.gauge(

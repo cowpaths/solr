@@ -33,6 +33,7 @@ public class CompressingDirectoryFactory extends StandardDirectoryFactory {
 
   private final ExecutorService ioExec = ExecutorUtil.newMDCAwareCachedThreadPool("ioExec");
   private boolean compress;
+  private boolean extendedWindow;
   private boolean useAsyncIO;
   private boolean useDirectIO;
 
@@ -41,6 +42,7 @@ public class CompressingDirectoryFactory extends StandardDirectoryFactory {
     super.init(args);
     SolrParams params = args.toSolrParams();
     compress = params.getBool("compress", true);
+    extendedWindow = params.getBool("extendedWindow", CompressingDirectory.DEFAULT_EXTENDED_WINDOW);
     useDirectIO = params.getBool("useDirectIO", CompressingDirectory.DEFAULT_USE_DIRECT_IO);
     useAsyncIO = params.getBool("useAsyncIO", useDirectIO);
   }
@@ -51,7 +53,7 @@ public class CompressingDirectoryFactory extends StandardDirectoryFactory {
     Directory backing;
     Path p = Path.of(path);
     if (compress) {
-      backing = new CompressingDirectory(p, ioExec, useAsyncIO, useDirectIO);
+      backing = new CompressingDirectory(p, ioExec, extendedWindow, useAsyncIO, useDirectIO);
     } else {
       backing = FSDirectory.open(p, lockFactory);
     }

@@ -71,6 +71,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
 
   private boolean isDataNode = true;
   private String accessDir;
+  private boolean extendedWindow;
   private boolean useAsyncIO;
   private boolean useDirectIO;
 
@@ -359,6 +360,7 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
     if (!Path.of(accessDir).isAbsolute()) {
       throw new IllegalArgumentException("accessDir should be absolute; found " + accessDir);
     }
+    extendedWindow = params.getBool("extendedWindow", CompressingDirectory.DEFAULT_EXTENDED_WINDOW);
     useDirectIO = params.getBool("useDirectIO", CompressingDirectory.DEFAULT_USE_DIRECT_IO);
     useAsyncIO = params.getBool("useAsyncIO", useDirectIO);
   }
@@ -420,7 +422,8 @@ public class TeeDirectoryFactory extends MMapDirectoryFactory {
             assert content == naive;
             content.close();
             content =
-                new CompressingDirectory(compressedPath, nodeLevelState, useAsyncIO, useDirectIO);
+                new CompressingDirectory(
+                    compressedPath, nodeLevelState, extendedWindow, useAsyncIO, useDirectIO);
             return new AbstractMap.SimpleImmutableEntry<>(content, Collections.emptyList());
           };
       backing = new TeeDirectory(naive, accessFunction, persistentFunction, nodeLevelState);

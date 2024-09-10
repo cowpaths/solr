@@ -308,6 +308,7 @@ public class CompressingDirectory extends FSDirectory
       preBuffer = ByteBuffer.wrap(compressBuffer);
       this.initialBlockBufferPool = initialBlockBufferPool;
       initialBlock = initialBlockBufferPool.get();
+      bytesWritten = HEADER_SIZE;
 
       // allocate space for the header
       buffer.position(buffer.position() + HEADER_SIZE);
@@ -368,8 +369,8 @@ public class CompressingDirectory extends FSDirectory
         LZ4.compressWithDictionary(compressBuffer, 0, 0, preBufferRemaining, out, ht);
       }
       int blockMapFooterSize = blockDeltas.transferTo(out);
+      bytesWritten += out.resetSize();
       if (wroteBlock) {
-        bytesWritten += buffer.position();
         writeHelper.flush(buffer, true);
         initialBlock.putLong(0, filePos);
         initialBlock.putInt(Long.BYTES, blockMapFooterSize);
@@ -387,7 +388,6 @@ public class CompressingDirectory extends FSDirectory
           buffer.rewind();
           buffer.limit(0);
         }
-        bytesWritten += buffer.position();
         writeHelper.flush(buffer, true);
       }
     }

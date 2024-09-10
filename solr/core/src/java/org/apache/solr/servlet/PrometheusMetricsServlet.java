@@ -718,15 +718,11 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     AUTOCOMMIT(
         "UPDATE.updateHandler.autoCommits",
         "auto_commits_hard",
-        "cumulative number of hard auto commits across cores",
-        null,
-        PrometheusMetricType.COUNTER),
+        "cumulative number of hard auto commits across cores"),
     SOFT_AUTOCOMMIT(
         "UPDATE.updateHandler.softAutoCommits",
         "auto_commits_soft",
-        "cumulative number of soft auto commits across cores",
-        null,
-        PrometheusMetricType.COUNTER),
+        "cumulative number of soft auto commits across cores"),
     COMMITS("UPDATE.updateHandler.commits", "commits", "cumulative number of commits across cores"),
     CUMULATIVE_DEL_BY_ID(
         "UPDATE.updateHandler.cumulativeDeletesById",

@@ -1,5 +1,13 @@
 package org.apache.solr.storage;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
@@ -10,325 +18,366 @@ import org.apache.solr.core.DirectoryFactory;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-
 public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
 
-    private ConcurrentHashMap<String, Boolean> activeFiles = new ConcurrentHashMap<>();
-    private ConcurrentHashMap<String, Boolean> deletedFiles = new ConcurrentHashMap<>();
-    private String path;
+  private ConcurrentHashMap<String, Boolean> activeFiles = new ConcurrentHashMap<>();
+  private ConcurrentHashMap<String, Boolean> deletedFiles = new ConcurrentHashMap<>();
+  private String path;
 
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
-        activeFiles.clear();
-        deletedFiles.clear();
-        path = createTempDir().toString() + "/somedir";
-    }
+  @Before
+  public void setUp() throws Exception {
+    super.setUp();
+    activeFiles.clear();
+    deletedFiles.clear();
+    path = createTempDir().toString() + "/somedir";
+  }
 
-    @Test
-    public void testInitSize() throws Exception {
-        CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();;
-        try (dirFac) {
-            dirFac.initCoreContainer(null);
-            dirFac.init(new NamedList<>());
+  @Test
+  public void testInitSize() throws Exception {
+    CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
+    ;
+    try (dirFac) {
+      dirFac.initCoreContainer(null);
+      dirFac.init(new NamedList<>());
 
-            Directory dir =
-                    dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
-            try {
-                try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
-                    file.writeInt(42);
-                } // implicitly close file
-
-                try (IndexOutput file = dir.createOutput("test_file2", IOContext.DEFAULT)) {
-                    file.writeInt(84);
-                } // implicitly close file
-
-                dir.sync(Collections.singleton("test_file"));
-                assertTrue(path + " should exist once file is synced", dirFac.exists(path));
-                dir.sync(Collections.singleton("test_file2"));
-                assertTrue(path + " should exist once file is synced", dirFac.exists(path));
-
-                long expectedDiskSize = Files.size(Paths.get(path+"/test_file")) + Files.size(Paths.get(path+"/test_file2"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-            } finally {
-                dirFac.release(dir);
-            }
-        }
-    }
-
-    @Test
-    public void testSizeTracking() throws Exception {
-        // after onDiskSize has been init(), the size should be correct using the LongAdder sum in SizeAwareDirectory
-        CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();;
-        try (dirFac) {
-            dirFac.initCoreContainer(null);
-            dirFac.init(new NamedList<>());
-
-            Directory dir =
-                    dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
-            try {
-                try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
-                    file.writeInt(42);
-                } // implicitly close file
-
-                long expectedDiskSize = Files.size(Paths.get(path+"/test_file"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-
-                try (IndexOutput file = dir.createOutput("test_file2", IOContext.DEFAULT)) {
-                    file.writeInt(84);
-                } // implicitly close file
-
-                expectedDiskSize =  Files.size(Paths.get(path+"/test_file")) + Files.size(Paths.get(path+"/test_file2"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-            } finally {
-                dirFac.release(dir);
-            }
-        }
-    }
-
-    @Test
-    public void testWriteBigFile() throws Exception {
-        CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();;
-        try (dirFac) {
-            dirFac.initCoreContainer(null);
-            dirFac.init(new NamedList<>());
-
-            Directory dir =
-                    dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
-            try {
-                // small file first to initSize()
-                try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
-                    file.writeInt(42);
-                } // implicitly close file
-
-                long expectedDiskSize = Files.size(Paths.get(path+"/test_file"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-
-                writeBlockSizeFile(dir, "test_file2");
-
-                expectedDiskSize =  Files.size(Paths.get(path+"/test_file")) + Files.size(Paths.get(path+"/test_file2"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-            } finally {
-                dirFac.release(dir);
-            }
-        }
-    }
-
-    @Test
-    public void testSimultaneous() throws Exception {
-        CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
-        try (dirFac) {
-            dirFac.initCoreContainer(null);
-            dirFac.init(new NamedList<>());
-
-            Directory dir =
-                    dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
-            try {
-                String createPrefix = "test_first_";
-                Random r = new Random(42);
-                int numCreateThreads = 100;
-                List<Thread> createThreads = getCreateThreads(dir, numCreateThreads, r, createPrefix);
-                startThreads(createThreads);
-                waitForThreads(createThreads);
-
-                List<Thread> createAndDeleteThreads = getCreateThreads(dir, numCreateThreads, r, "test_second_");
-                // randomly delete 10 percent of the files created above, while also creating some files
-                createAndDeleteThreads.addAll(getRandomDeleteThreads(dir, activeFiles.size() / 10, createPrefix, r));
-                startThreads(createAndDeleteThreads);
-                waitForThreads(createAndDeleteThreads);
-
-
-                System.out.println("deleted some files " + Strings.join(new ArrayList<>(deletedFiles.keySet()), ','));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSizeForFiles(), dirFac.onDiskSize(dir));
-            } finally {
-                dirFac.release(dir);
-            }
-        }
-    }
-
-    private void waitForThreads(List<Thread> threads) {
-        for (int i = 0; i < threads.size(); i++) {
-            try {
-                threads.get(i).join();
-            } catch (InterruptedException e) {
-                System.out.println("Thread was interrupted");
-                fail("thread was interrupted "+i);
-            }
-        }
-    }
-
-    private List<Thread> getCreateThreads(Directory dir, int numThreads, Random r, String prefix) {
-        List<Thread> threads = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++) {
-            String name = prefix+i;
-            int size = r.nextInt(100000000) + CompressingDirectory.COMPRESSION_BLOCK_SIZE + 1;
-            threads.add(new Thread(new CreateFileTask(dir, name, size)));
-        }
-        return threads;
-    }
-
-    private List<Thread> getRandomDeleteThreads(Directory dir, int numThreads, String prefix, Random r) {
-        List<String> activeFilesFiltered = activeFiles.keySet().stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
-        // can't delete more files than exist
-        assertTrue(activeFilesFiltered.size() >= numThreads);
-        List<String> filesToDelete = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++) {
-            int index = r.nextInt(activeFilesFiltered.size());
-            filesToDelete.add(activeFilesFiltered.remove(index));
-        }
-
-        List<Thread> threads = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++) {
-            threads.add(new Thread(new DeleteFileTask(dir, filesToDelete.get(i))));
-        }
-        return threads;
-    }
-
-    private void startThreads(List<Thread> threads) {
-        for (Thread t : threads) {
-            t.start();
-        }
-    }
-
-    private long expectedDiskSizeForFiles() throws Exception {
-        long fileSize = 0;
-        for (String name : activeFiles.keySet()) {
-            fileSize += Files.size(Paths.get(path+"/"+name));
-        }
-        return fileSize;
-    }
-
-    private class CreateFileTask implements Runnable {
-        final String name;
-        final int size;
-        final Directory dir;
-
-        public CreateFileTask(Directory dir, String name, int size) {
-            this.name = name;
-            this.size = size;
-            this.dir = dir;
-        }
-
-        public void run() {
-            try {
-                writeRandomFileOfSize(dir, name, size);
-            } catch (Exception e) {
-                fail("exception writing file"+name);
-            }
-        }
-    }
-
-    private class DeleteFileTask implements Runnable {
-        final String name;
-        final Directory dir;
-
-        public DeleteFileTask(Directory dir, String name) {
-            this.dir = dir;
-            this.name = name;
-        }
-
-        public void run() {
-            try {
-                deleteFile(dir, name);
-            } catch (Exception e) {
-                fail("exception deleting file"+name);
-            }
-        }
-    }
-
-    @Test
-    public void testDelete() throws Exception {
-        // write a file, then another, then delete one of the files - the onDiskSize should update correctly
-        CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();;
-        try (dirFac) {
-            dirFac.initCoreContainer(null);
-            dirFac.init(new NamedList<>());
-
-            Directory dir =
-                    dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
-            try {
-                // small file first to initSize()
-                try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
-                    file.writeInt(42);
-                } // implicitly close file
-
-                long expectedDiskSize = Files.size(Paths.get(path+"/test_file"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-
-                writeBlockSizeFile(dir, "test_file2");
-
-                expectedDiskSize =  Files.size(Paths.get(path+"/test_file")) + Files.size(Paths.get(path+"/test_file2"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-
-                deleteFile(dir, "test_file2");
-                expectedDiskSize =  Files.size(Paths.get(path+"/test_file"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-            } finally {
-                dirFac.release(dir);
-            }
-        }
-    }
-
-    private void deleteFile(Directory dir, String name) throws Exception {
-        dir.deleteFile(name);
-        activeFiles.remove(name);
-        addToDeletedFiles(name);
-    }
-
-    private void writeBlockSizeFile(Directory dir, String name) throws Exception {
-        try (IndexOutput file = dir.createOutput(name, IOContext.DEFAULT)) {
-            // write some small things first to force past blocksize boundary
-            file.writeInt(42);
-            file.writeInt(84);
-            // write a giant blocksize thing to force compression with dump()
-            Random random = new Random(42);
-            int blocksize = CompressingDirectory.COMPRESSION_BLOCK_SIZE;
-            byte[] byteArray = new byte[blocksize];
-            random.nextBytes(byteArray);
-            file.writeBytes(byteArray, blocksize);
+      Directory dir =
+          dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+      try {
+        try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
+          file.writeInt(42);
         } // implicitly close file
-        addToActiveFiles(name);
-    }
 
-    private void writeRandomFileOfSize(Directory dir, String name, int size) throws Exception {
-        try (IndexOutput file = dir.createOutput(name, IOContext.DEFAULT)) {
-            // write a giant blocksize thing to force compression with dump()
-            Random random = new Random(42);
-            int bufferSize = 4096; // Chunk size
-            byte[] buffer = new byte[bufferSize];
-            int remainingBytes = size;
-
-            while (remainingBytes > 0) {
-                int bytesToWrite = Math.min(remainingBytes, bufferSize);
-                random.nextBytes(buffer);
-
-                file.writeBytes(buffer, bytesToWrite);
-
-                remainingBytes -= bytesToWrite;
-            }
+        try (IndexOutput file = dir.createOutput("test_file2", IOContext.DEFAULT)) {
+          file.writeInt(84);
         } // implicitly close file
-        addToActiveFiles(name);
+
+        dir.sync(Collections.singleton("test_file"));
+        assertTrue(path + " should exist once file is synced", dirFac.exists(path));
+        dir.sync(Collections.singleton("test_file2"));
+        assertTrue(path + " should exist once file is synced", dirFac.exists(path));
+
+        long expectedDiskSize =
+            Files.size(Paths.get(path + "/test_file"))
+                + Files.size(Paths.get(path + "/test_file2"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+      } finally {
+        dirFac.release(dir);
+      }
+    }
+  }
+
+  @Test
+  public void testSizeTracking() throws Exception {
+    // after onDiskSize has been init(), the size should be correct using the LongAdder sum in
+    // SizeAwareDirectory
+    CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
+    ;
+    try (dirFac) {
+      dirFac.initCoreContainer(null);
+      dirFac.init(new NamedList<>());
+
+      Directory dir =
+          dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+      try {
+        try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
+          file.writeInt(42);
+        } // implicitly close file
+
+        long expectedDiskSize = Files.size(Paths.get(path + "/test_file"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+
+        try (IndexOutput file = dir.createOutput("test_file2", IOContext.DEFAULT)) {
+          file.writeInt(84);
+        } // implicitly close file
+
+        expectedDiskSize =
+            Files.size(Paths.get(path + "/test_file"))
+                + Files.size(Paths.get(path + "/test_file2"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+      } finally {
+        dirFac.release(dir);
+      }
+    }
+  }
+
+  @Test
+  public void testWriteBigFile() throws Exception {
+    CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
+    ;
+    try (dirFac) {
+      dirFac.initCoreContainer(null);
+      dirFac.init(new NamedList<>());
+
+      Directory dir =
+          dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+      try {
+        // small file first to initSize()
+        try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
+          file.writeInt(42);
+        } // implicitly close file
+
+        long expectedDiskSize = Files.size(Paths.get(path + "/test_file"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+
+        writeBlockSizeFile(dir, "test_file2");
+
+        expectedDiskSize =
+            Files.size(Paths.get(path + "/test_file"))
+                + Files.size(Paths.get(path + "/test_file2"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+      } finally {
+        dirFac.release(dir);
+      }
+    }
+  }
+
+  @Test
+  public void testSimultaneous() throws Exception {
+    CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
+    try (dirFac) {
+      dirFac.initCoreContainer(null);
+      dirFac.init(new NamedList<>());
+
+      Directory dir =
+          dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+      try {
+        String createPrefix = "test_first_";
+        Random r = new Random(42);
+        int numCreateThreads = 100;
+        List<Thread> createThreads = getCreateThreads(dir, numCreateThreads, r, createPrefix);
+        startThreads(createThreads);
+        waitForThreads(createThreads);
+
+        List<Thread> createAndDeleteThreads =
+            getCreateThreads(dir, numCreateThreads, r, "test_second_");
+        // randomly delete 10 percent of the files created above, while also creating some files
+        createAndDeleteThreads.addAll(
+            getRandomDeleteThreads(dir, activeFiles.size() / 10, createPrefix, r));
+        startThreads(createAndDeleteThreads);
+        waitForThreads(createAndDeleteThreads);
+
+        System.out.println(
+            "deleted some files " + Strings.join(new ArrayList<>(deletedFiles.keySet()), ','));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSizeForFiles(),
+            dirFac.onDiskSize(dir));
+      } finally {
+        dirFac.release(dir);
+      }
+    }
+  }
+
+  private void waitForThreads(List<Thread> threads) {
+    for (int i = 0; i < threads.size(); i++) {
+      try {
+        threads.get(i).join();
+      } catch (InterruptedException e) {
+        System.out.println("Thread was interrupted");
+        fail("thread was interrupted " + i);
+      }
+    }
+  }
+
+  private List<Thread> getCreateThreads(Directory dir, int numThreads, Random r, String prefix) {
+    List<Thread> threads = new ArrayList<>();
+    for (int i = 0; i < numThreads; i++) {
+      String name = prefix + i;
+      int size = r.nextInt(100000000) + CompressingDirectory.COMPRESSION_BLOCK_SIZE + 1;
+      threads.add(new Thread(new CreateFileTask(dir, name, size)));
+    }
+    return threads;
+  }
+
+  private List<Thread> getRandomDeleteThreads(
+      Directory dir, int numThreads, String prefix, Random r) {
+    List<String> activeFilesFiltered =
+        activeFiles.keySet().stream()
+            .filter(s -> s.startsWith(prefix))
+            .collect(Collectors.toList());
+    // can't delete more files than exist
+    assertTrue(activeFilesFiltered.size() >= numThreads);
+    List<String> filesToDelete = new ArrayList<>();
+    for (int i = 0; i < numThreads; i++) {
+      int index = r.nextInt(activeFilesFiltered.size());
+      filesToDelete.add(activeFilesFiltered.remove(index));
     }
 
-    private void addToActiveFiles(String name) {
-        activeFiles.put(name, true);
+    List<Thread> threads = new ArrayList<>();
+    for (int i = 0; i < numThreads; i++) {
+      threads.add(new Thread(new DeleteFileTask(dir, filesToDelete.get(i))));
+    }
+    return threads;
+  }
+
+  private void startThreads(List<Thread> threads) {
+    for (Thread t : threads) {
+      t.start();
+    }
+  }
+
+  private long expectedDiskSizeForFiles() throws Exception {
+    long fileSize = 0;
+    for (String name : activeFiles.keySet()) {
+      fileSize += Files.size(Paths.get(path + "/" + name));
+    }
+    return fileSize;
+  }
+
+  private class CreateFileTask implements Runnable {
+    final String name;
+    final int size;
+    final Directory dir;
+
+    public CreateFileTask(Directory dir, String name, int size) {
+      this.name = name;
+      this.size = size;
+      this.dir = dir;
     }
 
-    private String pickFromActiveSet(int index, String prefix) {
-        List<String> l = activeFiles.keySet().stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
-        assertTrue(l.size() > index);
-        return l.get(index);
+    public void run() {
+      try {
+        writeRandomFileOfSize(dir, name, size);
+      } catch (Exception e) {
+        fail("exception writing file" + name);
+      }
+    }
+  }
+
+  private class DeleteFileTask implements Runnable {
+    final String name;
+    final Directory dir;
+
+    public DeleteFileTask(Directory dir, String name) {
+      this.dir = dir;
+      this.name = name;
     }
 
-    private void addToDeletedFiles(String name) {
-        deletedFiles.put(name, true);
+    public void run() {
+      try {
+        deleteFile(dir, name);
+      } catch (Exception e) {
+        fail("exception deleting file" + name);
+      }
     }
+  }
+
+  @Test
+  public void testDelete() throws Exception {
+    // write a file, then another, then delete one of the files - the onDiskSize should update
+    // correctly
+    CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
+    ;
+    try (dirFac) {
+      dirFac.initCoreContainer(null);
+      dirFac.init(new NamedList<>());
+
+      Directory dir =
+          dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+      try {
+        // small file first to initSize()
+        try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
+          file.writeInt(42);
+        } // implicitly close file
+
+        long expectedDiskSize = Files.size(Paths.get(path + "/test_file"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+
+        writeBlockSizeFile(dir, "test_file2");
+
+        expectedDiskSize =
+            Files.size(Paths.get(path + "/test_file"))
+                + Files.size(Paths.get(path + "/test_file2"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+
+        deleteFile(dir, "test_file2");
+        expectedDiskSize = Files.size(Paths.get(path + "/test_file"));
+        assertEquals(
+            "directory size should be equal to on disk size of test files",
+            expectedDiskSize,
+            dirFac.onDiskSize(dir));
+      } finally {
+        dirFac.release(dir);
+      }
+    }
+  }
+
+  private void deleteFile(Directory dir, String name) throws Exception {
+    dir.deleteFile(name);
+    activeFiles.remove(name);
+    addToDeletedFiles(name);
+  }
+
+  private void writeBlockSizeFile(Directory dir, String name) throws Exception {
+    try (IndexOutput file = dir.createOutput(name, IOContext.DEFAULT)) {
+      // write some small things first to force past blocksize boundary
+      file.writeInt(42);
+      file.writeInt(84);
+      // write a giant blocksize thing to force compression with dump()
+      Random random = new Random(42);
+      int blocksize = CompressingDirectory.COMPRESSION_BLOCK_SIZE;
+      byte[] byteArray = new byte[blocksize];
+      random.nextBytes(byteArray);
+      file.writeBytes(byteArray, blocksize);
+    } // implicitly close file
+    addToActiveFiles(name);
+  }
+
+  private void writeRandomFileOfSize(Directory dir, String name, int size) throws Exception {
+    try (IndexOutput file = dir.createOutput(name, IOContext.DEFAULT)) {
+      // write a giant blocksize thing to force compression with dump()
+      Random random = new Random(42);
+      int bufferSize = 4096; // Chunk size
+      byte[] buffer = new byte[bufferSize];
+      int remainingBytes = size;
+
+      while (remainingBytes > 0) {
+        int bytesToWrite = Math.min(remainingBytes, bufferSize);
+        random.nextBytes(buffer);
+
+        file.writeBytes(buffer, bytesToWrite);
+
+        remainingBytes -= bytesToWrite;
+      }
+    } // implicitly close file
+    addToActiveFiles(name);
+  }
+
+  private void addToActiveFiles(String name) {
+    activeFiles.put(name, true);
+  }
+
+  private String pickFromActiveSet(int index, String prefix) {
+    List<String> l =
+        activeFiles.keySet().stream()
+            .filter(s -> s.startsWith(prefix))
+            .collect(Collectors.toList());
+    assertTrue(l.size() > index);
+    return l.get(index);
+  }
+
+  private void addToDeletedFiles(String name) {
+    deletedFiles.put(name, true);
+  }
 }

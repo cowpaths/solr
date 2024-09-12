@@ -368,15 +368,6 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
     activeFiles.put(name, true);
   }
 
-  private String pickFromActiveSet(int index, String prefix) {
-    List<String> l =
-        activeFiles.keySet().stream()
-            .filter(s -> s.startsWith(prefix))
-            .collect(Collectors.toList());
-    assertTrue(l.size() > index);
-    return l.get(index);
-  }
-
   private void addToDeletedFiles(String name) {
     deletedFiles.put(name, true);
   }

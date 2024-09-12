@@ -173,10 +173,10 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
 
         System.out.println(
             "deleted some files " + Strings.join(new ArrayList<>(deletedFiles.keySet()), ','));
+        long expected = expectedDiskSizeForFiles();
+        long actual = dirFac.onDiskSize(dir);
         assertEquals(
-            "directory size should be equal to on disk size of test files",
-            expectedDiskSizeForFiles(),
-            dirFac.onDiskSize(dir));
+            "directory size should be equal to on disk size of test files", expected, actual);
       } finally {
         dirFac.release(dir);
       }

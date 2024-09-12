@@ -20,8 +20,8 @@ import org.junit.Test;
 
 public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
 
-  private ConcurrentHashMap<String, Boolean> activeFiles = new ConcurrentHashMap<>();
-  private ConcurrentHashMap<String, Boolean> deletedFiles = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Boolean> activeFiles = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Boolean> deletedFiles = new ConcurrentHashMap<>();
   private String path;
 
   @Before

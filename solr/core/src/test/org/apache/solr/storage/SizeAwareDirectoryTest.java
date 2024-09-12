@@ -8,10 +8,8 @@ import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.DirectoryFactory;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -134,16 +132,6 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
             Directory dir =
                     dirFac.get(path, DirectoryFactory.DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
             try {
-                ConcurrentHashMap<String, Boolean> activeFiles = new ConcurrentHashMap<>();
-                // small file first to initSize()
-                try (IndexOutput file = dir.createOutput("test_file", IOContext.DEFAULT)) {
-                    file.writeInt(42);
-                } // implicitly close file
-                addToActiveFiles("test_file");
-
-                long expectedDiskSize = Files.size(Paths.get(path+"/test_file"));
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
-
                 String createPrefix = "test_first_";
                 Random r = new Random(42);
                 int numCreateThreads = 100;
@@ -153,15 +141,13 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
 
                 List<Thread> createAndDeleteThreads = getCreateThreads(dir, numCreateThreads, r, "test_second_");
                 // randomly delete 10 percent of the files created above, while also creating some files
-                createAndDeleteThreads.addAll(getRandomDeleteThreads(dir, numCreateThreads / 10, new Random(84), createPrefix, numCreateThreads));
+                createAndDeleteThreads.addAll(getRandomDeleteThreads(dir, activeFiles.size() / 10, createPrefix, r));
                 startThreads(createAndDeleteThreads);
                 waitForThreads(createAndDeleteThreads);
 
 
                 System.out.println("deleted some files " + Strings.join(new ArrayList<>(deletedFiles.keySet()), ','));
-
-                expectedDiskSize = expectedDiskSizeForFiles();
-                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSize, dirFac.onDiskSize(dir));
+                assertEquals("directory size should be equal to on disk size of test files", expectedDiskSizeForFiles(), dirFac.onDiskSize(dir));
             } finally {
                 dirFac.release(dir);
             }
@@ -189,11 +175,19 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
         return threads;
     }
 
-    private List<Thread> getRandomDeleteThreads(Directory dir, int numThreads, Random r, String prefix, int numActiveFiles) {
+    private List<Thread> getRandomDeleteThreads(Directory dir, int numThreads, String prefix, Random r) {
+        List<String> activeFilesFiltered = activeFiles.keySet().stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
+        // can't delete more files than exist
+        assertTrue(activeFilesFiltered.size() >= numThreads);
+        List<String> filesToDelete = new ArrayList<>();
+        for (int i = 0; i < numThreads; i++) {
+            int index = r.nextInt(activeFilesFiltered.size());
+            filesToDelete.add(activeFilesFiltered.remove(index));
+        }
+
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
-            int index = r.nextInt(numActiveFiles);
-            threads.add(new Thread(new DeleteFileTask(dir, prefix, index)));
+            threads.add(new Thread(new DeleteFileTask(dir, filesToDelete.get(i))));
         }
         return threads;
     }
@@ -233,18 +227,15 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
     }
 
     private class DeleteFileTask implements Runnable {
-        final String prefix;
+        final String name;
         final Directory dir;
-        final int index;
 
-        public DeleteFileTask(Directory dir, String prefix, int index) {
+        public DeleteFileTask(Directory dir, String name) {
             this.dir = dir;
-            this.prefix = prefix;
-            this.index = index;
+            this.name = name;
         }
 
         public void run() {
-            String name = pickFromActiveSet(index, prefix);
             try {
                 deleteFile(dir, name);
             } catch (Exception e) {

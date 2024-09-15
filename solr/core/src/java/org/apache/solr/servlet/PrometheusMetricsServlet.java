@@ -25,12 +25,14 @@ import java.io.PrintWriter;
 import java.lang.invoke.MethodHandles;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,7 +74,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
               new OsMetricsApiCaller(),
               new ThreadMetricsApiCaller(),
               new StatusCodeMetricsApiCaller(),
-              new CoresMetricsApiCaller()));
+              new CoresMetricsApiCaller(),
+              new NodeCacheMetricsApiCaller()));
 
   private final Map<String, PrometheusMetricType> cacheMetricTypes =
       Map.of(
@@ -81,6 +84,19 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
           "hits", PrometheusMetricType.COUNTER,
           "puts", PrometheusMetricType.COUNTER,
           "evictions", PrometheusMetricType.COUNTER);
+
+  /**
+   * node-level caches use slightly different terminology for some fields, so we map to old
+   * terminology for consistency.
+   */
+  private static final Map<String, Map.Entry<String, PrometheusMetricType>>
+      nodeLevelCacheMetricTypes =
+          Map.of(
+              "ramBytesUsed", new SimpleImmutableEntry<>("bytesUsed", PrometheusMetricType.GAUGE),
+              "lookups", new SimpleImmutableEntry<>("lookups", PrometheusMetricType.COUNTER),
+              "hits", new SimpleImmutableEntry<>("hits", PrometheusMetricType.COUNTER),
+              "inserts", new SimpleImmutableEntry<>("puts", PrometheusMetricType.COUNTER),
+              "evictions", new SimpleImmutableEntry<>("evictions", PrometheusMetricType.COUNTER));
 
   @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -138,6 +154,45 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
                   String.format(
                       Locale.ROOT, "%s %s for cache %s", name, type.getDisplayName(), cache),
                   stat.getValue()));
+        }
+      }
+    }
+  }
+
+  static class NodeCacheMetricsApiCaller extends MetricsApiCaller {
+    private static final String PREFIX = "CACHE.nodeLevelCache/";
+
+    NodeCacheMetricsApiCaller() {
+      super("node", PREFIX, "");
+    }
+
+    @Override
+    protected void handle(List<PrometheusMetric> results, JsonNode metrics) throws IOException {
+      JsonNode parent = metrics.path("solr.node");
+      Iterator<Map.Entry<String, JsonNode>> caches = parent.fields();
+      while (caches.hasNext()) {
+        Map.Entry<String, JsonNode> cacheEntry = caches.next();
+        String cacheName = cacheEntry.getKey().substring(PREFIX.length()).toLowerCase(Locale.ROOT);
+        Iterator<Map.Entry<String, JsonNode>> fields = cacheEntry.getValue().fields();
+        while (fields.hasNext()) {
+          Map.Entry<String, JsonNode> next = fields.next();
+          Map.Entry<String, PrometheusMetricType> typeEntry =
+              nodeLevelCacheMetricTypes.get(next.getKey());
+          if (typeEntry != null) {
+            String fieldName = typeEntry.getKey();
+            PrometheusMetricType type = typeEntry.getValue();
+            results.add(
+                new PrometheusMetric(
+                    String.format(Locale.ROOT, "cache_%s_%s", cacheName, fieldName),
+                    type,
+                    String.format(
+                        Locale.ROOT,
+                        "%s %s for cache %s",
+                        fieldName,
+                        type.getDisplayName(),
+                        cacheName),
+                    next.getValue().numberValue()));
+          }
         }
       }
     }

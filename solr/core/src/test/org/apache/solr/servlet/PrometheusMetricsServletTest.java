@@ -478,4 +478,48 @@ public class PrometheusMetricsServletTest {
             + "deletes_by_query 66\n";
     assertMetricsApiCaller(new PrometheusMetricsServlet.CoresMetricsApiCaller(), json, 25, output);
   }
+
+  @Test
+  public void testNodeCacheMetricsApiCaller() throws Exception {
+    String json =
+        "{\n"
+            + "  \"responseHeader\":{\n"
+            + "    \"status\":0,\n"
+            + "    \"QTime\":25},\n"
+            + "  \"metrics\":{\n"
+            + "    \"solr.node\":{\n"
+            + "      \"CACHE.nodeLevelCache/myCache\":{\n"
+            + "        \"lookups\":2,\n"
+            + "        \"hits\":1,\n"
+            + "        \"hitratio\":0.5,\n"
+            + "        \"inserts\":1,\n"
+            + "        \"evictions\":0,\n"
+            + "        \"size\":1,\n"
+            + "        \"warmupTime\":0,\n"
+            + "        \"ramBytesUsed\":623,\n"
+            + "        \"maxRamMB\":-1,\n"
+            + "        \"cumulative_lookups\":2,\n"
+            + "        \"cumulative_hits\":1,\n"
+            + "        \"cumulative_hitratio\":0.5,\n"
+            + "        \"cumulative_inserts\":1,\n"
+            + "        \"cumulative_evictions\":0}}}}";
+    String output =
+        "# HELP cache_mycache_lookups lookups counter for cache mycache\n"
+            + "# TYPE cache_mycache_lookups counter\n"
+            + "cache_mycache_lookups 2\n"
+            + "# HELP cache_mycache_hits hits counter for cache mycache\n"
+            + "# TYPE cache_mycache_hits counter\n"
+            + "cache_mycache_hits 1\n"
+            + "# HELP cache_mycache_puts puts counter for cache mycache\n"
+            + "# TYPE cache_mycache_puts counter\n"
+            + "cache_mycache_puts 1\n"
+            + "# HELP cache_mycache_evictions evictions counter for cache mycache\n"
+            + "# TYPE cache_mycache_evictions counter\n"
+            + "cache_mycache_evictions 0\n"
+            + "# HELP cache_mycache_bytes_used bytesUsed gauge for cache mycache\n"
+            + "# TYPE cache_mycache_bytes_used gauge\n"
+            + "cache_mycache_bytes_used 623\n";
+    assertMetricsApiCaller(
+        new PrometheusMetricsServlet.NodeCacheMetricsApiCaller(), json, 25, output);
+  }
 }

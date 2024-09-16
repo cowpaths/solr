@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import org.apache.logging.log4j.util.Strings;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexOutput;
@@ -169,8 +168,6 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
         startThreads(createAndDeleteThreads);
         waitForThreads(createAndDeleteThreads);
 
-        System.out.println(
-            "deleted some files " + Strings.join(new ArrayList<>(deletedFiles.keySet()), ','));
         long expected = expectedDiskSizeForFiles();
         long actual = dirFac.onDiskSize(dir);
         assertEquals(

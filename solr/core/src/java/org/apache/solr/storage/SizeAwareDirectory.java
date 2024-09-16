@@ -19,6 +19,11 @@ package org.apache.solr.storage;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,10 +55,15 @@ public class SizeAwareDirectory extends FilterDirectory
   private volatile long reconciledTimeNanos;
   private volatile LongAdder size = new LongAdder();
   private volatile LongAdder onDiskSize = new LongAdder();
+  private volatile ConcurrentHashMap<String, List<Long>> onDiskSizeOps = new ConcurrentHashMap<>();
   private volatile SizeWriter sizeWriter =
       (size, onDiskSize, name) -> {
         this.size.add(size);
         this.onDiskSize.add(onDiskSize);
+        if (!this.onDiskSizeOps.containsKey(name)) {
+          this.onDiskSizeOps.put(name, new ArrayList<>());
+        }
+        this.onDiskSizeOps.get(name).add(onDiskSize);
       };
 
   private final ConcurrentHashMap<String, Sizes> fileSizeMap = new ConcurrentHashMap<>();
@@ -154,9 +164,79 @@ public class SizeAwareDirectory extends FilterDirectory
     if (initialized
         && (reconcileThreshold == null
             || System.nanoTime() - reconciledTimeNanos < reconcileTTLNanos)) {
-      return onDiskSize.sum();
+      if (log.isDebugEnabled()) {
+        logSizeDifferences();
+      }
+      return calculateSumFromFileSizeMap();
     }
     return initSize().onDiskSize;
+  }
+
+  private long calculateSumFromFileSizeMap() {
+    long onDiskSize = 0;
+    for (Sizes size : fileSizeMap.values()) {
+      onDiskSize += size.onDiskSize;
+    }
+    return onDiskSize;
+  }
+
+  private static class SizeMismatch {
+    final String name;
+    final long realSize;
+    final long trackedSize;
+    final long longAdderSize;
+
+    SizeMismatch(String name, long realSize, long trackedSize, long longAdderSize) {
+      this.name = name;
+      this.realSize = realSize;
+      this.trackedSize = trackedSize;
+      this.longAdderSize = longAdderSize;
+    }
+
+    @Override
+    public String toString() {
+      return "name: " + name + " realSize: " + realSize + " trackedSize: " + trackedSize + " longAdderSize: " + longAdderSize;
+    }
+  }
+
+  private void logSizeDifferences() {
+    List<SizeMismatch> sizeMismatches = new ArrayList<>();
+    for (Map.Entry<String, Sizes> entry : this.fileSizeMap.entrySet()) {
+      String fileName = entry.getKey();
+      Sizes trackedSizes = entry.getValue();
+      DirectoryFactory.OnDiskSizeDirectory parentDir = (DirectoryFactory.OnDiskSizeDirectory) in;
+      try {
+        long realSize = parentDir.onDiskFileLength(fileName);
+        long fileMapSize = trackedSizes.onDiskSize;
+        long longAdderSize = getLongAdderSize(fileName);
+        if (realSize != fileMapSize || (longAdderSize > -1 && realSize != longAdderSize)) {
+          sizeMismatches.add(new SizeMismatch(fileName, realSize, fileMapSize, longAdderSize));
+        }
+      } catch (Exception e) {
+        log.error(e.toString());
+        sizeMismatches.add(new SizeMismatch(fileName, -1, -1, -1));
+      }
+    }
+    if (!sizeMismatches.isEmpty()) {
+      log.debug("Got size mismatches! {}", sizeMismatches);
+    } else {
+      log.debug("No size mismatches found.");
+    }
+    log.debug("Number of live inputs: {}", liveOutputs.size());
+    if (!liveOutputs.isEmpty() && liveOutputs.size() < 10) {
+      log.debug("Live outputs: {}", liveOutputs.keySet());
+    }
+  }
+
+  private long getLongAdderSize(String name) {
+    if (!onDiskSizeOps.containsKey(name)) {
+      return -1;
+    }
+    long size = 0;
+    for (Long op : onDiskSizeOps.get(name)) {
+      size += op;
+    }
+    return size;
   }
 
   private Sizes initSize() throws IOException {
@@ -195,6 +275,10 @@ public class SizeAwareDirectory extends FilterDirectory
               recomputeSize.add(fileSize);
               recomputeOnDiskSize.add(onDiskFileSize);
             }
+            if (!this.onDiskSizeOps.containsKey(name)) {
+              this.onDiskSizeOps.put(name, new ArrayList<>());
+            }
+            this.onDiskSizeOps.get(name).add(onDiskFileSize);
           };
       sizeWriter = dualSizeWriter;
       for (final String file : files) {
@@ -253,6 +337,10 @@ public class SizeAwareDirectory extends FilterDirectory
             (size, onDiskSize, name) -> {
               recomputeSize.add(size);
               recomputeOnDiskSize.add(onDiskSize);
+              if (!this.onDiskSizeOps.containsKey(name)) {
+                this.onDiskSizeOps.put(name, new ArrayList<>());
+              }
+              this.onDiskSizeOps.get(name).add(onDiskSize);
             };
         sizeWriter = replaceSizeWriter;
         size = recomputeSize;

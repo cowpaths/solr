@@ -158,7 +158,7 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
       try {
         String createPrefix = "test_first_";
         Random r = new Random(42);
-        int numCreateThreads = 100;
+        int numCreateThreads = 300;
         List<Thread> createThreads = getCreateThreads(dir, numCreateThreads, r, createPrefix);
         startThreads(createThreads);
         waitForThreads(createThreads);
@@ -171,8 +171,6 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
         startThreads(createAndDeleteThreads);
         waitForThreads(createAndDeleteThreads);
 
-        System.out.println(
-            "deleted some files " + Strings.join(new ArrayList<>(deletedFiles.keySet()), ','));
         long expected = expectedDiskSizeForFiles();
         long actual = dirFac.onDiskSize(dir);
         assertEquals(

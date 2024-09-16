@@ -24,6 +24,7 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
   private final ConcurrentHashMap<String, Boolean> deletedFiles = new ConcurrentHashMap<>();
   private String path;
 
+  @Override
   @Before
   public void setUp() throws Exception {
     super.setUp();
@@ -35,7 +36,6 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
   @Test
   public void testInitSize() throws Exception {
     CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
-    ;
     try (dirFac) {
       dirFac.initCoreContainer(null);
       dirFac.init(new NamedList<>());
@@ -74,7 +74,6 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
     // after onDiskSize has been init(), the size should be correct using the LongAdder sum in
     // SizeAwareDirectory
     CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
-    ;
     try (dirFac) {
       dirFac.initCoreContainer(null);
       dirFac.init(new NamedList<>());
@@ -112,7 +111,6 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
   @Test
   public void testWriteBigFile() throws Exception {
     CompressingDirectoryFactory dirFac = new CompressingDirectoryFactory();
-    ;
     try (dirFac) {
       dirFac.initCoreContainer(null);
       dirFac.init(new NamedList<>());
@@ -250,6 +248,7 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
       this.dir = dir;
     }
 
+    @Override
     public void run() {
       try {
         writeRandomFileOfSize(dir, name, size);
@@ -268,6 +267,7 @@ public class SizeAwareDirectoryTest extends SolrTestCaseJ4 {
       this.name = name;
     }
 
+    @Override
     public void run() {
       try {
         deleteFile(dir, name);

@@ -70,8 +70,7 @@ public class SizeAwareDirectory extends FilterDirectory
   }
 
   private static class FileSizeMap implements Accountable {
-    private final long RAM_BYTES_USED =
-            RamUsageEstimator.shallowSizeOfInstance(FileSizeMap.class);
+    private final long RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(FileSizeMap.class);
     private final ConcurrentHashMap<String, Sizes> fileSizeMap = new ConcurrentHashMap<>();
     private volatile LongAdder onDiskSize = new LongAdder();
 
@@ -103,7 +102,7 @@ public class SizeAwareDirectory extends FilterDirectory
 
     @Override
     public long ramBytesUsed() {
-      return RAM_BYTES_USED;
+      return RAM_BYTES_USED + RamUsageEstimator.sizeOfMap(fileSizeMap);
     }
   }
 

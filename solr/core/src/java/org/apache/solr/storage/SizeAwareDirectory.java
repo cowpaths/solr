@@ -49,6 +49,7 @@ public class SizeAwareDirectory extends FilterDirectory
   private boolean initialized = false;
   private volatile long reconciledTimeNanos;
   private volatile LongAdder size = new LongAdder();
+  // TODO(nickginther): do not use this value, there is currently a bug where it drifts
   private volatile LongAdder onDiskSize = new LongAdder();
   private volatile SizeWriter sizeWriter =
       (size, onDiskSize, name) -> {

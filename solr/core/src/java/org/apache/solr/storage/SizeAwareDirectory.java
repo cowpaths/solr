@@ -76,6 +76,9 @@ public class SizeAwareDirectory extends FilterDirectory
 
     public Sizes add(String name, Sizes sizes) {
       Sizes extant = fileSizeMap.put(name, sizes);
+      if (extant != null) {
+        onDiskSize.add(-extant.onDiskSize);
+      }
       onDiskSize.add(sizes.onDiskSize);
       return extant;
     }
@@ -96,7 +99,7 @@ public class SizeAwareDirectory extends FilterDirectory
       return fileSizeMap.get(key);
     }
 
-    public long size() {
+    public int size() {
       return fileSizeMap.size();
     }
 

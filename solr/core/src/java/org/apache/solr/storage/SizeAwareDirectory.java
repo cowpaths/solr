@@ -49,7 +49,6 @@ public class SizeAwareDirectory extends FilterDirectory
   private boolean initialized = false;
   private volatile long reconciledTimeNanos;
   private volatile LongAdder size = new LongAdder();
-  // TODO(nickginther): do not use this value, there is currently a bug where it drifts
   private volatile LongAdder onDiskSize = new LongAdder();
   private volatile SizeWriter sizeWriter =
       (size, onDiskSize, name) -> {
@@ -57,7 +56,7 @@ public class SizeAwareDirectory extends FilterDirectory
         this.onDiskSize.add(onDiskSize);
       };
 
-  private final FileSizeMap fileSizeMap = new FileSizeMap();
+  private final ConcurrentHashMap<String, Sizes> fileSizeMap = new ConcurrentHashMap<>();
 
   private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs =
       new ConcurrentHashMap<>();
@@ -67,46 +66,6 @@ public class SizeAwareDirectory extends FilterDirectory
 
   private interface SizeWriter {
     void apply(long size, long onDiskSize, String name);
-  }
-
-  private static class FileSizeMap implements Accountable {
-    private final long RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(FileSizeMap.class);
-    private final ConcurrentHashMap<String, Sizes> fileSizeMap = new ConcurrentHashMap<>();
-    private volatile LongAdder onDiskSize = new LongAdder();
-
-    public Sizes add(String name, Sizes sizes) {
-      Sizes extant = fileSizeMap.put(name, sizes);
-      if (extant != null) {
-        onDiskSize.add(-extant.onDiskSize);
-      }
-      onDiskSize.add(sizes.onDiskSize);
-      return extant;
-    }
-
-    public Sizes remove(String name) {
-      Sizes sizes = fileSizeMap.remove(name);
-      if (sizes != null) {
-        onDiskSize.add(-sizes.onDiskSize);
-      }
-      return sizes;
-    }
-
-    public long onDiskSize() {
-      return onDiskSize.sum();
-    }
-
-    public Sizes get(String key) {
-      return fileSizeMap.get(key);
-    }
-
-    public int size() {
-      return fileSizeMap.size();
-    }
-
-    @Override
-    public long ramBytesUsed() {
-      return RAM_BYTES_USED + RamUsageEstimator.sizeOfMap(fileSizeMap);
-    }
   }
 
   private static class Sizes implements Accountable {
@@ -140,7 +99,7 @@ public class SizeAwareDirectory extends FilterDirectory
   @Override
   public long ramBytesUsed() {
     return BASE_RAM_BYTES_USED
-        + fileSizeMap.ramBytesUsed()
+        + RamUsageEstimator.sizeOfMap(fileSizeMap)
         + RamUsageEstimator.sizeOfMap(liveOutputs);
   }
 
@@ -168,13 +127,14 @@ public class SizeAwareDirectory extends FilterDirectory
       if (live.backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
         return ((CompressingDirectory.SizeReportingIndexOutput) live.backing).getBytesWritten();
       }
-      return live.backing.getFilePointer();
+      // backing IndexOutput does not allow us to get onDiskSize
+      return 0;
     } else if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
       // fallback delegate to wrapped Directory
       return ((DirectoryFactory.OnDiskSizeDirectory) in).onDiskFileLength(name);
     } else {
-      // fallback delegate to wrapped Directory
-      return fileLength(name);
+      // directory does not implement onDiskSize
+      return 0;
     }
   }
 
@@ -195,7 +155,7 @@ public class SizeAwareDirectory extends FilterDirectory
     if (initialized
         && (reconcileThreshold == null
             || System.nanoTime() - reconciledTimeNanos < reconcileTTLNanos)) {
-      return fileSizeMap.onDiskSize();
+      return onDiskSize.sum();
     }
     return initSize().onDiskSize;
   }
@@ -252,7 +212,7 @@ public class SizeAwareDirectory extends FilterDirectory
           if (fileSize > 0) {
             // whether the file exists or not, we don't care about it if it has zero size.
             // more often though, 0 size means the file isn't there.
-            fileSizeMap.add(file, sizes);
+            fileSizeMap.put(file, sizes);
             if (DirectoryFactory.sizeOf(in, file) == 0) {
               // during reconciliation, we have to check for file presence _after_ adding
               // to the map, to prevent a race condition that could leak entries into `fileSizeMap`
@@ -383,7 +343,7 @@ public class SizeAwareDirectory extends FilterDirectory
 
     private final IndexOutput backing;
 
-    private final FileSizeMap fileSizeMap;
+    private final ConcurrentHashMap<String, Sizes> fileSizeMap;
 
     private final ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs;
 
@@ -394,7 +354,7 @@ public class SizeAwareDirectory extends FilterDirectory
     private SizeAccountingIndexOutput(
         String name,
         IndexOutput backing,
-        FileSizeMap fileSizeMap,
+        ConcurrentHashMap<String, Sizes> fileSizeMap,
         ConcurrentHashMap<String, SizeAccountingIndexOutput> liveOutputs,
         SizeWriter sizeWriter) {
       super("byteSize(" + name + ")", name);
@@ -427,7 +387,7 @@ public class SizeAwareDirectory extends FilterDirectory
       try (backing) {
         // TODO
       } finally {
-        long onDiskSize = size;
+        long onDiskSize = 0;
         if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
           long finalBytesWritten = getBytesWritten(backing);
           onDiskSize = finalBytesWritten;
@@ -435,7 +395,7 @@ public class SizeAwareDirectory extends FilterDirectory
           // on-disk size here
           sizeWriter.apply(0, finalBytesWritten - lastBytesWritten, name);
         }
-        fileSizeMap.add(name, new Sizes(backing.getFilePointer(), onDiskSize));
+        fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
         liveOutputs.remove(name);
       }
     }
@@ -483,7 +443,7 @@ public class SizeAwareDirectory extends FilterDirectory
   @Override
   public void rename(String source, String dest) throws IOException {
     in.rename(source, dest);
-    Sizes extant = fileSizeMap.add(dest, fileSizeMap.remove(source));
+    Sizes extant = fileSizeMap.put(dest, fileSizeMap.remove(source));
     assert extant == null; // it's illegal for dest to already exist
   }
 }

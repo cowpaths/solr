@@ -1,0 +1,51 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+apply plugin: 'java-library'
+
+description = 'Apache Solr Jetty'
+
+def jettyDependency = 'org.eclipse.jetty:jetty-util'
+def metricsDependency = 'io.dropwizard.metrics:metrics-core'
+def correspondingJettyVersion = '10.0.13'
+def correspondingMetricsVersion = '4.2.12'
+
+dependencies {
+  implementation jettyDependency
+  implementation metricsDependency
+  implementation 'org.slf4j:slf4j-api'
+  runtimeOnly 'org.slf4j:jcl-over-slf4j'
+  testImplementation 'junit:junit'
+  testRuntimeOnly project(':solr:test-framework')
+}
+
+project.tasks.each {
+  it.doLast {
+    /*
+    For now these classes are modified versions of upstream projects. Detect changes upstream
+    so that we can rebase local changes as necessary without worrying about getting out of sync
+     */
+    def jettyVersion = project.getVersion(jettyDependency)
+    def metricsVersion = project.getVersion(metricsDependency)
+    if (jettyVersion != correspondingJettyVersion) {
+      throw new GradleException("Must rebase changes on " + jettyDependency + " " + jettyVersion)
+    }
+    if (metricsVersion != correspondingMetricsVersion) {
+      throw new GradleException("Must rebase changes on (metrics-jetty10) " + metricsDependency + " " + metricsVersion)
+    }
+  }
+}

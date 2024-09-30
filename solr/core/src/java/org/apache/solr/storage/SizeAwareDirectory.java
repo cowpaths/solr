@@ -126,15 +126,18 @@ public class SizeAwareDirectory extends FilterDirectory
     } else if ((live = liveOutputs.get(name)) != null) {
       if (live.backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
         return ((CompressingDirectory.SizeReportingIndexOutput) live.backing).getBytesWritten();
+      } else if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
+        // backing IndexOutput does not allow us to get onDiskSize
+        return 0;
+      } else {
+        return live.backing.getFilePointer();
       }
-      // backing IndexOutput does not allow us to get onDiskSize
-      return 0;
     } else if (in instanceof DirectoryFactory.OnDiskSizeDirectory) {
       // fallback delegate to wrapped Directory
       return ((DirectoryFactory.OnDiskSizeDirectory) in).onDiskFileLength(name);
     } else {
       // directory does not implement onDiskSize
-      return 0;
+      return in.fileLength(name);
     }
   }
 
@@ -372,9 +375,13 @@ public class SizeAwareDirectory extends FilterDirectory
         // NOTE: there's an unavoidable race condition between these two
         // lines, and this ordering may occasionally overestimate directory size.
         this.sizeWriter = sizeWriter;
-        long onDiskSize = this.getFilePointer();
+        long onDiskSize;
         if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
           onDiskSize = ((CompressingDirectory.SizeReportingIndexOutput) backing).getBytesWritten();
+        } else if (backing instanceof DirectoryFactory.OnDiskSizeDirectory) {
+          onDiskSize = 0;
+        } else {
+          onDiskSize = getFilePointer();
         }
         return new Sizes(this.getFilePointer(), onDiskSize);
       }
@@ -383,21 +390,22 @@ public class SizeAwareDirectory extends FilterDirectory
     @Override
     @SuppressWarnings("try")
     public void close() throws IOException {
-      long size = backing.getFilePointer();
-      try (backing) {
-        // TODO
-      } finally {
-        long onDiskSize = 0;
-        if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
-          long finalBytesWritten = getBytesWritten(backing);
-          onDiskSize = finalBytesWritten;
-          // logical size should already be set through writeByte(s), but we need to finalize the
-          // on-disk size here
-          sizeWriter.apply(0, finalBytesWritten - lastBytesWritten, name);
-        }
-        fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
-        liveOutputs.remove(name);
+      backing.close();
+
+      long onDiskSize;
+      if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
+        long finalBytesWritten = getBytesWritten(backing);
+        onDiskSize = finalBytesWritten;
+        // logical size should already be set through writeByte(s), but we need to finalize the
+        // on-disk size here
+        sizeWriter.apply(0, finalBytesWritten - lastBytesWritten, name);
+      } else if (backing instanceof DirectoryFactory.OnDiskSizeDirectory) {
+        onDiskSize = 0;
+      } else {
+        onDiskSize = getFilePointer();
       }
+      fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
+      liveOutputs.remove(name);
     }
 
     @Override

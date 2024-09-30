@@ -69,8 +69,7 @@ public class SizeAwareDirectory extends FilterDirectory
   }
 
   private static class Sizes implements Accountable {
-    private static final long RAM_BYTES_USED =
-        RamUsageEstimator.shallowSizeOfInstance(Sizes.class);
+    private static final long RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(Sizes.class);
 
     long size;
     long onDiskSize;

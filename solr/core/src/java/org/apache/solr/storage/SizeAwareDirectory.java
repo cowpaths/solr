@@ -393,23 +393,22 @@ public class SizeAwareDirectory extends FilterDirectory
     @Override
     @SuppressWarnings("try")
     public void close() throws IOException {
-        backing.close();
+      backing.close();
 
-        long onDiskSize;
-        if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
-          long finalBytesWritten = getBytesWritten(backing);
-          onDiskSize = finalBytesWritten;
-          // logical size should already be set through writeByte(s), but we need to finalize the
-          // on-disk size here
-          sizeWriter.apply(0, finalBytesWritten - lastBytesWritten, name);
-        } else if (backingDirectory instanceof DirectoryFactory.OnDiskSizeDirectory) {
-          onDiskSize = 0;
-        } else {
-          onDiskSize = getFilePointer();
-        }
-        fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
-        liveOutputs.remove(name);
-
+      long onDiskSize;
+      if (backing instanceof CompressingDirectory.SizeReportingIndexOutput) {
+        long finalBytesWritten = getBytesWritten(backing);
+        onDiskSize = finalBytesWritten;
+        // logical size should already be set through writeByte(s), but we need to finalize the
+        // on-disk size here
+        sizeWriter.apply(0, finalBytesWritten - lastBytesWritten, name);
+      } else if (backingDirectory instanceof DirectoryFactory.OnDiskSizeDirectory) {
+        onDiskSize = 0;
+      } else {
+        onDiskSize = getFilePointer();
+      }
+      fileSizeMap.put(name, new Sizes(backing.getFilePointer(), onDiskSize));
+      liveOutputs.remove(name);
     }
 
     @Override

@@ -20,6 +20,7 @@ package org.apache.solr.util.circuitbreaker;
 import java.lang.invoke.MethodHandles;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,11 +79,13 @@ public class LoadAverageCircuitBreaker extends CircuitBreaker {
         + allowedLoadAverage.get();
   }
 
-  public void setThreshold(double thresholdValueUnbounded) {
+  @Override
+  public LoadAverageCircuitBreaker setThreshold(double thresholdValueUnbounded) {
     if (thresholdValueUnbounded <= 0) {
       throw new IllegalStateException("Threshold cannot be less than or equal to zero");
     }
     loadAverageThreshold = thresholdValueUnbounded;
+    return this;
   }
 
   public double getLoadAverageThreshold() {
@@ -91,5 +94,15 @@ public class LoadAverageCircuitBreaker extends CircuitBreaker {
 
   protected double calculateLiveLoadAverage() {
     return operatingSystemMXBean.getSystemLoadAverage();
+  }
+
+  @Override
+  public String toString() {
+    return String.format(
+        Locale.ROOT,
+        "%s(threshold=%f, warnOnly=%b)",
+        getClass().getSimpleName(),
+        loadAverageThreshold,
+        isWarnOnly());
   }
 }

@@ -178,7 +178,8 @@ public class CoreContainer {
 
   final SolrCores solrCores;
 
-  private final ExecutorService storedFieldsExecutor = ExecutorUtil.newMDCAwareCachedThreadPool("storedFieldsExecutor");
+  private final ExecutorService storedFieldsExecutor =
+      ExecutorUtil.newMDCAwareCachedThreadPool("storedFieldsExecutor");
 
   public void storedFieldsExecute(Callable<Void> callable) throws IOException {
     Future<Void> future = storedFieldsExecutor.submit(callable);

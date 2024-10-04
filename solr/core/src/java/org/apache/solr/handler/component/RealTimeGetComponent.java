@@ -235,10 +235,24 @@ public class RealTimeGetComponent extends SearchComponent {
 
     try {
 
-      req.getCoreContainer().storedFieldsExecute(() -> {
-        extracted(rb, reqIds, fieldType, params, searcherInfo, ulog, mustUseRealtimeSearcher, core, transformer, rsp, req, docList);
-        return null;
-      });
+      req.getCoreContainer()
+          .storedFieldsExecute(
+              () -> {
+                extracted(
+                    rb,
+                    reqIds,
+                    fieldType,
+                    params,
+                    searcherInfo,
+                    ulog,
+                    mustUseRealtimeSearcher,
+                    core,
+                    transformer,
+                    rsp,
+                    req,
+                    docList);
+                return null;
+              });
 
     } finally {
       searcherInfo.clear();
@@ -247,7 +261,20 @@ public class RealTimeGetComponent extends SearchComponent {
     addDocListToResponse(rb, docList);
   }
 
-  private static void extracted(ResponseBuilder rb, IdsRequested reqIds, FieldType fieldType, SolrParams params, SearcherInfo searcherInfo, UpdateLog ulog, boolean mustUseRealtimeSearcher, SolrCore core, DocTransformer transformer, SolrQueryResponse rsp, SolrQueryRequest req, SolrDocumentList docList) throws IOException {
+  private static void extracted(
+      ResponseBuilder rb,
+      IdsRequested reqIds,
+      FieldType fieldType,
+      SolrParams params,
+      SearcherInfo searcherInfo,
+      UpdateLog ulog,
+      boolean mustUseRealtimeSearcher,
+      SolrCore core,
+      DocTransformer transformer,
+      SolrQueryResponse rsp,
+      SolrQueryRequest req,
+      SolrDocumentList docList)
+      throws IOException {
     // this is initialized & set on the context *after* any searcher (re-)opening
     ResultContext resultContext = null;
     boolean opennedRealtimeSearcher = false;
@@ -320,8 +347,7 @@ public class RealTimeGetComponent extends SearchComponent {
             case UpdateLog.DELETE:
               break;
             default:
-              throw new SolrException(
-                  ErrorCode.SERVER_ERROR, "Unknown Operation! " + oper);
+              throw new SolrException(ErrorCode.SERVER_ERROR, "Unknown Operation! " + oper);
           }
           if (o != null) continue;
         }
@@ -363,8 +389,7 @@ public class RealTimeGetComponent extends SearchComponent {
           searcherInfo.getSearcher().doc(docid, rsp.getReturnFields().getLuceneFieldNames());
       SolrDocument doc = toSolrDoc(luceneDocument, core.getLatestSchema());
       SolrDocumentFetcher docFetcher = searcherInfo.getSearcher().getDocFetcher();
-      docFetcher.decorateDocValueFields(
-          doc, docid, docFetcher.getNonStoredDVs(true), reuseDvIters);
+      docFetcher.decorateDocValueFields(doc, docid, docFetcher.getNonStoredDVs(true), reuseDvIters);
       if (null != transformer) {
         if (null == resultContext) {
           // either first pass, or we've re-opened searcher - either way now we setContext

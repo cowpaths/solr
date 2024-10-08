@@ -56,6 +56,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import org.apache.solr.client.solrj.SolrClient;
@@ -2950,6 +2951,16 @@ public class ZkController implements Closeable {
    */
   public void publishNodeAsDown(String nodeName) {
     log.info("Publish node={} as DOWN", nodeName);
+
+    log.info("Measuring overhead for getting collection states");
+    AtomicInteger collectionCount = new AtomicInteger();
+    AtomicInteger replicaCount = new AtomicInteger();
+    getClusterState().forEachCollection((docCollection) -> {
+      collectionCount.incrementAndGet();
+      replicaCount.addAndGet(docCollection.getReplicas().size());
+    }); //call this so it triggers collectionRef.get
+    log.info("Done loading all collection state, Collection count {} Replica count {}", collectionCount.get(), replicaCount.get());
+
     if (distributedClusterStateUpdater.isDistributedStateUpdate()) {
       // Note that with the current implementation, when distributed cluster state updates are
       // enabled, we mark the node down synchronously from this thread, whereas the Overseer cluster

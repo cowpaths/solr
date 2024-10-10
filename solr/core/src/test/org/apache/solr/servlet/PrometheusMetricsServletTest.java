@@ -22,7 +22,14 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.solr.common.util.ExecutorUtil;
+import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.response.ResultContext;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -36,9 +43,26 @@ public class PrometheusMetricsServletTest {
       int expectedQTime,
       String expectedOutput)
       throws Exception {
+    assertMetricsApiCaller(caller, null, json, expectedQTime, expectedOutput);
+  }
+
+  static void assertMetricsApiCaller(
+          PrometheusMetricsServlet.MetricsApiCaller caller,
+          PrometheusMetricsServlet.ResultContext resultContext,
+          String json,
+          int expectedQTime,
+          String expectedOutput)
+          throws Exception {
     AtomicInteger qTime = new AtomicInteger();
-    List<PrometheusMetricsServlet.PrometheusMetric> metrics = new ArrayList<>();
-    caller.handleResponse(qTime, metrics, OBJECT_MAPPER.readTree(json));
+
+    List<PrometheusMetricsServlet.PrometheusMetric> metrics;
+    if (resultContext == null) {
+      metrics = new ArrayList<>();
+      resultContext = new PrometheusMetricsServlet.ResultContext(metrics);
+    } else {
+      metrics = resultContext.resultMetrics;
+    }
+    caller.handleResponse(qTime, resultContext, OBJECT_MAPPER.readTree(json));
     Assert.assertEquals(expectedQTime, qTime.get());
     StringWriter writer = new StringWriter();
     PrintWriter printWriter = new PrintWriter(writer);
@@ -387,8 +411,7 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 4\n";
     assertMetricsApiCaller(
-        new PrometheusMetricsServlet.CoresMetricsApiCaller(
-            Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())),
+        new PrometheusMetricsServlet.CoresMetricsApiCaller(),
         json,
         14,
         output);
@@ -492,10 +515,85 @@ public class PrometheusMetricsServletTest {
             + "# TYPE update_errors counter\n"
             + "update_errors 0\n";
     assertMetricsApiCaller(
-        new PrometheusMetricsServlet.CoresMetricsApiCaller(
-            Arrays.asList(PrometheusMetricsServlet.CoreMetric.values())),
+        new PrometheusMetricsServlet.CoresMetricsApiCaller(),
         json,
         25,
         output);
+  }
+
+
+  @Test
+  public void testConcurrentCallers() throws Exception {
+    String coreJson =
+            "{\n"
+                    + "  \"responseHeader\":{\n"
+                    + "    \"status\":0,\n"
+                    + "    \"QTime\":25},\n"
+                    + "  \"metrics\":{\n"
+                    + "    \"solr.core.loadtest.shard1_1.replica_n8\":{\n"
+                    + "      \"QUERY./get.requestTimes\":{\"count\":29},\n"
+                    + "      \"QUERY./get[shard].requestTimes\":{\"count\":1},\n"
+                    + "      \"UPDATE./update.requestTimes\":{\"count\":2},\n" +
+                      "      \"UPDATE./update[local].requestTimes\":{\"count\":1}}}}";
+    String nodeJson =
+            "{\n"
+                    + "  \"responseHeader\":{\n"
+                    + "    \"status\":0,\n"
+                    + "    \"QTime\":25},\n"
+                    + "  \"metrics\":{\n"
+                    + "\"solr.node\":{\n" +
+                    "      \"UPDATE./update.requestTimes\":{\"count\":20},\n" +
+                    "      \"UPDATE./update[local].requestTimes\":{\"count\":10}}}}";
+
+
+    String nodeOutput = "# HELP distributed_requests_update cumulative number of distributed updates across cores[node aggregated]\n" +
+            "# TYPE distributed_requests_update counter\n" +
+            "distributed_requests_update 20\n" +
+            "# HELP local_requests_update cumulative number of local updates across cores[node aggregated]\n" +
+            "# TYPE local_requests_update counter\n" +
+            "local_requests_update 10\n";
+
+    //core CoresMetricsApiCaller output, it should contain both the nodeOutput and the new metrics added by the core
+    String coreOutput = "# HELP distributed_requests_update cumulative number of distributed updates across cores[node aggregated]\n" +
+            "# TYPE distributed_requests_update counter\n" +
+            "distributed_requests_update 20\n" +
+            "# HELP local_requests_update cumulative number of local updates across cores[node aggregated]\n" +
+            "# TYPE local_requests_update counter\n" +
+            "local_requests_update 10\n" +
+            "# HELP top_level_requests_get cumulative number of top-level gets across cores\n" +
+            "# TYPE top_level_requests_get counter\n" +
+            "top_level_requests_get 29\n" +
+            "# HELP sub_shard_requests_get cumulative number of sub (spawned by re-distributing a top-level req) gets across cores\n" +
+            "# TYPE sub_shard_requests_get counter\n" +
+            "sub_shard_requests_get 1\n";
+
+    final int THREAD_COUNT = 10;
+    ExecutorService executorService = ExecutorUtil.newMDCAwareFixedThreadPool(
+            THREAD_COUNT, new SolrNamedThreadFactory("test-concurrent-metric-callers"));
+
+    List<Future<?>> futures = new ArrayList<>();
+    for (int i = 0 ; i < 10; i ++) {
+      futures.add(executorService.submit(() -> {
+        PrometheusMetricsServlet.ResultContext resultContext = new PrometheusMetricsServlet.ResultContext(new ArrayList<>());
+        assertMetricsApiCaller(
+                new PrometheusMetricsServlet.AggregateMetricsApiCaller(),
+                resultContext,
+                nodeJson,
+                25,
+                nodeOutput);
+
+        assertMetricsApiCaller(
+                new PrometheusMetricsServlet.CoresMetricsApiCaller(),
+                resultContext,
+                coreJson,
+                25,
+                coreOutput);
+        return null;
+      }));
+    }
+
+    for (Future<?> future : futures) {
+      future.get(); //this should not throw any concurrent exceptions or ComparisonFailure
+    }
   }
 }

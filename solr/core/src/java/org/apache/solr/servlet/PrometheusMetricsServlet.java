@@ -915,8 +915,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
     private List<CoreMetric> getTargetCoreMetrics(ResultContext resultContext) {
       List<CoreMetric> targetCoreMetrics = resultContext.missingCoreMetrics;
-      if (targetCoreMetrics
-          == null) { // if not explicitly defined by other callers, then just get everything
+      // if not explicitly defined by other callers, then just get everything
+      if (targetCoreMetrics == null) {
         targetCoreMetrics = Arrays.asList(CoreMetric.values());
       }
       return targetCoreMetrics;

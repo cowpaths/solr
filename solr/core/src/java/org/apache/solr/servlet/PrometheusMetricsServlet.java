@@ -97,7 +97,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     ResultContext resultContext = new ResultContext(metrics);
 
     AtomicInteger qTime = new AtomicInteger();
-    // callers might be invoked sequentially in the same thread as some of them might have dependencies on eachother
+    // callers might be invoked sequentially in the same thread as some of them might have
+    // dependencies on eachother
     for (MetricsApiCaller caller : callers) {
       caller.call(qTime, resultContext, request);
     }
@@ -857,7 +858,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       JsonNode nodeMetricNode = metricsNode.get("solr.node");
 
       if (nodeMetricNode != null) {
-        resultContext.missingCoreMetrics = new ArrayList<>(); //explicitly set missing core metrics
+        resultContext.missingCoreMetrics = new ArrayList<>(); // explicitly set missing core metrics
         for (CoreMetric metric : CoreMetric.values()) {
           Number value =
               metric.property != null
@@ -914,7 +915,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
 
     private List<CoreMetric> getTargetCoreMetrics(ResultContext resultContext) {
       List<CoreMetric> targetCoreMetrics = resultContext.missingCoreMetrics;
-      if (targetCoreMetrics == null) { //if not explicitly defined by other callers, then just get everything
+      if (targetCoreMetrics
+          == null) { // if not explicitly defined by other callers, then just get everything
         targetCoreMetrics = Arrays.asList(CoreMetric.values());
       }
       return targetCoreMetrics;
@@ -950,7 +952,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     protected void handle(ResultContext resultContext, JsonNode metrics) throws IOException {
       List<PrometheusMetric> results = resultContext.resultMetrics;
       Map<CoreMetric, Long> accumulative = new LinkedHashMap<>();
-      for (CoreMetric missingCoreMetric :getTargetCoreMetrics(resultContext)) {
+      for (CoreMetric missingCoreMetric : getTargetCoreMetrics(resultContext)) {
         for (JsonNode coreMetricNode : metrics) {
           Number val =
               missingCoreMetric.property != null
@@ -1056,12 +1058,12 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   abstract static class MetricsApiCaller {
 
     // use HttpSolrCall to simulate a call to the metrics api.
-    void call(
-        AtomicInteger qTime, ResultContext resultContext, HttpServletRequest originalRequest)
+    void call(AtomicInteger qTime, ResultContext resultContext, HttpServletRequest originalRequest)
         throws IOException, UnavailableException {
       SolrDispatchFilter filter = getSolrDispatchFilter(originalRequest);
       CoreContainer cores = filter.getCores();
-      HttpServletRequest request = new MetricsApiRequest(originalRequest, buildQueryString(resultContext));
+      HttpServletRequest request =
+          new MetricsApiRequest(originalRequest, buildQueryString(resultContext));
       MetricsApiResponse response = new MetricsApiResponse();
       SolrDispatchFilter.Action action =
           new HttpSolrCall(filter, cores, request, response, false).call();
@@ -1087,7 +1089,6 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
       qTime.addAndGet(getNumber(header, "QTime").intValue());
       handle(resultContext, response.path("metrics"));
     }
-
 
     abstract void handle(ResultContext resultContext, JsonNode metrics) throws IOException;
 
@@ -1370,8 +1371,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   }
 
   /**
-   * Context that carries the metrics results as well as information that needs to be propagated in the MetricsApiCaller
-   * call chain
+   * Context that carries the metrics results as well as information that needs to be propagated in
+   * the MetricsApiCaller call chain
    */
   static class ResultContext {
     final List<PrometheusMetric> resultMetrics;

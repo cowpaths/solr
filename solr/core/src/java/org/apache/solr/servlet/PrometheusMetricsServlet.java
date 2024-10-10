@@ -97,8 +97,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     ResultContext resultContext = new ResultContext(metrics);
 
     AtomicInteger qTime = new AtomicInteger();
-    // callers might be invoked sequentially in the same thread as some of them might have
-    // dependencies on eachother
+    // callers should be invoked sequentially in the same thread there could be dependencies among
+    // them
     for (MetricsApiCaller caller : callers) {
       caller.call(qTime, resultContext, request);
     }

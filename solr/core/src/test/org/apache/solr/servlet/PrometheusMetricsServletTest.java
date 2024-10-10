@@ -567,12 +567,12 @@ public class PrometheusMetricsServletTest {
             "# TYPE sub_shard_requests_get counter\n" +
             "sub_shard_requests_get 1\n";
 
-    final int THREAD_COUNT = 10;
+    final int THREAD_COUNT = 100;
     ExecutorService executorService = ExecutorUtil.newMDCAwareFixedThreadPool(
             THREAD_COUNT, new SolrNamedThreadFactory("test-concurrent-metric-callers"));
 
     List<Future<?>> futures = new ArrayList<>();
-    for (int i = 0 ; i < 10; i ++) {
+    for (int i = 0 ; i < THREAD_COUNT; i ++) {
       futures.add(executorService.submit(() -> {
         PrometheusMetricsServlet.ResultContext resultContext = new PrometheusMetricsServlet.ResultContext(new ArrayList<>());
         assertMetricsApiCaller(

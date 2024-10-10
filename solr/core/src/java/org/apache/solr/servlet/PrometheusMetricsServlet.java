@@ -97,6 +97,7 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     ResultContext resultContext = new ResultContext(metrics);
 
     AtomicInteger qTime = new AtomicInteger();
+    // callers might be invoked sequentially in the same thread as some of them might have dependencies on eachother
     for (MetricsApiCaller caller : callers) {
       caller.call(qTime, resultContext, request);
     }
@@ -1369,8 +1370,8 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
   }
 
   /**
-   * Context that carries the metrics results as well as information that needs to be propagated from MetricsApiCaller
-   * to MetricsApiCaller
+   * Context that carries the metrics results as well as information that needs to be propagated in the MetricsApiCaller
+   * call chain
    */
   static class ResultContext {
     final List<PrometheusMetric> resultMetrics;

@@ -1023,7 +1023,8 @@ public class ZkController implements Closeable {
       }
 
       Stat stat = zkClient.exists(ZkStateReader.LIVE_NODES_ZKNODE, null, true);
-      if (stat != null && stat.getNumChildren() > 0) {
+      boolean skipPublishDownOnStart = Boolean.getBoolean("solrcloud.skipPublishDownOnStart");
+      if (stat != null && stat.getNumChildren() > 0 && !skipPublishDownOnStart) {
         publishAndWaitForDownStates();
       }
 
@@ -2904,8 +2905,11 @@ public class ZkController implements Closeable {
     log.info("Publish node={} as DOWN", nodeName);
 
     ClusterState clusterState = getClusterState();
+    long startZkFetch = System.currentTimeMillis();
     Map<String, List<Replica>> replicasPerCollectionOnNode =
         clusterState.getReplicaNamesPerCollectionOnNode(nodeName);
+    long zkFetchDuration = System.currentTimeMillis() - startZkFetch;
+    log.info("Spent {} ms on ClusterState#getReplicaNamesPerCollectionOnNode", zkFetchDuration);
     if (distributedClusterStateUpdater.isDistributedStateUpdate()) {
       // Note that with the current implementation, when distributed cluster state updates are
       // enabled, we mark the node down synchronously from this thread, whereas the Overseer cluster

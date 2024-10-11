@@ -2905,10 +2905,10 @@ public class ZkController implements Closeable {
     log.info("Publish node={} as DOWN", nodeName);
 
     ClusterState clusterState = getClusterState();
-    long startZkFetch = System.currentTimeMillis();
+    final RTimer startZkFetchTimer = new RTimer();
     Map<String, List<Replica>> replicasPerCollectionOnNode =
         clusterState.getReplicaNamesPerCollectionOnNode(nodeName);
-    long zkFetchDuration = System.currentTimeMillis() - startZkFetch;
+    long zkFetchDuration = (long)startZkFetchTimer.getTime();
     log.info("Spent {} ms on ClusterState#getReplicaNamesPerCollectionOnNode", zkFetchDuration);
     if (distributedClusterStateUpdater.isDistributedStateUpdate()) {
       // Note that with the current implementation, when distributed cluster state updates are

@@ -2903,7 +2903,8 @@ public class ZkController implements Closeable {
    */
   public Collection<String> publishNodeAsDown(String nodeName) {
     log.info("Publish node={} as DOWN", nodeName);
-    Map<DocCollection, List<Replica>> replicasPerCollectionOnNode = getReplicasPerCollectionOnThisNode();
+    Map<DocCollection, List<Replica>> replicasPerCollectionOnNode =
+        getReplicasPerCollectionOnThisNode();
 
     if (distributedClusterStateUpdater.isDistributedStateUpdate()) {
       // Note that with the current implementation, when distributed cluster state updates are
@@ -2926,7 +2927,8 @@ public class ZkController implements Closeable {
                         coll.getZNode(), zkClient, coll.getPerReplicaStates()))
                 .persist(coll.getZNode(), zkClient);
           } else {
-            // if this node contains any non PRS collection, then we need to notify the overseer as overseer
+            // if this node contains any non PRS collection, then we need to notify the overseer as
+            // overseer
             // manages the replica state for non PRS collections
             sendToOverseer = true;
           }
@@ -2955,7 +2957,9 @@ public class ZkController implements Closeable {
         log.warn("Could not publish node as down: ", e);
       }
     }
-    return replicasPerCollectionOnNode.keySet().stream().map(DocCollection::getName).collect(Collectors.toSet());
+    return replicasPerCollectionOnNode.keySet().stream()
+        .map(DocCollection::getName)
+        .collect(Collectors.toSet());
   }
 
   private Map<DocCollection, List<Replica>> getReplicasPerCollectionOnThisNode() {
@@ -2966,29 +2970,29 @@ public class ZkController implements Closeable {
         String collName = cd.getCollectionName();
         DocCollection coll;
         if (collName != null
-                && processedCollections.add(collName)
-                && (coll = zkStateReader.getCollection(collName)) != null) {
+            && processedCollections.add(collName)
+            && (coll = zkStateReader.getCollection(collName)) != null) {
           final List<Replica> replicasOnThisNode = new ArrayList<>();
           coll.forEachReplica(
-                  (s, replica) -> {
-                    if (replica.getNodeName().equals(nodeName)) {
-                      replicasOnThisNode.add(replica);
-                    }
-                  });
+              (s, replica) -> {
+                if (replica.getNodeName().equals(nodeName)) {
+                  replicasOnThisNode.add(replica);
+                }
+              });
           result.put(coll, replicasOnThisNode);
         }
       }
     } else {
       getClusterState().getCollectionStates().values().stream()
-              .map(ClusterState.CollectionRef::get)
-              .filter(Objects::nonNull)
-              .forEach(
-                      col -> {
-                        List<Replica> replicas = col.getReplicas(nodeName);
-                        if (replicas != null && !replicas.isEmpty()) {
-                          result.put(col, replicas);
-                        }
-                      });
+          .map(ClusterState.CollectionRef::get)
+          .filter(Objects::nonNull)
+          .forEach(
+              col -> {
+                List<Replica> replicas = col.getReplicas(nodeName);
+                if (replicas != null && !replicas.isEmpty()) {
+                  result.put(col, replicas);
+                }
+              });
     }
     return result;
   }

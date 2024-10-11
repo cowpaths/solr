@@ -28,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -209,21 +208,6 @@ public class ClusterState implements MapWriter {
           .orElse(null);
     }
     return null;
-  }
-
-  public Map<String, List<Replica>> getReplicaNamesPerCollectionOnNode(final String nodeName) {
-    Map<String, List<Replica>> replicaNamesPerCollectionOnNode = new HashMap<>();
-    collectionStates.values().stream()
-        .map(CollectionRef::get)
-        .filter(Objects::nonNull)
-        .forEach(
-            col -> {
-              List<Replica> replicas = col.getReplicas(nodeName);
-              if (replicas != null && !replicas.isEmpty()) {
-                replicaNamesPerCollectionOnNode.put(col.getName(), replicas);
-              }
-            });
-    return replicaNamesPerCollectionOnNode;
   }
 
   /** Check if node is alive. */

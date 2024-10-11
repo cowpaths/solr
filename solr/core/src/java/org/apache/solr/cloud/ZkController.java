@@ -2902,13 +2902,14 @@ public class ZkController implements Closeable {
    * @return the names of the collections that have replicas on the given node
    */
   public Collection<String> publishNodeAsDown(String nodeName) {
+    final RTimer publishDownTimer = new RTimer();
     log.info("Publish node={} as DOWN", nodeName);
 
     ClusterState clusterState = getClusterState();
-    final RTimer startZkFetchTimer = new RTimer();
+    final RTimer zkFetchTimer = new RTimer();
     Map<String, List<Replica>> replicasPerCollectionOnNode =
         clusterState.getReplicaNamesPerCollectionOnNode(nodeName);
-    long zkFetchDuration = (long)startZkFetchTimer.getTime();
+    long zkFetchDuration = (long)zkFetchTimer.getTime();
     log.info("Spent {} ms on ClusterState#getReplicaNamesPerCollectionOnNode", zkFetchDuration);
     if (distributedClusterStateUpdater.isDistributedStateUpdate()) {
       // Note that with the current implementation, when distributed cluster state updates are
@@ -2962,6 +2963,9 @@ public class ZkController implements Closeable {
         log.warn("Could not publish node as down: ", e);
       }
     }
+    long publishDownDuration = (long)publishDownTimer.getTime();
+    log.info("Spent {} ms on ZKController#publishNodeAsDown", publishDownDuration);
+
     return replicasPerCollectionOnNode.keySet();
   }
 

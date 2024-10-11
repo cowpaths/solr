@@ -2962,7 +2962,7 @@ public class ZkController implements Closeable {
         .collect(Collectors.toSet());
   }
 
-  private Map<DocCollection, List<Replica>> getReplicasPerCollectionOnThisNode() {
+  Map<DocCollection, List<Replica>> getReplicasPerCollectionOnThisNode() {
     Map<DocCollection, List<Replica>> result = new HashMap<>();
     if (cc.isStatusLoadComplete()) {
       Set<String> processedCollections = new HashSet<>();

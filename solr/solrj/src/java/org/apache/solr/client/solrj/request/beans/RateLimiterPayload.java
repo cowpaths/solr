@@ -35,8 +35,6 @@ public class RateLimiterPayload implements ReflectMapWriter {
 
   @JsonProperty public Boolean priorityBasedEnabled;
 
-  @JsonProperty public Integer priorityMaxRequests;
-
   public RateLimiterPayload copy() {
     RateLimiterPayload result = new RateLimiterPayload();
 
@@ -46,7 +44,6 @@ public class RateLimiterPayload implements ReflectMapWriter {
     result.slotBorrowingEnabled = slotBorrowingEnabled;
     result.slotAcquisitionTimeoutInMS = slotAcquisitionTimeoutInMS;
     result.priorityBasedEnabled = priorityBasedEnabled;
-    result.priorityMaxRequests = priorityMaxRequests;
     return result;
   }
 
@@ -59,8 +56,7 @@ public class RateLimiterPayload implements ReflectMapWriter {
           && Objects.equals(this.allowedRequests, that.allowedRequests)
           && Objects.equals(this.slotBorrowingEnabled, that.slotBorrowingEnabled)
           && Objects.equals(this.slotAcquisitionTimeoutInMS, that.slotAcquisitionTimeoutInMS)
-          && Objects.equals(this.priorityBasedEnabled, that.priorityBasedEnabled)
-          && Objects.equals(this.priorityMaxRequests, that.priorityMaxRequests);
+          && Objects.equals(this.priorityBasedEnabled, that.priorityBasedEnabled);
     }
     return false;
   }
@@ -73,7 +69,6 @@ public class RateLimiterPayload implements ReflectMapWriter {
         allowedRequests,
         slotBorrowingEnabled,
         slotAcquisitionTimeoutInMS,
-        priorityBasedEnabled,
-        priorityMaxRequests);
+        priorityBasedEnabled);
   }
 }

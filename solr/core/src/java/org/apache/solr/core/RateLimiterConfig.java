@@ -33,6 +33,7 @@ public class RateLimiterConfig {
   public final boolean isSlotBorrowingEnabled;
   public final int guaranteedSlotsThreshold;
   public final Boolean priorityBasedEnabled;
+
   /**
    * We store the config definition in order to determine whether anything has changed that would
    * call for re-initialization.

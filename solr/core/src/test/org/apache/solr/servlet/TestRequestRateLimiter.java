@@ -665,36 +665,38 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
 
     // PriorityBasedRateLimiter
     RateLimiterConfig rateLimiterConfig =
-            new RateLimiterConfig(
-                    SolrRequest.SolrRequestType.QUERY,
-                    true,
-                    1,
-                    10,
-                    1 /* allowedRequests */,
-                    true /* isSlotBorrowing */,
-                    true);
+        new RateLimiterConfig(
+            SolrRequest.SolrRequestType.QUERY,
+            true,
+            1,
+            10,
+            1 /* allowedRequests */,
+            true /* isSlotBorrowing */,
+            true);
 
     PriorityBasedRateLimiter requestRateLimiter = new PriorityBasedRateLimiter(rateLimiterConfig);
 
     rateLimitManager.registerRequestRateLimiter(
-            requestRateLimiter, SolrRequest.SolrRequestType.PRIORITY_BASED);
+        requestRateLimiter, SolrRequest.SolrRequestType.PRIORITY_BASED);
 
     HttpServletRequest firstRequest = new DummyRequest(null, "FOREGROUND");
 
-    RequestRateLimiter.SlotReservation firstRequestAllowed = rateLimitManager.handleRequest(firstRequest);
+    RequestRateLimiter.SlotReservation firstRequestAllowed =
+        rateLimitManager.handleRequest(firstRequest);
     assertNotNull(firstRequestAllowed);
     assertEquals(1, requestRateLimiter.getRequestsAllowed());
 
-
     HttpServletRequest secondRequest = new DummyRequest(null, "FOREGROUND");
 
-    RequestRateLimiter.SlotReservation secondRequestNotAllowed = rateLimitManager.handleRequest(secondRequest);
-      assertNull(secondRequestNotAllowed);
-      assertEquals(1, requestRateLimiter.getRequestsAllowed());
+    RequestRateLimiter.SlotReservation secondRequestNotAllowed =
+        rateLimitManager.handleRequest(secondRequest);
+    assertNull(secondRequestNotAllowed);
+    assertEquals(1, requestRateLimiter.getRequestsAllowed());
 
     HttpServletRequest thirdRequest = new DummyRequest(null, "BACKGROUND");
 
-    RequestRateLimiter.SlotReservation thirdRequestNotAllowed = rateLimitManager.handleRequest(thirdRequest);
+    RequestRateLimiter.SlotReservation thirdRequestNotAllowed =
+        rateLimitManager.handleRequest(thirdRequest);
     assertNull(thirdRequestNotAllowed);
     assertEquals(1, requestRateLimiter.getRequestsAllowed());
 

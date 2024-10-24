@@ -13,7 +13,8 @@ import org.apache.solr.core.RateLimiterConfig;
  * priorities {@link SolrRequest.RequestPriorities} FOREGROUND and {@link
  * SolrRequest.RequestPriorities} BACKGROUND Requests. Client can pass the {@link
  * org.apache.solr.common.params.CommonParams} SOLR_REQUEST_TYPE_PARAM request header to indicate
- * the foreground and background request. Foreground requests has high priority than background requests
+ * the foreground and background request. Foreground requests has high priority than background
+ * requests
  */
 public class PriorityBasedRateLimiter extends RequestRateLimiter {
   private final AtomicInteger priorityOneRequests = new AtomicInteger();
@@ -44,7 +45,7 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
       if (!acquire(requestPriority)) {
         return null;
       }
-    }catch (InterruptedException ie) {
+    } catch (InterruptedException ie) {
       return null;
     }
     return () -> PriorityBasedRateLimiter.this.release(requestPriority);
@@ -66,7 +67,8 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
   }
 
   private boolean nextInQueue() throws InterruptedException {
-    boolean acquired = this.numRequestsAllowed.tryAcquire(1, this.waitTimeoutInMillis, TimeUnit.MILLISECONDS);
+    boolean acquired =
+        this.numRequestsAllowed.tryAcquire(1, this.waitTimeoutInMillis, TimeUnit.MILLISECONDS);
     if (!acquired) {
       return false;
     }

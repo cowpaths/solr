@@ -33,6 +33,10 @@ public class RateLimiterPayload implements ReflectMapWriter {
 
   @JsonProperty public Integer slotAcquisitionTimeoutInMS;
 
+  @JsonProperty public Boolean priorityBasedEnabled;
+
+  @JsonProperty public Integer priorityMaxRequests;
+
   public RateLimiterPayload copy() {
     RateLimiterPayload result = new RateLimiterPayload();
 
@@ -41,7 +45,8 @@ public class RateLimiterPayload implements ReflectMapWriter {
     result.allowedRequests = allowedRequests;
     result.slotBorrowingEnabled = slotBorrowingEnabled;
     result.slotAcquisitionTimeoutInMS = slotAcquisitionTimeoutInMS;
-
+    result.priorityBasedEnabled = priorityBasedEnabled;
+    result.priorityMaxRequests = priorityMaxRequests;
     return result;
   }
 
@@ -53,7 +58,9 @@ public class RateLimiterPayload implements ReflectMapWriter {
           && Objects.equals(this.guaranteedSlots, that.guaranteedSlots)
           && Objects.equals(this.allowedRequests, that.allowedRequests)
           && Objects.equals(this.slotBorrowingEnabled, that.slotBorrowingEnabled)
-          && Objects.equals(this.slotAcquisitionTimeoutInMS, that.slotAcquisitionTimeoutInMS);
+          && Objects.equals(this.slotAcquisitionTimeoutInMS, that.slotAcquisitionTimeoutInMS)
+          && Objects.equals(this.priorityBasedEnabled, that.priorityBasedEnabled)
+          && Objects.equals(this.priorityMaxRequests, that.priorityMaxRequests);
     }
     return false;
   }
@@ -65,6 +72,8 @@ public class RateLimiterPayload implements ReflectMapWriter {
         guaranteedSlots,
         allowedRequests,
         slotBorrowingEnabled,
-        slotAcquisitionTimeoutInMS);
+        slotAcquisitionTimeoutInMS,
+        priorityBasedEnabled,
+        priorityMaxRequests);
   }
 }

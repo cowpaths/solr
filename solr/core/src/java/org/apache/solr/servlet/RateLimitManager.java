@@ -68,13 +68,14 @@ public class RateLimitManager implements ClusterPropertiesListener {
           try {
             RateLimiterConfig newConfig =
                 QueryRateLimiter.processConfigChange(
-                    SolrRequest.SolrRequestType.QUERY,
-                    v == null ? null : v.getRateLimiterConfig(),
-                    properties);
+                    v == null ? null : v.getRateLimiterConfig(), properties);
             if (newConfig == null) {
               return v;
             } else {
               log.info("updated config: {}", newConfig);
+              if (newConfig.priorityBasedEnabled) {
+                return new PriorityBasedRateLimiter(newConfig);
+              }
               return new QueryRateLimiter(newConfig);
             }
           } catch (IOException e) {
@@ -93,6 +94,7 @@ public class RateLimitManager implements ClusterPropertiesListener {
       throws InterruptedException {
     String requestContext = request.getHeader(SOLR_REQUEST_CONTEXT_PARAM);
     String typeOfRequest = request.getHeader(SOLR_REQUEST_TYPE_PARAM);
+    String requestPriority = typeOfRequest;
 
     if (typeOfRequest == null) {
       // Cannot determine if this request should be throttled
@@ -105,6 +107,10 @@ public class RateLimitManager implements ClusterPropertiesListener {
       return RequestRateLimiter.UNLIMITED;
     }
 
+    if (typeOfRequest.equals(SolrRequest.RequestPriorities.FOREGROUND.toString())
+        || typeOfRequest.equals(SolrRequest.RequestPriorities.BACKGROUND.toString())) {
+      typeOfRequest = SolrRequest.SolrRequestType.PRIORITY_BASED.toString();
+    }
     RequestRateLimiter requestRateLimiter = requestRateLimiterMap.get(typeOfRequest);
 
     if (requestRateLimiter == null) {
@@ -115,7 +121,7 @@ public class RateLimitManager implements ClusterPropertiesListener {
     // slot borrowing should be fallback behavior, so if `slotAcquisitionTimeoutInMS`
     // is configured it will be applied here (blocking if necessary), to make a best
     // effort to draw from the request's own slot pool.
-    RequestRateLimiter.SlotReservation result = requestRateLimiter.handleRequest();
+    RequestRateLimiter.SlotReservation result = requestRateLimiter.handleRequest(requestPriority);
 
     if (result != null) {
       return result;

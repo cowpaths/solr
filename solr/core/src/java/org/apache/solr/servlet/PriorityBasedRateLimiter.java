@@ -10,8 +10,7 @@ import org.apache.solr.core.RateLimiterConfig;
 
 /**
  * PriorityBasedRateLimiter allocates the slot based on their request priority Currently, it has two
- * priorities {@link SolrRequest.RequestPriorities} FOREGROUND and {@link
- * SolrRequest.RequestPriorities} BACKGROUND Requests. Client can pass the {@link
+ * priorities FOREGROUND and BACKGROUND Requests. Client can pass the {@link
  * org.apache.solr.common.params.CommonParams} SOLR_REQUEST_TYPE_PARAM request header to indicate
  * the foreground and background request. Foreground requests has high priority than background
  * requests

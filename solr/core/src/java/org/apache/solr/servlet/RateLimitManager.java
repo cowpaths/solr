@@ -107,9 +107,9 @@ public class RateLimitManager implements ClusterPropertiesListener {
       return RequestRateLimiter.UNLIMITED;
     }
 
-    if (typeOfRequest.equals(SolrRequest.RequestPriorities.FOREGROUND.toString())
-        || typeOfRequest.equals(SolrRequest.RequestPriorities.BACKGROUND.toString())) {
-      typeOfRequest = SolrRequest.SolrRequestType.PRIORITY_BASED.toString();
+    if (typeOfRequest.equals(SolrRequest.RequestPriorities.FOREGROUND.name())
+        || typeOfRequest.equals(SolrRequest.RequestPriorities.BACKGROUND.name())) {
+      typeOfRequest = SolrRequest.SolrRequestType.PRIORITY_BASED.name();
     }
     RequestRateLimiter requestRateLimiter = requestRateLimiterMap.get(typeOfRequest);
 

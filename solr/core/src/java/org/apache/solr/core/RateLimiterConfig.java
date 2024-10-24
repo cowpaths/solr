@@ -33,9 +33,6 @@ public class RateLimiterConfig {
   public final boolean isSlotBorrowingEnabled;
   public final int guaranteedSlotsThreshold;
   public final Boolean priorityBasedEnabled;
-
-  public final int priorityMaxRequests;
-
   /**
    * We store the config definition in order to determine whether anything has changed that would
    * call for re-initialization.
@@ -53,8 +50,7 @@ public class RateLimiterConfig {
       long waitForSlotAcquisition,
       int allowedRequests,
       boolean isSlotBorrowingEnabled,
-      boolean priorityBasedEnabled,
-      int priorityMaxRequests) {
+      boolean priorityBasedEnabled) {
     this(
         requestType,
         makePayload(
@@ -63,8 +59,7 @@ public class RateLimiterConfig {
             waitForSlotAcquisition,
             allowedRequests,
             isSlotBorrowingEnabled,
-            priorityBasedEnabled,
-            priorityMaxRequests));
+            priorityBasedEnabled));
   }
 
   private static RateLimiterPayload makePayload(
@@ -73,8 +68,7 @@ public class RateLimiterConfig {
       long waitForSlotAcquisition,
       int allowedRequests,
       boolean isSlotBorrowingEnabled,
-      boolean priorityBasedEnabled,
-      int priorityMaxRequests) {
+      boolean priorityBasedEnabled) {
     RateLimiterPayload ret = new RateLimiterPayload();
     ret.enabled = isEnabled;
     ret.allowedRequests = allowedRequests;
@@ -82,7 +76,6 @@ public class RateLimiterConfig {
     ret.slotBorrowingEnabled = isSlotBorrowingEnabled;
     ret.slotAcquisitionTimeoutInMS = Math.toIntExact(waitForSlotAcquisition);
     ret.priorityBasedEnabled = priorityBasedEnabled;
-    ret.priorityMaxRequests = priorityMaxRequests;
     return ret;
   }
 
@@ -111,8 +104,6 @@ public class RateLimiterConfig {
 
     priorityBasedEnabled =
         definition.priorityBasedEnabled == null ? false : definition.priorityBasedEnabled;
-    priorityMaxRequests =
-        definition.priorityMaxRequests == null ? 0 : definition.priorityMaxRequests;
 
     this.definition = definition;
   }
@@ -142,7 +133,6 @@ public class RateLimiterConfig {
     sb.append(", borrowEnabled=").append(isSlotBorrowingEnabled);
     sb.append(", waitForSlotMillis=").append(waitForSlotAcquisition);
     sb.append(", priorityBasedEnabled=").append(priorityBasedEnabled);
-    sb.append(", priorityMaxRequests=").append(priorityMaxRequests);
     return sb.append('}').toString();
   }
 }

@@ -48,19 +48,11 @@ public class QueryRateLimiter extends RequestRateLimiter {
   }
 
   public static RateLimiterConfig processConfigChange(
-      RateLimiterConfig rateLimiterConfig, Map<String, Object> properties) throws IOException {
-    byte[] configInput = Utils.toJSON(properties.get(RL_CONFIG_KEY));
-
-    RateLimiterPayload rateLimiterMeta;
-    if (configInput == null || configInput.length == 0) {
-      rateLimiterMeta = null;
-    } else {
-      rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
-    }
+      RateLimiterConfig rateLimiterConfig, RateLimiterPayload rateLimiterMeta) throws IOException {
 
     // default rate limiter
     SolrRequest.SolrRequestType requestType = SolrRequest.SolrRequestType.QUERY;
-    if (rateLimiterConfig.priorityBasedEnabled) {
+    if (rateLimiterMeta.priorityBasedEnabled) {
       requestType = SolrRequest.SolrRequestType.PRIORITY_BASED;
     }
 

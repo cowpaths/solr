@@ -19,7 +19,9 @@ package org.apache.solr.servlet;
 
 import static org.apache.solr.common.params.CommonParams.SOLR_REQUEST_CONTEXT_PARAM;
 import static org.apache.solr.common.params.CommonParams.SOLR_REQUEST_TYPE_PARAM;
+import static org.apache.solr.core.RateLimiterConfig.RL_CONFIG_KEY;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
@@ -28,9 +30,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.http.HttpServletRequest;
 import net.jcip.annotations.ThreadSafe;
 import org.apache.solr.client.solrj.SolrRequest;
+import org.apache.solr.client.solrj.request.beans.RateLimiterPayload;
 import org.apache.solr.common.cloud.ClusterPropertiesListener;
 import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.RateLimiterConfig;
+import org.apache.solr.util.SolrJacksonAnnotationInspector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +51,7 @@ import org.slf4j.LoggerFactory;
 @ThreadSafe
 public class RateLimitManager implements ClusterPropertiesListener {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
+  private static final ObjectMapper mapper = SolrJacksonAnnotationInspector.createObjectMapper();
   public static final String ERROR_MESSAGE =
       "Too many requests for this request type. Please try after some time or increase the quota for this request type";
   public static final int DEFAULT_CONCURRENT_REQUESTS =
@@ -61,14 +66,29 @@ public class RateLimitManager implements ClusterPropertiesListener {
   @Override
   public boolean onChange(Map<String, Object> properties) {
 
+    byte[] configInput = Utils.toJSON(properties.get(RL_CONFIG_KEY));
+
+    RateLimiterPayload rateLimiterMeta;
+    if (configInput == null || configInput.length == 0) {
+      return false;
+    } else {
+      try {
+        rateLimiterMeta = mapper.readValue(configInput, RateLimiterPayload.class);
+      } catch (IOException e) {
+        throw new UncheckedIOException(e);
+      }
+    }
+
     // Hack: We only support query rate limiting for now
     requestRateLimiterMap.compute(
-        SolrRequest.SolrRequestType.QUERY.toString(),
+        rateLimiterMeta.priorityBasedEnabled
+            ? SolrRequest.SolrRequestType.PRIORITY_BASED.name()
+            : SolrRequest.SolrRequestType.QUERY.name(),
         (k, v) -> {
           try {
             RateLimiterConfig newConfig =
                 QueryRateLimiter.processConfigChange(
-                    v == null ? null : v.getRateLimiterConfig(), properties);
+                    v == null ? null : v.getRateLimiterConfig(), rateLimiterMeta);
             if (newConfig == null) {
               return v;
             } else {

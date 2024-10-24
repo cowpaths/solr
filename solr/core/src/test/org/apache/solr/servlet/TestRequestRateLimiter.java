@@ -26,7 +26,9 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -701,5 +703,48 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     assertEquals(1, requestRateLimiter.getRequestsAllowed());
 
     firstRequestAllowed.close();
+  }
+
+  @Test
+  public void testPriorityBasedRateLimiterDynamicChange() throws Exception {
+    RateLimitManager rateLimitManager = new RateLimitManager();
+
+    // PriorityBasedRateLimiter
+    RateLimiterConfig rateLimiterConfig =
+        new RateLimiterConfig(
+            SolrRequest.SolrRequestType.QUERY,
+            true,
+            1,
+            10,
+            1 /* allowedRequests */,
+            true /* isSlotBorrowing */,
+            false);
+
+    QueryRateLimiter requestRateLimiter = new QueryRateLimiter(rateLimiterConfig);
+
+    rateLimitManager.registerRequestRateLimiter(
+        requestRateLimiter, SolrRequest.SolrRequestType.QUERY);
+
+    RequestRateLimiter rateLimiter =
+        rateLimitManager.getRequestRateLimiter(SolrRequest.SolrRequestType.PRIORITY_BASED);
+    assertNull(rateLimiter);
+
+    Map<String, Object> properties = new HashMap<>();
+    Map<String, Object> rateLimiterProps = new HashMap<>();
+    rateLimiterProps.put("enabled", true);
+    rateLimiterProps.put("guaranteedSlots", 1);
+    rateLimiterProps.put("allowedRequests", 1);
+    rateLimiterProps.put("slotBorrowingEnabled", false);
+    rateLimiterProps.put("slotAcquisitionTimeoutInMS", 100);
+    rateLimiterProps.put("priorityBasedEnabled", true);
+    properties.put("rate-limiters", rateLimiterProps);
+
+    // updating rate limiter
+    rateLimitManager.onChange(properties);
+
+    rateLimiter =
+        rateLimitManager.getRequestRateLimiter(SolrRequest.SolrRequestType.PRIORITY_BASED);
+
+    assertEquals(true, rateLimiter.getRateLimiterConfig().priorityBasedEnabled);
   }
 }

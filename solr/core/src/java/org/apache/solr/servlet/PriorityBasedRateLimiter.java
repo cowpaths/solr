@@ -40,6 +40,9 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
 
   @Override
   public SlotReservation handleRequest(String requestPriority) {
+    if (!rateLimiterConfig.isEnabled) {
+      return UNLIMITED;
+    }
     try {
       if (!acquire(requestPriority)) {
         return null;

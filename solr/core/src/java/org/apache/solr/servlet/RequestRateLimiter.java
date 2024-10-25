@@ -46,7 +46,7 @@ public class RequestRateLimiter {
 
   private final AtomicInteger nativeReservations;
 
-  private final RateLimiterConfig rateLimiterConfig;
+  protected final RateLimiterConfig rateLimiterConfig;
   public static final SlotReservation UNLIMITED =
       () -> {
         // no-op

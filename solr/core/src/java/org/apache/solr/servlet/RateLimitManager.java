@@ -33,9 +33,12 @@ import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.request.beans.RateLimiterPayload;
 import org.apache.solr.common.cloud.ClusterPropertiesListener;
 import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.RateLimiterConfig;
 import org.apache.solr.util.SolrJacksonAnnotationInspector;
+import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -214,10 +217,55 @@ public class RateLimitManager implements ClusterPropertiesListener {
     public RateLimitManager build() {
       RateLimitManager rateLimitManager = new RateLimitManager();
 
-      rateLimitManager.registerRequestRateLimiter(
-          new QueryRateLimiter(solrZkClient), SolrRequest.SolrRequestType.QUERY);
+      RateLimiterConfig rateLimiterConfig = constructQueryRateLimiterConfig(solrZkClient);
+
+      if (rateLimiterConfig.priorityBasedEnabled) {
+        rateLimitManager.registerRequestRateLimiter(
+            new PriorityBasedRateLimiter(rateLimiterConfig),
+            SolrRequest.SolrRequestType.PRIORITY_BASED);
+      } else {
+        rateLimitManager.registerRequestRateLimiter(
+            new QueryRateLimiter(rateLimiterConfig), SolrRequest.SolrRequestType.QUERY);
+      }
 
       return rateLimitManager;
+    }
+
+    // To be used in initialization
+    @SuppressWarnings({"unchecked"})
+    private static RateLimiterConfig constructQueryRateLimiterConfig(SolrZkClient zkClient) {
+      try {
+
+        if (zkClient == null) {
+          return new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY);
+        }
+
+        Map<String, Object> clusterPropsJson =
+            (Map<String, Object>)
+                Utils.fromJSON(
+                    zkClient.getData(ZkStateReader.CLUSTER_PROPS, null, new Stat(), true));
+        byte[] configInput = Utils.toJSON(clusterPropsJson.get(RL_CONFIG_KEY));
+
+        if (configInput.length == 0) {
+          // No Rate Limiter configuration defined in clusterprops.json. Return default
+          // configuration
+          // values
+          return new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY);
+        }
+
+        RateLimiterPayload rateLimiterMeta =
+            mapper.readValue(configInput, RateLimiterPayload.class);
+        return rateLimiterMeta.priorityBasedEnabled
+            ? new RateLimiterConfig(SolrRequest.SolrRequestType.PRIORITY_BASED, rateLimiterMeta)
+            : new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY, rateLimiterMeta);
+      } catch (KeeperException.NoNodeException e) {
+        return new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY);
+      } catch (KeeperException | InterruptedException e) {
+        throw new RuntimeException(
+            "Error reading cluster property", SolrZkClient.checkInterrupted(e));
+      } catch (IOException e) {
+        throw new RuntimeException("Encountered an IOException " + e.getMessage());
+      }
     }
   }
 }

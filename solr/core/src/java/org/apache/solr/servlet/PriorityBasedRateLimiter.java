@@ -49,7 +49,7 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
     } catch (InterruptedException ie) {
       return null;
     }
-    return () -> PriorityBasedRateLimiter.this.release(requestPriority);
+    return () -> PriorityBasedRateLimiter.this.release();
   }
 
   private boolean acquire(RequestPriorities priority) throws InterruptedException {
@@ -82,7 +82,7 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
     this.activeRequests.addAndGet(-1);
   }
 
-  private void release(RequestPriorities priority) {
+  private void release() {
     if (this.activeRequests.get() > this.totalAllowedRequests) {
       // priority one request is waiting, let's inform it
       this.exitFromQueue();

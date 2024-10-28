@@ -5,7 +5,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.solr.client.solrj.SolrRequest;
+import javax.servlet.http.HttpServletRequest;
 import org.apache.solr.core.RateLimiterConfig;
 
 /**
@@ -16,8 +16,8 @@ import org.apache.solr.core.RateLimiterConfig;
  * requests
  */
 public class PriorityBasedRateLimiter extends RequestRateLimiter {
-  private final AtomicInteger priorityOneRequests = new AtomicInteger();
-  private final String[] priorities;
+  public static final String SOLR_REQUEST_PRIORITY_PARAM = "Solr-Request-Priority";
+  private final AtomicInteger activeRequests = new AtomicInteger();
   private final Semaphore numRequestsAllowed;
 
   private final int totalAllowedRequests;
@@ -28,19 +28,18 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
 
   public PriorityBasedRateLimiter(RateLimiterConfig rateLimiterConfig) {
     super(rateLimiterConfig);
-    this.priorities =
-        new String[] {
-          SolrRequest.RequestPriorities.FOREGROUND.name(),
-          SolrRequest.RequestPriorities.BACKGROUND.name()
-        };
     this.numRequestsAllowed = new Semaphore(rateLimiterConfig.allowedRequests, true);
     this.totalAllowedRequests = rateLimiterConfig.allowedRequests;
     this.waitTimeoutInMillis = rateLimiterConfig.waitForSlotAcquisition;
   }
 
   @Override
-  public SlotReservation handleRequest(String requestPriority) {
+  public SlotReservation handleRequest(HttpServletRequest request) {
     if (!rateLimiterConfig.isEnabled) {
+      return UNLIMITED;
+    }
+    RequestPriorities requestPriority = getRequestPriority(request);
+    if (requestPriority == null) {
       return UNLIMITED;
     }
     try {
@@ -53,11 +52,11 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
     return () -> PriorityBasedRateLimiter.this.release(requestPriority);
   }
 
-  private boolean acquire(String priority) throws InterruptedException {
-    if (priority.equals(this.priorities[0])) {
+  private boolean acquire(RequestPriorities priority) throws InterruptedException {
+    if (priority.equals(RequestPriorities.FOREGROUND)) {
       return nextInQueue();
-    } else if (priority.equals(this.priorities[1])) {
-      if (this.priorityOneRequests.get() < this.totalAllowedRequests) {
+    } else if (priority.equals(RequestPriorities.BACKGROUND)) {
+      if (this.activeRequests.get() < this.totalAllowedRequests) {
         return nextInQueue();
       } else {
         CountDownLatch wait = new CountDownLatch(1);
@@ -74,28 +73,26 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
     if (!acquired) {
       return false;
     }
-    this.priorityOneRequests.addAndGet(1);
+    this.activeRequests.addAndGet(1);
     return true;
   }
 
   private void exitFromQueue() {
     this.numRequestsAllowed.release(1);
-    this.priorityOneRequests.addAndGet(-1);
+    this.activeRequests.addAndGet(-1);
   }
 
-  private void release(String priority) {
-    if (this.priorities[0].equals(priority) || this.priorities[1].equals(priority)) {
-      if (this.priorityOneRequests.get() > this.totalAllowedRequests) {
-        // priority one request is waiting, let's inform it
-        this.exitFromQueue();
-      } else {
-        // next priority
-        CountDownLatch waiter = this.waitingList.poll();
-        if (waiter != null) {
-          waiter.countDown();
-        }
-        this.exitFromQueue();
+  private void release(RequestPriorities priority) {
+    if (this.activeRequests.get() > this.totalAllowedRequests) {
+      // priority one request is waiting, let's inform it
+      this.exitFromQueue();
+    } else {
+      // next priority
+      CountDownLatch waiter = this.waitingList.poll();
+      if (waiter != null) {
+        waiter.countDown();
       }
+      this.exitFromQueue();
     }
   }
 
@@ -106,6 +103,23 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
   }
 
   public int getRequestsAllowed() {
-    return this.priorityOneRequests.get();
+    return this.activeRequests.get();
+  }
+
+  private RequestPriorities getRequestPriority(HttpServletRequest request) {
+    String requestPriority = request.getHeader(SOLR_REQUEST_PRIORITY_PARAM);
+    try {
+      return RequestPriorities.valueOf(requestPriority);
+    } catch (IllegalArgumentException iae) {
+
+    }
+    return null;
+  }
+
+  public enum RequestPriorities {
+    // this has high priority
+    FOREGROUND,
+    // this has low priority
+    BACKGROUND
   }
 }

@@ -19,6 +19,7 @@ package org.apache.solr.servlet;
 
 import static org.apache.solr.common.params.CommonParams.SOLR_REQUEST_CONTEXT_PARAM;
 import static org.apache.solr.common.params.CommonParams.SOLR_REQUEST_TYPE_PARAM;
+import static org.apache.solr.servlet.PriorityBasedRateLimiter.SOLR_REQUEST_PRIORITY_PARAM;
 import static org.apache.solr.servlet.RateLimitManager.DEFAULT_SLOT_ACQUISITION_TIMEOUT_MS;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -288,10 +289,20 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     private final String ctx;
     private final String type;
 
+    private final String priority;
+
     public DummyRequest(String ctx, String type) {
       super(null, null);
       this.ctx = ctx;
       this.type = type;
+      this.priority = null;
+    }
+
+    public DummyRequest(String ctx, String type, String priority) {
+      super(null, null);
+      this.ctx = ctx;
+      this.type = type;
+      this.priority = priority;
     }
 
     @Override
@@ -301,6 +312,8 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
           return ctx;
         case SOLR_REQUEST_TYPE_PARAM:
           return type;
+        case SOLR_REQUEST_PRIORITY_PARAM:
+          return priority;
         default:
           throw new IllegalArgumentException();
       }
@@ -427,10 +440,10 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     }
 
     @Override
-    public SlotReservation handleRequest(String requestType) throws InterruptedException {
+    public SlotReservation handleRequest(HttpServletRequest request) throws InterruptedException {
       incomingRequestCount.getAndIncrement();
 
-      SlotReservation response = super.handleRequest(requestType);
+      SlotReservation response = super.handleRequest(request);
 
       if (response != null) {
         acceptedNewRequestCount.getAndIncrement();
@@ -493,6 +506,7 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
   @Test
   @SuppressWarnings("try")
   public void testAdjustingConfig() throws IOException, InterruptedException {
+    DummyRequest dr = new DummyRequest(null, SolrRequest.SolrRequestType.QUERY.toString());
     Random r = random();
     int maxAllowed = 32;
     int allowed = r.nextInt(maxAllowed) + 1;
@@ -530,7 +544,7 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
                   () -> {
                     while (!finish.get()) {
                       try (RequestRateLimiter.SlotReservation slotReservation =
-                          limiterF.handleRequest(SolrRequest.SolrRequestType.QUERY.toString())) {
+                          limiterF.handleRequest(dr)) {
                         if (slotReservation != null) {
                           executed.increment();
                           int ct = outstanding.incrementAndGet();
@@ -636,7 +650,8 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     rateLimitManager.registerRequestRateLimiter(
         requestRateLimiter, SolrRequest.SolrRequestType.PRIORITY_BASED);
 
-    HttpServletRequest foreground = new DummyRequest(null, "FOREGROUND");
+    HttpServletRequest foreground =
+        new DummyRequest(null, SolrRequest.SolrRequestType.PRIORITY_BASED.name(), "FOREGROUND");
 
     try (final RequestRateLimiter.SlotReservation allowed =
         rateLimitManager.handleRequest(foreground)) {
@@ -644,7 +659,8 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
       assertEquals(1, requestRateLimiter.getRequestsAllowed());
     }
 
-    HttpServletRequest background = new DummyRequest(null, "BACKGROUND");
+    HttpServletRequest background =
+        new DummyRequest(null, SolrRequest.SolrRequestType.PRIORITY_BASED.name(), "BACKGROUND");
 
     try (final RequestRateLimiter.SlotReservation allowed =
         rateLimitManager.handleRequest(background)) {
@@ -652,7 +668,8 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
       assertEquals(1, requestRateLimiter.getRequestsAllowed());
     }
 
-    HttpServletRequest unknown = new DummyRequest(null, "unknown");
+    HttpServletRequest unknown =
+        new DummyRequest(null, SolrRequest.SolrRequestType.PRIORITY_BASED.name(), "unknown");
 
     try (final RequestRateLimiter.SlotReservation allowed =
         rateLimitManager.handleRequest(unknown)) {
@@ -681,21 +698,24 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     rateLimitManager.registerRequestRateLimiter(
         requestRateLimiter, SolrRequest.SolrRequestType.PRIORITY_BASED);
 
-    HttpServletRequest firstRequest = new DummyRequest(null, "FOREGROUND");
+    HttpServletRequest firstRequest =
+        new DummyRequest(null, SolrRequest.SolrRequestType.PRIORITY_BASED.name(), "FOREGROUND");
 
     RequestRateLimiter.SlotReservation firstRequestAllowed =
         rateLimitManager.handleRequest(firstRequest);
     assertNotNull(firstRequestAllowed);
     assertEquals(1, requestRateLimiter.getRequestsAllowed());
 
-    HttpServletRequest secondRequest = new DummyRequest(null, "FOREGROUND");
+    HttpServletRequest secondRequest =
+        new DummyRequest(null, SolrRequest.SolrRequestType.PRIORITY_BASED.name(), "FOREGROUND");
 
     RequestRateLimiter.SlotReservation secondRequestNotAllowed =
         rateLimitManager.handleRequest(secondRequest);
     assertNull(secondRequestNotAllowed);
     assertEquals(1, requestRateLimiter.getRequestsAllowed());
 
-    HttpServletRequest thirdRequest = new DummyRequest(null, "BACKGROUND");
+    HttpServletRequest thirdRequest =
+        new DummyRequest(null, SolrRequest.SolrRequestType.PRIORITY_BASED.name(), "BACKGROUND");
 
     RequestRateLimiter.SlotReservation thirdRequestNotAllowed =
         rateLimitManager.handleRequest(thirdRequest);

@@ -62,11 +62,6 @@ public abstract class SolrRequest<T extends SolrResponse> implements Serializabl
     PRIORITY_BASED,
   };
 
-  public enum RequestPriorities {
-    FOREGROUND,
-    BACKGROUND
-  }
-
   public enum SolrClientContext {
     CLIENT,
     SERVER

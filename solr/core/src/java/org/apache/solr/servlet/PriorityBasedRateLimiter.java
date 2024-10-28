@@ -6,6 +6,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.servlet.http.HttpServletRequest;
+
+import org.apache.solr.common.SolrException;
 import org.apache.solr.core.RateLimiterConfig;
 
 /**
@@ -40,7 +42,7 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
     }
     RequestPriorities requestPriority = getRequestPriority(request);
     if (requestPriority == null) {
-      return UNLIMITED;
+      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Request priority header is not defined or not set properly");
     }
     try {
       if (!acquire(requestPriority)) {
@@ -111,7 +113,6 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
     try {
       return RequestPriorities.valueOf(requestPriority);
     } catch (IllegalArgumentException iae) {
-
     }
     return null;
   }

@@ -671,11 +671,14 @@ public class TestRequestRateLimiter extends SolrCloudTestCase {
     HttpServletRequest unknown =
         new DummyRequest(null, SolrRequest.SolrRequestType.PRIORITY_BASED.name(), "unknown");
 
+    boolean gotException = false;
     try (final RequestRateLimiter.SlotReservation allowed =
         rateLimitManager.handleRequest(unknown)) {
-      assertNotNull(allowed);
-      assertEquals(0, requestRateLimiter.getRequestsAllowed());
+      assertNull(allowed);
+    } catch (SolrException se) {
+      gotException = true;
     }
+    assertTrue(gotException);
   }
 
   @Test

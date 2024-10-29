@@ -25,13 +25,13 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
 
   private final LinkedBlockingQueue<CountDownLatch> waitingList = new LinkedBlockingQueue<>();
 
-  private final long waitTimeoutInMillis;
+  private final long waitTimeoutInNanos;
 
   public PriorityBasedRateLimiter(RateLimiterConfig rateLimiterConfig) {
     super(rateLimiterConfig);
     this.numRequestsAllowed = new Semaphore(rateLimiterConfig.allowedRequests, true);
     this.totalAllowedRequests = rateLimiterConfig.allowedRequests;
-    this.waitTimeoutInMillis = rateLimiterConfig.waitForSlotAcquisition;
+    this.waitTimeoutInNanos = rateLimiterConfig.waitForSlotAcquisition * 1000000l;
   }
 
   @Override
@@ -57,26 +57,29 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
 
   private boolean acquire(RequestPriorities priority) throws InterruptedException {
     if (priority.equals(RequestPriorities.FOREGROUND)) {
-      return nextInQueue();
+      return nextInQueue(this.waitTimeoutInNanos);
     } else if (priority.equals(RequestPriorities.BACKGROUND)) {
       if (this.activeRequests.get() < this.totalAllowedRequests) {
-        return nextInQueue();
+        return nextInQueue(this.waitTimeoutInNanos);
       } else {
         CountDownLatch wait = new CountDownLatch(1);
         this.waitingList.put(wait);
-        return wait.await(this.waitTimeoutInMillis, TimeUnit.MILLISECONDS) && nextInQueue();
+        long startTime = System.nanoTime();
+        return wait.await(this.waitTimeoutInNanos, TimeUnit.NANOSECONDS)
+            && nextInQueue(this.waitTimeoutInNanos - (System.nanoTime() - startTime));
       }
     }
     return true;
   }
 
-  private boolean nextInQueue() throws InterruptedException {
+  private boolean nextInQueue(long waitTimeoutInNanos) throws InterruptedException {
+    this.activeRequests.addAndGet(1);
     boolean acquired =
-        this.numRequestsAllowed.tryAcquire(1, this.waitTimeoutInMillis, TimeUnit.MILLISECONDS);
+        this.numRequestsAllowed.tryAcquire(1, waitTimeoutInNanos, TimeUnit.NANOSECONDS);
     if (!acquired) {
+      this.activeRequests.addAndGet(-1);
       return false;
     }
-    this.activeRequests.addAndGet(1);
     return true;
   }
 
@@ -86,16 +89,13 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
   }
 
   private void release() {
-    if (this.activeRequests.get() > this.totalAllowedRequests) {
-      // priority one request is waiting, let's inform it
-      this.exitFromQueue();
-    } else {
+    this.exitFromQueue();
+    if (this.activeRequests.get() < this.totalAllowedRequests) {
       // next priority
       CountDownLatch waiter = this.waitingList.poll();
       if (waiter != null) {
         waiter.countDown();
       }
-      this.exitFromQueue();
     }
   }
 

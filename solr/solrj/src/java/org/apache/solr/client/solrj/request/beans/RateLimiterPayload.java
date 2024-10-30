@@ -76,7 +76,7 @@ public class RateLimiterPayload implements ReflectMapWriter {
   }
 
   public void overrideNodeProperty(String hostname) {
-    if (!this.enabled && hostname != "") {
+    if (!this.enabled && hostname.isEmpty()) {
       if (this.nodesEnabled != null && !this.nodesEnabled.isEmpty()) {
         String[] hosts = this.nodesEnabled.split(",");
         for (String host : hosts) {

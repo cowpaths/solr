@@ -65,8 +65,13 @@ public class PriorityBasedRateLimiter extends RequestRateLimiter {
         CountDownLatch wait = new CountDownLatch(1);
         this.waitingList.put(wait);
         long startTime = System.nanoTime();
-        return wait.await(this.waitTimeoutInNanos, TimeUnit.NANOSECONDS)
-            && nextInQueue(this.waitTimeoutInNanos - (System.nanoTime() - startTime));
+        if (wait.await(this.waitTimeoutInNanos, TimeUnit.NANOSECONDS)) {
+          return nextInQueue(this.waitTimeoutInNanos - (System.nanoTime() - startTime));
+        } else {
+          // remove from the queue; this/other requests already waited long enough; thus best effort
+          this.waitingList.poll();
+          return false;
+        }
       }
     }
     return true;

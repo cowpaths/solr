@@ -75,7 +75,7 @@ public class RateLimiterPayload implements ReflectMapWriter {
         priorityBasedEnabled);
   }
 
-  public void overrideNodeProperty(String hostname) {
+  public void maybeEnableForHost(String hostname) {
     if (!this.enabled && !hostname.isEmpty()) {
       if (this.nodesEnabled != null && !this.nodesEnabled.isEmpty()) {
         String[] hosts = this.nodesEnabled.split(",");

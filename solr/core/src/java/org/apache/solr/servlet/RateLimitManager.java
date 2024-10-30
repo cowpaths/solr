@@ -84,7 +84,7 @@ public class RateLimitManager implements ClusterPropertiesListener {
         throw new UncheckedIOException(e);
       }
     }
-    rateLimiterMeta.overrideNodeProperty(hostname);
+    rateLimiterMeta.maybeEnableForHost(hostname);
     // Hack: We only support query rate limiting for now
     requestRateLimiterMap.compute(
         rateLimiterMeta.priorityBasedEnabled
@@ -254,7 +254,7 @@ public class RateLimitManager implements ClusterPropertiesListener {
 
         RateLimiterPayload rateLimiterMeta =
             mapper.readValue(configInput, RateLimiterPayload.class);
-        rateLimiterMeta.overrideNodeProperty(hostname);
+        rateLimiterMeta.maybeEnableForHost(hostname);
         return rateLimiterMeta.priorityBasedEnabled
             ? new RateLimiterConfig(SolrRequest.SolrRequestType.PRIORITY_BASED, rateLimiterMeta)
             : new RateLimiterConfig(SolrRequest.SolrRequestType.QUERY, rateLimiterMeta);

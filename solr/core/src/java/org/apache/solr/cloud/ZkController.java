@@ -1023,8 +1023,8 @@ public class ZkController implements Closeable {
       }
 
       Stat stat = zkClient.exists(ZkStateReader.LIVE_NODES_ZKNODE, null, true);
-      boolean skipPublishDownOnStart = Boolean.getBoolean("solrcloud.skipPublishDownOnStart");
-      if (stat != null && stat.getNumChildren() > 0 && !skipPublishDownOnStart) {
+      boolean publishDownOnStart = Boolean.getBoolean("solrcloud.publishDownOnStart");
+      if (stat != null && stat.getNumChildren() > 0 && publishDownOnStart) {
         publishAndWaitForDownStates();
       }
 

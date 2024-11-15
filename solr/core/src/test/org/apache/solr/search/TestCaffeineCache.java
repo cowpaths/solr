@@ -344,6 +344,9 @@ public class TestCaffeineCache extends SolrTestCase {
     cache.put(0, "test");
     assertEquals(nonEmptySize, cache.ramBytesUsed());
 
+    cache.put(0, "test2"); //replace with a value with bigger size
+    assertTrue("new ramBytesUsed " + cache.ramBytesUsed() + " is not bigger than previous size " + nonEmptySize, cache.ramBytesUsed() > nonEmptySize);
+
     cache.remove(0);
     assertEquals(emptySize, cache.ramBytesUsed());
 

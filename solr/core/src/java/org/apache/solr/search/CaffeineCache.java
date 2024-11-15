@@ -275,7 +275,10 @@ public class CaffeineCache<K, V> extends SolrCacheBase
   public V put(K key, V val) {
     inserts.increment();
     V old = cache.asMap().put(key, val);
-    recordRamBytes(key, old, val);
+    // workaround, do not pass on the old val for recordRamBytes, since caffeine's LocalCache has already deducted bytes
+    // used by key and old val when replacing the old val with new val. See https://fullstory.atlassian.net/browse/SAI-5263
+    //    recordRamBytes(key, old, val);
+    recordRamBytes(key, null, val);
     return old;
   }
 

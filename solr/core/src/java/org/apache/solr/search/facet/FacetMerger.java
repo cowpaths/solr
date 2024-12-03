@@ -71,7 +71,7 @@ public abstract class FacetMerger {
       Integer shardNum = shardmap.get(shard);
       boolean hasShard = shardNum != null;
       this.shardNum = hasShard ? shardNum : -1;
-      return  hasShard;
+      return hasShard;
     }
 
     public int getNewBucketNumber() {

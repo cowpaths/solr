@@ -275,7 +275,8 @@ public class CaffeineCache<K, V> extends SolrCacheBase
   public V put(K key, V val) {
     inserts.increment();
     V old = cache.asMap().put(key, val);
-    recordRamBytes(key, old, val);
+    // ramBytes decrement for `old` happens via #onRemoval
+    recordRamBytes(key, null, val);
     return old;
   }
 

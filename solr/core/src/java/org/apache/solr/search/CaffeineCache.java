@@ -276,7 +276,14 @@ public class CaffeineCache<K, V> extends SolrCacheBase
     inserts.increment();
     V old = cache.asMap().put(key, val);
     // ramBytes decrement for `old` happens via #onRemoval
-    recordRamBytes(key, null, val);
+    if (val != old) {
+      // NOTE: this is conditional on `val != old` in order to work around a
+      //  behavior in the Caffeine library: where there is reference equality
+      //  between `val` and `old`, caffeine does _not_ invoke RemovalListener,
+      //  so the entry is not decremented for the replaced value (hence we
+      //  don't need to increment ram bytes for the entry either).
+      recordRamBytes(key, null, val);
+    }
     return old;
   }
 

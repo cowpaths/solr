@@ -67,6 +67,7 @@ import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.params.UpdateParams;
 import org.apache.solr.common.util.ContentStream;
@@ -586,6 +587,17 @@ public class Http2SolrClient extends SolrClient {
   }
 
   private void decorateRequest(Request req, SolrRequest<?> solrRequest) {
+    SolrRequest.SolrClientContext context = getContext();
+    req.header(CommonParams.SOLR_REQUEST_CONTEXT_PARAM, context.toString());
+    if (context == SolrRequest.SolrClientContext.CLIENT
+        || solrRequest.getParams().getBool(ShardParams.SHARDS_TOLERANT, false)) {
+      // automatically set requestType on top-level requests (CLIENT), or if `shards.tolerant=true`.
+      // NOTE: if `shards.tolerant=false`, do _not_ set the `Solr-Request-Type` header, because we
+      // could end up doing a lot of extra work at the cluster level, retrying requests that may
+      // only
+      // have failed to obtain a ratelimit permit on a single shard.
+      req.header(CommonParams.SOLR_REQUEST_TYPE_PARAM, solrRequest.getRequestType());
+    }
     req.header(HttpHeader.ACCEPT_ENCODING, null);
     if (requestTimeoutMillis > 0) {
       req.timeout(requestTimeoutMillis, TimeUnit.MILLISECONDS);
@@ -1034,6 +1046,7 @@ public class Http2SolrClient extends SolrClient {
     private Long connectionTimeoutMillis;
     private Long requestTimeoutMillis;
     private Integer maxConnectionsPerHost;
+    private SolrRequest.SolrClientContext context = SolrRequest.SolrClientContext.CLIENT;
     private String basicAuthAuthorizationStr;
     private boolean useHttp1_1 = Boolean.getBoolean("solr.http1");
     private Boolean followRedirects;
@@ -1051,7 +1064,14 @@ public class Http2SolrClient extends SolrClient {
     }
 
     public Http2SolrClient build() {
-      Http2SolrClient client = new Http2SolrClient(baseSolrUrl, this);
+      final SolrRequest.SolrClientContext context = this.context;
+      Http2SolrClient client =
+          new Http2SolrClient(baseSolrUrl, this) {
+            @Override
+            public SolrRequest.SolrClientContext getContext() {
+              return context;
+            }
+          };
       try {
         httpClientBuilderSetup(client);
       } catch (RuntimeException e) {
@@ -1196,6 +1216,11 @@ public class Http2SolrClient extends SolrClient {
      */
     public Builder withMaxConnectionsPerHost(int max) {
       this.maxConnectionsPerHost = max;
+      return this;
+    }
+
+    public Builder withContext(SolrRequest.SolrClientContext context) {
+      this.context = context;
       return this;
     }
 

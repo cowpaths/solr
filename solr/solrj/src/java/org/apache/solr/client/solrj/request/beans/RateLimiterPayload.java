@@ -33,7 +33,7 @@ public class RateLimiterPayload implements ReflectMapWriter {
 
   @JsonProperty public Integer slotAcquisitionTimeoutInMS;
 
-  @JsonProperty public Boolean priorityBasedEnabled;
+  @JsonProperty public Boolean priorityBasedEnabled = false;
 
   @JsonProperty public String nodesEnabled;
 

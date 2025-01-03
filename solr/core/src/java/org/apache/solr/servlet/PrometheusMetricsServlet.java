@@ -835,7 +835,10 @@ public final class PrometheusMetricsServlet extends BaseSolrServlet {
     */
 
     AggregateMetricsApiCaller() {
-      super("solr.node", buildPrefix(), Arrays.stream(CoreMetric.values())
+      super(
+          "solr.node",
+          buildPrefix(),
+          Arrays.stream(CoreMetric.values())
               .filter(m -> m.property != null)
               .map(m -> m.property)
               .distinct()
